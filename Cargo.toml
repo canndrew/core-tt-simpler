@@ -1,0 +1,12 @@
+[package]
+name = "core-tt-simpler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ubig = { path = "/home/shum/src/rust/ubig" }
+lazy_static = "*"
+parser = { path = "/home/shum/work/src/simplicity-hl-again/parser" }
+core-tt-simpler-macros = { path = "core-tt-simpler-macros" }
+#derive-where = "*"
+

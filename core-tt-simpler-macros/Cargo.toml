@@ -1,0 +1,13 @@
+[package]
+name = "core-tt-simpler-macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "*", features = ["full"] }
+quote = "*"
+proc-macro2 = { version = "*" }
+
