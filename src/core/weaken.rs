@@ -85,7 +85,22 @@ impl<T> Unify for Weaken<T>
 where
     T: Contextual + Unify + Sized,
 {
-    fn unify(mut weaken_0: Weaken<T>, mut weaken_1: Weaken<T>) -> Option<Weaken<T>> {
+    type Meta = T::Meta;
+
+    fn unify(
+        ctx_tys: &mut Vec<Ty>,
+        meta: T::Meta,
+        weaken_0: Weaken<T>,
+        weaken_1: Weaken<T>,
+    ) -> Option<Weaken<T>> {
+        let thing_0 = weaken_0.into_inner();
+        let thing_1 = weaken_1.into_inner();
+        let thing = T::unify(ctx_tys, meta, thing_0, thing_1)?;
+        Some(Weaken::new(thing))
+
+        /*
+         * TODO: is it worth filtering here?
+         *
         let usages = Usages::merge_all_mut([&mut weaken_0.usages, &mut weaken_1.usages]);
         let thing_0 = weaken_0.into_inner();
         let thing_1 = weaken_1.into_inner();
@@ -93,6 +108,7 @@ where
         let mut weaken = Weaken::new(thing);
         weaken.usages.unfilter(&usages);
         Some(weaken)
+        */
     }
 }
 

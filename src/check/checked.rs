@@ -18,6 +18,21 @@ impl<T: Contextual + Bindable> Bindable for Checked<T> {
     }
 }
 
+impl<T: Contextual + Bindable> Substitutable for Checked<T> {
+    type Output = Checked<T>;
+
+    fn subst(self, subst: &mut Subst) -> Checked<T> {
+        let Checked { constraint_ty, scope } = self;
+        let constraint_ty = constraint_ty.subst(subst);
+        let scope = scope.subst(subst);
+        Checked { constraint_ty, scope }
+    }
+
+    fn into_output(self) -> Checked<T> {
+        self
+    }
+}
+
 impl<T> Checked<T> {
     pub fn pure(val: T) -> Checked<T>
     where
@@ -38,7 +53,7 @@ impl<T> Checked<T> {
         U: Contextual,
     {
         let Checked { constraint_ty, scope } = self;
-        let scope = ch.with_anon_var(|ch, constraint| {
+        let scope = ch.with_anon_var(constraint_ty.clone(), |ch, constraint| {
             func(ch, constraint.clone(), scope.bind(constraint))
         });
         Checked { constraint_ty, scope }
@@ -56,7 +71,7 @@ impl<T> Checked<T> {
         let Checked { constraint_ty: outer_constraint_ty, scope } = self;
         let (inner_constraint_ty, scope) = {
             ch
-            .with_anon_var(|ch, outer_constraint| {
+            .with_anon_var(outer_constraint_ty.clone(), |ch, outer_constraint| {
                 let Checked {
                     constraint_ty: inner_constraint_ty, scope,
                 } = func(ch, outer_constraint.clone(), scope.bind(outer_constraint));
@@ -238,3 +253,42 @@ impl<T: Contextual + Bindable> Scope<Checked<T>> {
     }
 }
 
+#[derive(Debug)]
+pub enum SolveError {
+    Uninhabited {
+        tags: Vec<Tag>,
+    },
+    Ambiguous {
+        ty: Ty,
+    },
+}
+
+impl<T> Checked<T> {
+    pub fn solve(self) -> Result<T, SolveError>
+    where
+        T: Contextual,
+        T: Bindable,
+    {
+        let Checked { constraint_ty, scope } = self;
+        let mut ctx = Vec::new();
+        let result = constraint_ty.simplify(&mut ctx, 0);
+        debug_assert_eq!(ctx.len(), 0);
+
+        let simplification = match result {
+            Ok(simplification) => simplification,
+            Err(Uninhabited { tags, proof: _ }) => {
+                return Err(SolveError::Uninhabited { tags });
+            },
+        };
+        let Simplification { new_ty, iso, constraints, eliminated } = simplification;
+        debug_assert!(constraints.is_empty());
+        debug_assert!(eliminated.is_empty());
+
+        let Some(()) = new_ty.clone().as_unit() else {
+            return Err(SolveError::Ambiguous { ty: new_ty });
+        };
+
+        let body = scope.bind(iso.rev.bind(Tm::unit()));
+        Ok(body)
+    }
+}

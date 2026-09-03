@@ -310,7 +310,6 @@ impl Check for Spanned<ast::ExprFuncType> {
                         res_ty_ty,
                         res_ty
                     )
-
                 })
             },
         )
@@ -845,8 +844,57 @@ impl Check for Spanned<ast::TypeField> {
 impl Check for Spanned<ast::FuncTermArg> {
     type Output = (Name, Ty);
 
-    fn check(&self, _ch: &mut CheckCtx) -> Checked<(Name, Ty)> {
-        todo!()
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty)> {
+        let ast::FuncTermArg { arg_name, arg_ty_opt } = &self.inner;
+        let arg_name_span = arg_name.span();
+
+        arg_name
+        .check(ch)
+        .group(MetaTag::FuncArgNameConstraint { arg_name_span: arg_name_span.clone() })
+        .and_then(ch, |ch, _, arg_name| {
+            let arg_ty_checked = match arg_ty_opt {
+                None => {
+                    Checked::assume_ty(
+                        MetaTag::FuncArgTy { arg_name_span: arg_name_span.clone() },
+                    )
+                },
+                Some(arg_ty) => {
+                    arg_ty
+                    .check(ch)
+                    .group(MetaTag::FuncArgTyConstraint { span: self.span() })
+                },
+            };
+            arg_ty_checked.map(ch, |_, _, arg_ty| (arg_name, arg_ty))
+        })
+    }
+}
+
+impl Check for ast::FuncTermArgTy {
+    type Output = Ty;
+
+    fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
+        let ast::FuncTermArgTy { args_opt, ty } = self;
+        let args = args_opt.as_ref().map_or(&[][..], |args| args.inner.as_slice());
+        let ty_span = ty.span();
+
+        check_func_type(
+            ch,
+            args,
+            ty_span.clone(),
+            |ch| {
+                ty
+                .check(ch)
+                .and_then(ch, |ch, _, (ty_ty, ty)| {
+                    Checked::cast_to_ty(
+                        ch,
+                        MetaTag::FuncResTy { res_ty_span: ty_span.clone() }.into(),
+                        MetaTag::FuncResTyIsAType { res_ty_span: ty_span },
+                        ty_ty,
+                        ty,
+                    )
+                })
+            },
+        )
     }
 }
 
@@ -943,15 +991,12 @@ fn check_func_type(
     }
 }
 
-fn check_pat_prec_inj<T>(
+fn check_pat_prec_inj(
     ch: &mut CheckCtx,
     pat_prec_inj: &ast::PatPrecInj,
     var_ty: Ty,
-    func: impl FnOnce(&mut CheckCtx) -> Checked<T>,
-) -> Checked<Scope<Checked<T>>>
-where
-    T: Contextual,
-{
+    func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
     match pat_prec_inj {
         ast::PatPrecInj::Refl(pat_refl) => {
             check_pat_refl(ch, pat_refl, var_ty, func)
@@ -962,15 +1007,12 @@ where
     }
 }
 
-fn check_pat_prec_atom<T>(
+fn check_pat_prec_atom(
     ch: &mut CheckCtx,
     pat_prec_atom: &ast::PatPrecAtom,
     var_ty: Ty,
-    func: impl FnOnce(&mut CheckCtx) -> Checked<T>,
-) -> Checked<Scope<Checked<T>>>
-where
-    T: Contextual,
-{
+    func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
     match pat_prec_atom {
         ast::PatPrecAtom::Var(name) => {
             name
@@ -987,21 +1029,148 @@ where
     }
 }
 
-fn check_pat_refl<T>(
-    _ch: &mut CheckCtx,
-    _pat_refl: &Spanned<ast::PatRefl>,
-    _var_ty: Ty,
-    _func: impl FnOnce(&mut CheckCtx) -> Checked<T>,
-) -> Checked<Scope<Checked<T>>> {
-    todo!()
+fn check_pat_refl(
+    ch: &mut CheckCtx,
+    pat_refl: &Spanned<ast::PatRefl>,
+    var_ty: Ty,
+    func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
+    let refl_pat_span = pat_refl.span();
+    let ast::PatRefl { eq_pat } = &pat_refl.inner;
+
+    Checked::assume_ty(
+        MetaTag::ReflPatEqTy {
+            refl_pat_span: refl_pat_span.clone(),
+        },
+    )
+    .and_then(ch, |ch, _, eq_ty| {
+        Checked::assume(
+            MetaTag::ReflPatEqTm0 {
+                refl_pat_span: refl_pat_span.clone(),
+            },
+            eq_ty.clone(),
+        )
+        .and_then(ch, |ch, _, eq_tm_0| {
+            Checked::assume(
+                MetaTag::ReflPatEqTm1 {
+                    refl_pat_span: refl_pat_span.clone(),
+                },
+                eq_ty.clone(),
+            )
+            .and_then(ch, |ch, _, eq_tm_1| {
+                Checked::assume(
+                    MetaTag::ReflPatVarTyIsExpectedTy {
+                        refl_pat_span: refl_pat_span.clone(),
+                    },
+                    Ty::equal(
+                        Ty::universe(),
+                        var_ty.clone().into_tm(),
+                        Ty::equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()).into_tm(),
+                    ),
+                )
+                .and_then(ch, |ch, _, var_tys_eq| {
+                    Checked::assume(
+                        MetaTag::ReflPatMotive {
+                            refl_pat_span: refl_pat_span.clone(),
+                        },
+                        Ty::pi(
+                            MetaTag::ReflPatMotiveEqTm1 {
+                                refl_pat_span: refl_pat_span.clone(),
+                                eq_pat_span: eq_pat.span(),
+                            }.into(),
+                            eq_ty.clone(),
+                            Scope::make(ch.ctx_len(), |eq_tm_1| {
+                                Ty::pi(
+                                    MetaTag::ReflPatMotiveElim {
+                                        refl_pat_span: refl_pat_span.clone(),
+                                        eq_pat_span: eq_pat.span(),
+                                    }.into(),
+                                    Ty::equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1),
+                                    Scope::constant(Ty::universe()),
+                                )
+                            })
+                        ),
+                    )
+                    .and_then(ch, |ch, _, motive| {
+                        check_pat_prec_inj(ch, eq_pat, eq_ty.clone(), func)
+                        .group(MetaTag::ReflPatInhabOuterConstraint {
+                            refl_pat_span: refl_pat_span.clone(),
+                        })
+                        .and_then(ch, |ch, _, inhab| {
+                            inhab
+                            .bind(eq_tm_0.clone())
+                            .group(MetaTag::ReflPatInhabInnerConstraint {
+                                refl_pat_span: refl_pat_span.clone(),
+                            })
+                            .and_then(ch, |ch, _, (inhab_ty, inhab)| {
+                                let expected_inhab_ty = {
+                                    motive
+                                    .clone()
+                                    .app(eq_tm_0.clone())
+                                    .app(eq_tm_0.clone().refl())
+                                    .into_ty()
+                                };
+
+                                Checked::cast(
+                                    ch,
+                                    MetaTag::ReflPatInhab {
+                                        refl_pat_span: refl_pat_span.clone(),
+                                    }.into(),
+                                    MetaTag::ReflPatInhabHasCorrectType {
+                                        refl_pat_span: refl_pat_span.clone(),
+                                    },
+                                    inhab_ty,
+                                    expected_inhab_ty,
+                                    inhab,
+                                )
+                                .map(ch, |ch, _, inhab| {
+                                    Scope::make(ch.ctx_len(), |var_tm| {
+                                        let elim = {
+                                            var_tys_eq
+                                            .transport(
+                                                var_ty.clone(),
+                                                var_tm,
+                                                MetaTag::ReflPatVarTm {
+                                                    refl_pat_span: refl_pat_span.clone(),
+                                                }.into(),
+                                            )
+                                        };
+                                        let ty = {
+                                            motive
+                                            .clone()
+                                            .app(eq_tm_1)
+                                            .app(elim.clone())
+                                            .into_ty()
+                                        };
+                                        let tm = {
+                                            elim
+                                            .cong(
+                                                Scope::make(ch.ctx_len() + 1, |eq_tm_1| {
+                                                    Scope::make(ch.ctx_len() + 2, |elim| {
+                                                        motive.app(eq_tm_1).app(elim).into_ty()
+                                                    })
+                                                }),
+                                                inhab,
+                                            )
+                                        };
+                                        Checked::pure((ty, tm))
+                                    })
+                                })
+                            })
+                        })
+                    })
+                })
+            })
+        })
+    })
 }
 
-fn check_pat_struct_term<T>(
+fn check_pat_struct_term(
     _ch: &mut CheckCtx,
     _pat_struct_term: &Spanned<ast::PatStructTerm>,
     _var_ty: Ty,
-    _func: impl FnOnce(&mut CheckCtx) -> Checked<T>,
-) -> Checked<Scope<Checked<T>>> {
+    _func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
     todo!()
 }
 

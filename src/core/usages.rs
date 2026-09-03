@@ -11,6 +11,10 @@ impl Usages {
         Usages { ubig }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.ubig.is_zero()
+    }
+
     pub fn single_var(index: usize) -> Usages {
         let ubig = Ubig::nth_power_of_two(index);
         Usages { ubig }
@@ -64,6 +68,12 @@ impl Usages {
     pub fn or_assign_truncated(&mut self, other: &Usages, ctx_len: usize) {
         let ubig = other.ubig.clone_truncate(ctx_len);
         self.ubig |= ubig;
+    }
+
+    pub fn or(self, other: Usages) -> Usages {
+        Usages {
+            ubig: self.ubig | other.ubig,
+        }
     }
 
     pub fn set_to_zero(&mut self, index: usize) {
@@ -137,6 +147,12 @@ impl Usages {
             usages.filter(&ret);
         }
         ret
+    }
+
+    pub fn intersection(usages_0: Usages, usages_1: Usages) -> Usages {
+        Usages {
+            ubig: usages_0.ubig & usages_1.ubig,
+        }
     }
 }
 

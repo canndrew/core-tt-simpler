@@ -65,15 +65,17 @@ impl Subst {
         self.var_tms.truncate(var_tms_len);
     }
 
-    pub fn remove_unused_vars(&mut self, usages: &Usages) {
-        debug_assert!(usages.ctx_len() <= self.subst_index + self.var_tms.len());
+    pub fn remove_unused_vars(self, usages: &Usages) -> (usize, Vec<Tm>) {
+        let Subst { subst_index, mut var_tms} = self;
+        debug_assert!(usages.ctx_len() <= subst_index + var_tms.len());
 
-        let mut var_tm_index = self.subst_index;
-        self.var_tms.retain(|_| {
+        let mut var_tm_index = subst_index;
+        var_tms.retain(|_| {
             let ret = usages.get(var_tm_index);
             var_tm_index += 1;
             ret
         });
+        (subst_index, var_tms)
     }
 
     pub fn with_composed<T>(
@@ -115,8 +117,19 @@ impl Subst {
     pub fn iter_tms(&self) -> impl Iterator<Item = &Tm> {
         self.var_tms.iter()
     }
+
+    /*
+    pub fn ctx_len(&self) -> usize {
+        self.var_tms.ctx_len()
+    }
+
+    pub fn collect_usages(&self, usages: &mut Usages) {
+        self.var_tms.collect_usages(usages);
+    }
+    */
 }
 
+/*
 impl Contextual for Subst {
     fn ctx_len(&self) -> usize {
         self.var_tms.ctx_len()
@@ -132,10 +145,20 @@ impl Contextual for Subst {
     }
 
     fn unfilter_usages(&mut self, usages: &Usages) {
-        self.subst_index = usages.unfilter_index(self.subst_index);
+        println!("self == {:#?}", self);
+        println!("usages == {:#?}", usages);
+        self.subst_index = {
+            usages
+            .unfilter_index(self.subst_index)
+            .unwrap_or_else(|| {
+                debug_assert_eq!(self.subst_index, usages.count_ones());
+                usages.ctx_len()
+            })
+        };
         self.var_tms.unfilter_usages(usages);
     }
 }
+*/
 
 pub trait Substitutable {
     type Output;

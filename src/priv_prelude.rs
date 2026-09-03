@@ -1,6 +1,6 @@
 pub(crate) use {
     std::{
-        cmp, iter, fmt,
+        cmp, iter, fmt, mem,
         //collections::BTreeMap,
         sync::{Arc, OnceLock},
     },
@@ -9,7 +9,8 @@ pub(crate) use {
     parser::{Span, Spanned},
     //derive_where::derive_where,
     crate::{
-        util::{as_equal, max_all},
+        solve,
+        util::{as_equal, max_all, iter::{Which, merge_enumerated}},
         tag::{Tag, MetaTag},
         core::{
             usages::Usages,
@@ -31,6 +32,11 @@ pub(crate) use {
             checked::Checked,
         },
         more::iso::Iso,
+        solve::{
+            simplification::{Simplification, Uninhabited},
+            constraint::Constraint,
+        },
+        builtins::Builtin,
     },
     core_tt_simpler_macros::Contextual,
 };

@@ -32,7 +32,14 @@ pub enum FormKind {
 }
 
 impl Unify for FormKind {
-    fn unify(form_kind_0: FormKind, form_kind_1: FormKind) -> Option<FormKind> {
+    type Meta = ();
+
+    fn unify(
+        ctx_tys: &mut Vec<Ty>,
+        (): (),
+        form_kind_0: FormKind,
+        form_kind_1: FormKind,
+    ) -> Option<FormKind> {
         match (form_kind_0, form_kind_1) {
             (FormKind::Name, FormKind::Name) => Some(FormKind::Name),
 
@@ -44,9 +51,9 @@ impl Unify for FormKind {
                 FormKind::Equal { eq_ty: eq_ty_0, eq_tm_0: eq_tm_0_0, eq_tm_1: eq_tm_1_0 },
                 FormKind::Equal { eq_ty: eq_ty_1, eq_tm_0: eq_tm_0_1, eq_tm_1: eq_tm_1_1 },
             ) => {
-                let eq_ty = Unify::unify(eq_ty_0, eq_ty_1)?;
-                let eq_tm_0 = Unify::unify(eq_tm_0_0, eq_tm_0_1)?;
-                let eq_tm_1 = Unify::unify(eq_tm_1_0, eq_tm_1_1)?;
+                let eq_ty = Unify::unify(ctx_tys, (), eq_ty_0, eq_ty_1)?;
+                let eq_tm_0 = Unify::unify(ctx_tys, eq_ty.clone(), eq_tm_0_0, eq_tm_0_1)?;
+                let eq_tm_1 = Unify::unify(ctx_tys, eq_ty.clone(), eq_tm_1_0, eq_tm_1_1)?;
                 Some(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
             },
 
@@ -58,9 +65,9 @@ impl Unify for FormKind {
                 FormKind::Sum { lhs_name: lhs_name_0, lhs_ty: lhs_ty_0, rhs_ty: rhs_ty_0 },
                 FormKind::Sum { lhs_name: lhs_name_1, lhs_ty: lhs_ty_1, rhs_ty: rhs_ty_1 },
             ) => {
-                let lhs_name = Unify::unify(lhs_name_0, lhs_name_1)?;
-                let lhs_ty = Unify::unify(lhs_ty_0, lhs_ty_1)?;
-                let rhs_ty = Unify::unify(rhs_ty_0, rhs_ty_1)?;
+                let lhs_name = Unify::unify(ctx_tys, (), lhs_name_0, lhs_name_1)?;
+                let lhs_ty = Unify::unify(ctx_tys, (), lhs_ty_0, lhs_ty_1)?;
+                let rhs_ty = Unify::unify(ctx_tys, (), rhs_ty_0, rhs_ty_1)?;
                 Some(FormKind::Sum { lhs_name, lhs_ty, rhs_ty })
             },
 
@@ -68,9 +75,11 @@ impl Unify for FormKind {
                 FormKind::Sigma { head_name: head_name_0, head_ty: head_ty_0, tail_ty: tail_ty_0 },
                 FormKind::Sigma { head_name: head_name_1, head_ty: head_ty_1, tail_ty: tail_ty_1 },
             ) => {
-                let head_name = Unify::unify(head_name_0, head_name_1)?;
-                let head_ty = Unify::unify(head_ty_0, head_ty_1)?;
-                let tail_ty = Unify::unify(tail_ty_0, tail_ty_1)?;
+                let head_name = Unify::unify(ctx_tys, (), head_name_0, head_name_1)?;
+                let head_ty = Unify::unify(ctx_tys, (), head_ty_0, head_ty_1)?;
+                let tail_ty = Unify::unify(
+                    ctx_tys, (head_ty.clone(), Scope::constant(())), tail_ty_0, tail_ty_1,
+                )?;
                 Some(FormKind::Sigma { head_name, head_ty, tail_ty })
             },
 
@@ -78,9 +87,11 @@ impl Unify for FormKind {
                 FormKind::Pi { arg_name: arg_name_0, arg_ty: arg_ty_0, res_ty: res_ty_0 },
                 FormKind::Pi { arg_name: arg_name_1, arg_ty: arg_ty_1, res_ty: res_ty_1 },
             ) => {
-                let arg_name = Unify::unify(arg_name_0, arg_name_1)?;
-                let arg_ty = Unify::unify(arg_ty_0, arg_ty_1)?;
-                let res_ty = Unify::unify(res_ty_0, res_ty_1)?;
+                let arg_name = Unify::unify(ctx_tys, (), arg_name_0, arg_name_1)?;
+                let arg_ty = Unify::unify(ctx_tys, (), arg_ty_0, arg_ty_1)?;
+                let res_ty = Unify::unify(
+                    ctx_tys, (arg_ty.clone(), Scope::constant(())), res_ty_0, res_ty_1,
+                )?;
                 Some(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
 
@@ -248,6 +259,13 @@ impl Form {
     pub fn as_pi(self) -> Option<(Name, Ty, Scope<Ty>)> {
         self.map_out_unfiltered(|form| Arc::unwrap_or_clone(form).as_pi())
     }
+
+    pub fn deep_nf(self) -> Form {
+        let Weaken { usages, weak: form_kind } = self;
+        let form_kind = Arc::unwrap_or_clone(form_kind);
+        let form_kind = form_kind.deep_nf();
+        form_kind.unfiltered(&usages)
+    }
 }
 
 impl FormKind {
@@ -352,6 +370,48 @@ impl FormKind {
             return None;
         };
         Some((arg_name, arg_ty, res_ty))
+    }
+
+    pub fn deep_nf(self) -> Form {
+        match self {
+            FormKind::Name => Weaken::new_arc(FormKind::Name),
+
+            FormKind::Universe => Weaken::new_arc(FormKind::Universe),
+
+            FormKind::Nat => Weaken::new_arc(FormKind::Nat),
+
+            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.deep_nf();
+                let eq_tm_0 = eq_tm_0.deep_nf();
+                let eq_tm_1 = eq_tm_1.deep_nf();
+                Weaken::new_arc(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
+            },
+
+            FormKind::Never => Weaken::new_arc(FormKind::Never),
+
+            FormKind::Unit => Weaken::new_arc(FormKind::Unit),
+
+            FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
+                let lhs_name = lhs_name.deep_nf();
+                let lhs_ty = lhs_ty.deep_nf();
+                let rhs_ty = rhs_ty.deep_nf();
+                Weaken::new_arc(FormKind::Sum { lhs_name, lhs_ty, rhs_ty })
+            },
+
+            FormKind::Sigma { head_name, head_ty, tail_ty } => {
+                let head_name = head_name.deep_nf();
+                let head_ty = head_ty.deep_nf();
+                let tail_ty = tail_ty.deep_nf();
+                Weaken::new_arc(FormKind::Sigma { head_name, head_ty, tail_ty })
+            },
+
+            FormKind::Pi { arg_name, arg_ty, res_ty } => {
+                let arg_name = arg_name.deep_nf();
+                let arg_ty = arg_ty.deep_nf();
+                let res_ty = res_ty.deep_nf();
+                Weaken::new_arc(FormKind::Pi { arg_name, arg_ty, res_ty })
+            },
+        }
     }
 }
 

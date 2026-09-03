@@ -1,3 +1,5 @@
+pub mod iter;
+
 pub fn max_all<I>(iter: I) -> I::Item
 where
     I: IntoIterator,

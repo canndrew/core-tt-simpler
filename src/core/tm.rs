@@ -13,13 +13,17 @@ pub enum TmKind {
 }
 
 impl Bindable for Tm {
-    fn capture_subst(self, mut subst: Subst) -> Tm {
+    fn capture_subst(self, subst: Subst) -> Tm {
+        let (subst_index, var_tms) = subst.remove_unused_vars(&self.usages);
+        if var_tms.is_empty() {
+            return self;
+        }
+
         let Weaken { usages: mut truncated_body_usages, weak: body } = self;
-        subst.remove_unused_vars(&truncated_body_usages);
-        truncated_body_usages.truncate(subst.subst_index());
+        truncated_body_usages.truncate(subst_index);
 
         Weaken::new_arc(NeutralData::new(NeutralKind::Bind {
-            subst, truncated_body_usages, body,
+            var_tms, truncated_body_usages, body,
         }))
         .map(|neutral| TmKind::Neutral { neutral })
     }
@@ -82,6 +86,11 @@ impl Tm {
                 Some(intro.unfiltered(&self.usages))
             },
         }
+    }
+
+    pub fn deep_nf(self) -> Tm {
+        let Weaken { usages, weak: tm_kind } = self;
+        tm_kind.deep_nf().unfiltered(&usages)
     }
 
     pub fn into_name(self) -> Name {
@@ -242,10 +251,16 @@ impl Tm {
         intro.as_tag()
     }
 
+    pub fn unwrap_neutral(self) -> Neutral {
+        let Weaken { usages, weak: tm_kind } = self;
+        let neutral = tm_kind.unwrap_neutral();
+        Weaken { usages, weak: neutral }
+    }
+
     /*
     pub fn try_infer_ty(
         &self,
-        ctx_tys: &mut impl FnMut(usize) -> Option<Ty>,
+        ctx_tys: &mut impl FnMut(usize) -> Ty,
     ) -> Option<Ty> {
         self.clone().into_inner().try_infer_ty(ctx_tys)
     }
@@ -253,10 +268,17 @@ impl Tm {
 }
 
 impl Unify for TmKind {
-    fn unify(tm_kind_0: TmKind, tm_kind_1: TmKind) -> Option<TmKind> {
+    type Meta = Ty;
+
+    fn unify(
+        ctx_tys: &mut Vec<Ty>,
+        ty: Ty,
+        tm_kind_0: TmKind,
+        tm_kind_1: TmKind,
+    ) -> Option<TmKind> {
         match (tm_kind_0, tm_kind_1) {
             (TmKind::Intro { intro: intro_0 }, TmKind::Intro { intro: intro_1 }) => {
-                let intro = Unify::unify(intro_0, intro_1)?;
+                let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
                 Some(TmKind::Intro { intro })
             },
 
@@ -264,7 +286,7 @@ impl Unify for TmKind {
                 match neutral.try_reduce_to_intro() {
                     Some(intro_1) => {
                         let intro_1 = intro_1.into_inner();
-                        let intro = Unify::unify(intro_0, intro_1)?;
+                        let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
                         Some(TmKind::Intro { intro })
                     },
                     None => {
@@ -278,9 +300,12 @@ impl Unify for TmKind {
                                 let tm_1 = Weaken::new(tm_kind_1.clone());
                                 let head_tm_1 = tm_1.clone().proj_head();
                                 let tail_tm_1 = tm_1.proj_tail();
+                                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
 
-                                let _head_tm = Unify::unify(head_tm_0, head_tm_1)?;
-                                let _tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
+                                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
+                                let _tail_tm = Unify::unify(
+                                    ctx_tys, tail_ty.bind(head_tm), tail_tm_0, tail_tm_1,
+                                )?;
                                 Some(tm_kind_1)
                             },
                             IntroKind::Func { res_tm: res_tm_0 } => {
@@ -288,8 +313,9 @@ impl Unify for TmKind {
                                 let res_tm_1 = Scope::make(tm_1.ctx_len(), |arg_tm| {
                                     tm_1.app(arg_tm).into_inner()
                                 });
+                                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
 
-                                let _res_tm = Unify::unify(res_tm_0, res_tm_1);
+                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1);
                                 Some(tm_kind_1)
                             },
                             _ => None,
@@ -302,7 +328,7 @@ impl Unify for TmKind {
                 match neutral.try_reduce_to_intro() {
                     Some(intro_0) => {
                         let intro_0 = intro_0.into_inner();
-                        let intro = Unify::unify(intro_0, intro_1)?;
+                        let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
                         Some(TmKind::Intro { intro })
                     },
                     None => {
@@ -316,9 +342,12 @@ impl Unify for TmKind {
                                 let tm_0 = Weaken::new(tm_kind_0.clone());
                                 let head_tm_0 = tm_0.clone().proj_head();
                                 let tail_tm_0 = tm_0.proj_tail();
+                                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
 
-                                let _head_tm = Unify::unify(head_tm_0, head_tm_1)?;
-                                let _tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
+                                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
+                                let _tail_tm = Unify::unify(
+                                    ctx_tys, tail_ty.bind(head_tm), tail_tm_0, tail_tm_1,
+                                )?;
                                 Some(tm_kind_0)
                             },
                             IntroKind::Func { res_tm: res_tm_1 } => {
@@ -326,8 +355,9 @@ impl Unify for TmKind {
                                 let res_tm_0 = Scope::make(tm_0.ctx_len(), |arg_tm| {
                                     tm_0.app(arg_tm).into_inner()
                                 });
+                                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
 
-                                let _res_tm = Unify::unify(res_tm_0, res_tm_1);
+                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1);
                                 Some(tm_kind_0)
                             },
                             _ => None,
@@ -344,7 +374,7 @@ impl Unify for TmKind {
                     (None, None) => {
                         let neutral_0 = Arc::unwrap_or_clone(neutral_0);
                         let neutral_1 = Arc::unwrap_or_clone(neutral_1);
-                        let kind = Unify::unify(neutral_0.kind, neutral_1.kind)?;
+                        let kind = Unify::unify(ctx_tys, (), neutral_0.kind, neutral_1.kind)?;
                         let neutral = NeutralData::new_arc(kind);
                         Some(TmKind::Neutral { neutral })
                     },
@@ -353,6 +383,7 @@ impl Unify for TmKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_1 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
+                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -365,6 +396,7 @@ impl Unify for TmKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_0 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
+                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -373,7 +405,7 @@ impl Unify for TmKind {
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {
-                        let tm = Unify::unify(tm_0.clone(), tm_1.clone())?;
+                        let tm = Unify::unify(ctx_tys, ty, tm_0.clone(), tm_1.clone())?;
                         Some(tm.into_inner())
                     },
                 }
@@ -413,29 +445,22 @@ impl TmKind {
         }
     }
 
-    /*
-    pub fn try_infer_ty(
-        &self,
-        ctx_tys: &mut impl FnMut(usize) -> Option<Ty>,
-    ) -> Option<Ty> {
+    pub fn unwrap_neutral(self) -> Arc<NeutralData> {
+        match self {
+            TmKind::Intro { .. } => panic!("TmKind::unwrap_neutral() called on Intro"),
+            TmKind::Neutral { neutral } => neutral,
+        }
+    }
+
+    pub fn deep_nf(self) -> Tm {
         match self {
             TmKind::Intro { intro } => {
-                intro.try_infer_ty(ctx_tys)
+                Arc::unwrap_or_clone(intro).deep_nf().into_tm()
             },
             TmKind::Neutral { neutral } => {
-                neutral.try_infer_ty(ctx_tys)
+                Arc::unwrap_or_clone(neutral).deep_nf()
             },
         }
     }
-    */
-
-    /*
-    pub fn try_unify_heterogeneous(
-        tm_kind_0: TmKind,
-        tm_kind_1: TmKind,
-    ) -> Option<TmKind> {
-        todo!()
-    }
-    */
 }
 

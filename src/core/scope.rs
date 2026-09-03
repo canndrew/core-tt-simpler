@@ -233,11 +233,11 @@ impl<T: Contextual + Bindable> Bindable for Scope<T> {
         }
 
         let subst_index = subst.subst_index();
+        let subst = subst.lift(1);
         let mut filter = Usages::ones(subst_index);
-        filter.set_run_to_one(subst_index.strict_add(1), subst.len());
+        filter.set_run_to_one(subst.subst_index(), subst.len());
         inner.unfilter_usages(&filter);
 
-        let subst = subst.lift(1);
         let inner = inner.capture_subst(subst);
         Scope::new(subst_index, inner)
     }
@@ -250,28 +250,44 @@ pub trait Bindable {
     ) -> Self;
 }
 
-impl<T: Contextual + Unify> Unify for Scope<T> {
-    fn unify(scope_0: Scope<T>, scope_1: Scope<T>) -> Option<Scope<T>> {
-        let Scope { ctx_len: ctx_len_0, inner: mut inner_0 } = scope_0;
-        let Scope { ctx_len: ctx_len_1, inner: mut inner_1 } = scope_1;
+impl<T> Unify for Scope<T>
+where
+    T: Contextual + Unify<Meta: Contextual>,
+{
+    type Meta = (Ty, Scope<T::Meta>);
 
-        let ctx_len = match ctx_len_0.cmp(&ctx_len_1) {
-            cmp::Ordering::Equal => ctx_len_0,
-            cmp::Ordering::Less => {
-                let mut usages = Usages::ones(ctx_len_0);
-                usages.set_to_one(ctx_len_1);
-                inner_0.unfilter_usages(&usages);
-                ctx_len_1
-            },
-            cmp::Ordering::Greater => {
-                let mut usages = Usages::ones(ctx_len_1);
-                usages.set_to_one(ctx_len_0);
-                inner_1.unfilter_usages(&usages);
-                ctx_len_0
-            },
+    fn unify(
+        ctx_tys: &mut Vec<Ty>,
+        (var_ty, body_meta): (Ty, Scope<T::Meta>),
+        scope_0: Scope<T>,
+        scope_1: Scope<T>,
+    ) -> Option<Scope<T>> {
+        let Scope { ctx_len: ctx_len_meta, inner: inner_meta } = body_meta;
+        let Scope { ctx_len: ctx_len_0, inner: inner_0 } = scope_0;
+        let Scope { ctx_len: ctx_len_1, inner: inner_1 } = scope_1;
+
+        let ctx_len = ctx_tys.len();
+        let inner_meta = {
+            let mut usages = Usages::ones(ctx_len_meta);
+            usages.set_to_one(ctx_len);
+            inner_meta.unfiltered(&usages)
+        };
+        let inner_0 = {
+            let mut usages = Usages::ones(ctx_len_0);
+            usages.set_to_one(ctx_len);
+            inner_0.unfiltered(&usages)
+        };
+        let inner_1 = {
+            let mut usages = Usages::ones(ctx_len_1);
+            usages.set_to_one(ctx_len);
+            inner_1.unfiltered(&usages)
         };
 
-        let inner = Unify::unify(inner_0, inner_1)?;
+        ctx_tys.push(var_ty);
+        let inner_opt = Unify::unify(ctx_tys, inner_meta, inner_0, inner_1);
+        ctx_tys.pop();
+        let inner = inner_opt?;
+
         Some(Scope::new(ctx_len, inner))
     }
 }
@@ -295,6 +311,28 @@ impl Scope<Tm> {
 
     pub fn id() -> Scope<Tm> {
         Scope::new(0, Tm::var(0))
+    }
+
+    pub fn deep_nf(self) -> Scope<Tm> {
+        self.map_without_capture(|tm| tm.deep_nf())
+    }
+}
+
+impl Scope<Ty> {
+    pub fn deep_nf(self) -> Scope<Ty> {
+        self.map_without_capture(|ty| ty.deep_nf())
+    }
+}
+
+impl Scope<Scope<Tm>> {
+    pub fn deep_nf(self) -> Scope<Scope<Tm>> {
+        self.map_without_capture(|scope| scope.deep_nf())
+    }
+}
+
+impl Scope<Scope<Ty>> {
+    pub fn deep_nf(self) -> Scope<Scope<Ty>> {
+        self.map_without_capture(|scope| scope.deep_nf())
     }
 }
 

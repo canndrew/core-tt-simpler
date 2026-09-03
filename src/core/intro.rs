@@ -40,7 +40,11 @@ pub enum IntroKind {
 }
 
 impl Unify for IntroKind {
+    type Meta = Ty;
+
     fn unify(
+        ctx_tys: &mut Vec<Ty>,
+        ty: Ty,
         intro_kind_0: IntroKind,
         intro_kind_1: IntroKind,
     ) -> Option<IntroKind> {
@@ -51,7 +55,7 @@ impl Unify for IntroKind {
             },
             
             (IntroKind::Form { form: form_0 }, IntroKind::Form { form: form_1 }) => {
-                let form = Unify::unify(form_0, form_1)?;
+                let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
                 Some(IntroKind::Form { form })
             },
 
@@ -126,7 +130,7 @@ impl Unify for IntroKind {
                     },
                     (None, Some(_)) | (Some(_), None) => None,
                     (Some(pred_tm_0), Some(pred_tm_1)) => {
-                        let kind = Unify::unify(pred_tm_0.kind, pred_tm_1.kind)?;
+                        let kind = Unify::unify(ctx_tys, (), pred_tm_0.kind, pred_tm_1.kind)?;
                         let pred_tm = NeutralData::new_arc(kind);
                         Some(IntroKind::Succs { succ_count_m1, pred_tm })
                     },
@@ -166,10 +170,9 @@ impl Unify for IntroKind {
             },
 
             (
-                IntroKind::Refl { eq_tm: eq_tm_0 },
-                IntroKind::Refl { eq_tm: eq_tm_1 },
+                IntroKind::Refl { eq_tm },
+                IntroKind::Refl { .. },
             ) => {
-                let eq_tm = Unify::unify(eq_tm_0, eq_tm_1)?;
                 Some(IntroKind::Refl { eq_tm })
             },
 
@@ -178,12 +181,14 @@ impl Unify for IntroKind {
             },
 
             (IntroKind::InjLhs { lhs_tm: lhs_tm_0 }, IntroKind::InjLhs { lhs_tm: lhs_tm_1 }) => {
-                let lhs_tm = Unify::unify(lhs_tm_0, lhs_tm_1)?;
+                let (_lhs_name, lhs_ty, _rhs_ty) = ty.as_sum().unwrap();
+                let lhs_tm = Unify::unify(ctx_tys, lhs_ty, lhs_tm_0, lhs_tm_1)?;
                 Some(IntroKind::InjLhs { lhs_tm })
             },
 
             (IntroKind::InjRhs { rhs_tm: rhs_tm_0 }, IntroKind::InjRhs { rhs_tm: rhs_tm_1 }) => {
-                let rhs_tm = Unify::unify(rhs_tm_0, rhs_tm_1)?;
+                let (_lhs_name, _lhs_ty, rhs_ty) = ty.as_sum().unwrap();
+                let rhs_tm = Unify::unify(ctx_tys, rhs_ty, rhs_tm_0, rhs_tm_1)?;
                 Some(IntroKind::InjRhs { rhs_tm })
             },
 
@@ -191,13 +196,15 @@ impl Unify for IntroKind {
                 IntroKind::Pair { head_tm: head_tm_0, tail_tm: tail_tm_0 },
                 IntroKind::Pair { head_tm: head_tm_1, tail_tm: tail_tm_1 },
             ) => {
-                let head_tm = Unify::unify(head_tm_0, head_tm_1)?;
-                let tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
+                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
+                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
+                let tail_tm = Unify::unify(ctx_tys, tail_ty.bind(head_tm.clone()), tail_tm_0, tail_tm_1)?;
                 Some(IntroKind::Pair { head_tm, tail_tm })
             },
 
             (IntroKind::Func { res_tm: res_tm_0 }, IntroKind::Func { res_tm: res_tm_1 }) => {
-                let res_tm = Unify::unify(res_tm_0, res_tm_1)?;
+                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
+                let res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
                 Some(IntroKind::Func { res_tm })
             },
 
@@ -209,6 +216,10 @@ impl Unify for IntroKind {
 impl Intro {
     pub fn into_tm(self) -> Tm {
         self.map(|intro| TmKind::Intro { intro })
+    }
+
+    pub fn into_ty(self) -> Ty {
+        self.into_form().into_ty()
     }
 
     pub fn into_form(self) -> Form {
@@ -307,11 +318,18 @@ impl Intro {
     /*
     pub fn try_infer_ty(
         &self,
-        ctx_tys: &mut impl FnMut(usize) -> Option<Ty>,
+        ctx_tys: &mut impl FnMut(usize) -> Ty,
     ) -> Option<Ty> {
         self.clone().into_inner().try_infer_ty(ctx_tys)
     }
     */
+
+    pub fn deep_nf(self) -> Intro {
+        let Weaken { usages, weak: intro_kind } = self;
+        let intro_kind = Arc::unwrap_or_clone(intro_kind);
+        let intro_kind = intro_kind.deep_nf();
+        intro_kind.unfiltered(&usages)
+    }
 }
 
 impl IntroKind {
@@ -408,7 +426,7 @@ impl IntroKind {
     /*
     pub fn try_infer_ty(
         &self,
-        ctx_tys: &mut impl FnMut(usize) -> Option<Ty>,
+        ctx_tys: &mut impl FnMut(usize) -> Ty,
     ) -> Option<Ty> {
         match self {
             IntroKind::Tag { .. } => Some(Ty::name()),
@@ -595,6 +613,61 @@ impl IntroKind {
         }
     }
     */
+
+    pub fn deep_nf(self) -> Intro {
+        match self {
+            IntroKind::Tag { tag } => {
+                Weaken::new_arc(IntroKind::Tag { tag })
+            },
+
+            IntroKind::Form { form } => {
+                Arc::unwrap_or_clone(form).deep_nf().map(|form| Arc::new(IntroKind::Form { form }))
+            },
+
+            IntroKind::Constant { ubig } => {
+                Weaken::new_arc(IntroKind::Constant { ubig })
+            },
+
+            IntroKind::Succs { succ_count_m1, pred_tm } => {
+                Arc::unwrap_or_clone(pred_tm)
+                .deep_nf_assuming_stuck()
+                .map(|pred_tm| Arc::new(IntroKind::Succs { succ_count_m1, pred_tm }))
+            },
+
+            IntroKind::Refl { eq_tm } => {
+                eq_tm
+                .deep_nf()
+                .map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
+            },
+
+            IntroKind::Unit => Weaken::new_arc(IntroKind::Unit),
+
+            IntroKind::InjLhs { lhs_tm } => {
+                lhs_tm
+                .deep_nf()
+                .map(|lhs_tm| Arc::new(IntroKind::InjLhs { lhs_tm }))
+            },
+
+            IntroKind::InjRhs { rhs_tm } => {
+                rhs_tm
+                .deep_nf()
+                .map(|rhs_tm| Arc::new(IntroKind::InjRhs { rhs_tm }))
+            },
+
+            IntroKind::Pair { head_tm, tail_tm } => {
+                let head_tm = head_tm.deep_nf();
+                let tail_tm = tail_tm.deep_nf();
+                Weaken::new_arc(IntroKind::Pair { head_tm, tail_tm })
+            },
+
+            IntroKind::Func { res_tm } => {
+                res_tm
+                .map_without_capture(|res_tm| res_tm.deep_nf())
+                .lift_weaken()
+                .map(|res_tm| Arc::new(IntroKind::Func { res_tm }))
+            },
+        }
+    }
 }
 
 impl Substitutable for Intro {

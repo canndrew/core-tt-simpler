@@ -60,6 +60,15 @@ pub enum MetaTag {
         body_span: Span,
     },
 
+    FuncArgNameConstraint {
+        arg_name_span: Span,
+    },
+    FuncArgTy {
+        arg_name_span: Span,
+    },
+    FuncArgTyConstraint {
+        span: Span,
+    },
     FuncArgConstraint {
         func_arg_span: Span,
     },
@@ -240,60 +249,46 @@ pub enum MetaTag {
     },
     ProjHeadHasExpectedType {
         proj_span: Span,
-    }
-
-    /*
-    TypeOfHole {
-        span: Span,
-    },
-    Hole {
-        span: Span,
     },
 
-    CheckVarName {
-        span: Span,
+    ReflPatEqTy {
+        refl_pat_span: Span,
     },
-    TypeOfUnresolvedVariable {
-        span: Span,
+    ReflPatEqTm0 {
+        refl_pat_span: Span,
     },
-    UnresolvedVariable {
-        span: Span,
+    ReflPatEqTm1 {
+        refl_pat_span: Span,
     },
-
-    CheckBindVarName {
-        span: Span,
+    ReflPatVarTyIsExpectedTy {
+        refl_pat_span: Span,
     },
-    CheckBindVarTm {
-        span: Span,
+    ReflPatMotive {
+        refl_pat_span: Span,
     },
-    CheckBindBody {
-        span: Span,
+    ReflPatMotiveEqTm1 {
+        refl_pat_span: Span,
+        eq_pat_span: Span,
     },
-
-    EqualTagsAreApart {
-        tag: Tag,
-        span: Span,
+    ReflPatMotiveElim {
+        refl_pat_span: Span,
+        eq_pat_span: Span,
     },
-    CheckTagsApartElim {
-        span: Span,
+    ReflPatInhabOuterConstraint {
+        refl_pat_span: Span,
     },
-    TagsApartElim {
-        span: Span,
+    ReflPatInhabInnerConstraint {
+        refl_pat_span: Span,
     },
-    TagsApartElimHasCorrectType {
-        span: Span,
+    ReflPatInhab {
+        refl_pat_span: Span,
     },
-
-    CheckSuccsPredTm {
-        span: Span,
+    ReflPatInhabHasCorrectType {
+        refl_pat_span: Span,
     },
-    SuccsPredTm {
-        span: Span,
+    ReflPatVarTm {
+        refl_pat_span: Span,
     },
-    SuccsPredTmHasCorrectType {
-        span: Span,
-    },
-    */
 }
 
 impl From<&str> for Tag {

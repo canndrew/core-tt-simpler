@@ -9,6 +9,7 @@ mod check;
 
 mod more;
 mod solve;
+mod builtins;
 
 pub use {
     self::{
