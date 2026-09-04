@@ -1,7 +1,7 @@
 pub(crate) use {
     std::{
         cmp, iter, fmt, mem,
-        //collections::BTreeMap,
+        collections::{btree_map, BTreeMap},
         sync::{Arc, OnceLock},
     },
     lazy_static::lazy_static,
@@ -34,7 +34,7 @@ pub(crate) use {
         more::iso::Iso,
         solve::{
             simplification::{Simplification, Uninhabited},
-            constraint::Constraint,
+            constraint::{Constraint, Constraints},
         },
         builtins::Builtin,
     },

@@ -6,7 +6,15 @@ use {
     core_tt_simpler::{CheckCtx, Check},
 };
 
-fn main() -> Result<(), String> {
+fn main() {
+    let err = match run() {
+        Ok(()) => return,
+        Err(err) => err,
+    };
+    eprintln!("{}", err);
+}
+
+fn run() -> Result<(), String> {
     let Some(path) = env::args_os().skip(1).next() else {
         return Err(format!("expected a filename"));
     };

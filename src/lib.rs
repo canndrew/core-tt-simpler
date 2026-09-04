@@ -4,7 +4,6 @@ mod priv_prelude;
 mod util;
 mod tag;
 mod core;
-//mod untyped;
 mod check;
 
 mod more;

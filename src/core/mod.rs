@@ -3,7 +3,6 @@ pub mod form;
 pub mod intro;
 pub mod name;
 pub mod neutral;
-pub mod elim;
 pub mod scope;
 pub mod subst;
 pub mod tm;

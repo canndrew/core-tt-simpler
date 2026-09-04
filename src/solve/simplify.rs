@@ -348,7 +348,7 @@ fn simplify_sum(
 
         (
             Err(Uninhabited { tags: _, proof: lhs_proof }),
-            Ok(Simplification { new_ty, iso: rhs_iso, constraints, eliminated }),
+            Ok(Simplification { new_ty, iso: rhs_iso, mut constraints, eliminated }),
         ) => {
             let lhs_iso = Iso::scope_never_to_iso_never(lhs_ty.clone(), lhs_proof.clone());
             let iso = Iso::transitivity(
@@ -369,29 +369,27 @@ fn simplify_sum(
                 orig_ty.clone(),
                 new_ty.clone(),
             );
-            let constraints = Constraint::map_all(
-                constraints,
-                ctx.len(),
-                |index, unique_tm, proof, sum| {
-                    let motive = Ty::equal(
-                        ctx[index].clone(),
-                        Tm::var(index),
-                        unique_tm.clone(),
-                    );
-                    sum.case(
-                        Scope::constant(motive.clone()),
-                        Scope::make(ctx.len() + 1, |lhs| {
-                            lhs_proof.clone().bind(lhs).explode(Scope::constant(motive))
-                        }),
-                        proof,
-                    )
-                },
-            );
+
+            constraints.map_in_place(ctx.len(), |index, unique_tm, proof, sum| {
+                let motive = Ty::equal(
+                    ctx[index].clone(),
+                    Tm::var(index),
+                    unique_tm.clone(),
+                );
+                sum.case(
+                    Scope::constant(motive.clone()),
+                    Scope::make(ctx.len() + 1, |lhs| {
+                        lhs_proof.clone().bind(lhs).explode(Scope::constant(motive))
+                    }),
+                    proof,
+                )
+            });
+
             Ok(Simplification { new_ty, iso, constraints, eliminated })
         },
 
         (
-            Ok(Simplification { new_ty, iso: lhs_iso, constraints, eliminated }),
+            Ok(Simplification { new_ty, iso: lhs_iso, mut constraints, eliminated }),
             Err(Uninhabited { tags: _, proof: rhs_proof }),
         ) => {
             let rhs_iso = Iso::scope_never_to_iso_never(rhs_ty.clone(), rhs_proof.clone());
@@ -413,24 +411,22 @@ fn simplify_sum(
                 orig_ty.clone(),
                 new_ty.clone(),
             );
-            let constraints = Constraint::map_all(
-                constraints,
-                ctx.len(),
-                |index, unique_tm, proof, sum| {
-                    let motive = Ty::equal(
-                        ctx[index].clone(),
-                        Tm::var(index),
-                        unique_tm.clone(),
-                    );
-                    sum.case(
-                        Scope::constant(motive.clone()),
-                        proof,
-                        Scope::make(ctx.len() + 1, |lhs| {
-                            rhs_proof.clone().bind(lhs).explode(Scope::constant(motive))
-                        }),
-                    )
-                },
-            );
+
+            constraints.map_in_place(ctx.len(), |index, unique_tm, proof, sum| {
+                let motive = Ty::equal(
+                    ctx[index].clone(),
+                    Tm::var(index),
+                    unique_tm.clone(),
+                );
+                sum.case(
+                    Scope::constant(motive.clone()),
+                    proof,
+                    Scope::make(ctx.len() + 1, |lhs| {
+                        rhs_proof.clone().bind(lhs).explode(Scope::constant(motive))
+                    }),
+                )
+            });
+
             Ok(Simplification { new_ty, iso, constraints, eliminated })
         },
 
@@ -459,45 +455,22 @@ fn simplify_sum(
                 lhs_iso,
                 rhs_iso,
             );
-            let constraints = {
-                let mut constraints = Vec::new();
-                for (index, which) in merge_enumerated(lhs_constraints, rhs_constraints) {
-                    let (lhs_constraint, rhs_constraint) = match which {
-                        Which::Left(_) | Which::Right(_) => continue,
-                        Which::Both(lhs_constraint, rhs_constraint) => {
-                            (lhs_constraint, rhs_constraint)
-                        },
-                    };
-                    let Constraint {
-                        unique_tm: lhs_unique_tm, proof: lhs_proof,
-                    } = lhs_constraint;
-                    let Constraint {
-                        unique_tm: rhs_unique_tm, proof: rhs_proof,
-                    } = rhs_constraint;
 
-                    let Some(unique_tm) = Unify::unify(
-                        ctx, ctx[index].clone(), lhs_unique_tm, rhs_unique_tm,
-                    ) else {
-                        continue;
-                    };
+            let constraints = Constraints::intersection(
+                ctx,
+                lhs_constraints,
+                rhs_constraints,
+                |ctx, index, unique_tm, lhs_proof, rhs_proof, sum| {
+                    sum.case(
+                        Scope::constant(
+                            Ty::equal(ctx[index].clone(), Tm::var(index), unique_tm.clone()),
+                        ),
+                        lhs_proof,
+                        rhs_proof,
+                    )
+                },
+            );
 
-                    let proof = Scope::make(ctx.len(), |sum| {
-                        sum.case(
-                            Scope::constant(
-                                Ty::equal(ctx[index].clone(), Tm::var(index), unique_tm.clone()),
-                            ),
-                            lhs_proof,
-                            rhs_proof,
-                        )
-                    });
-
-                    constraints.push((
-                        index,
-                        Constraint { unique_tm, proof },
-                    ));
-                }
-                constraints
-            };
             let eliminated = Usages::intersection(lhs_eliminated, rhs_eliminated);
             Ok(Simplification { new_ty, iso, constraints, eliminated })
         },
@@ -515,7 +488,7 @@ fn simplify_sigma(
     let Simplification {
         new_ty: head_new_ty,
         iso: head_iso,
-        constraints: head_constraints,
+        constraints: mut head_constraints,
         eliminated: head_eliminated,
     } = match head_ty.simplify(ctx, preserved_constraint_depth) {
         Err(Uninhabited { mut tags, proof }) => {
@@ -548,15 +521,11 @@ fn simplify_sigma(
         head_iso,
     );
 
-    let head_constraints = Constraint::map_all(
-        head_constraints,
-        ctx.len(),
-        |_, _, proof, pair| proof.bind(pair.proj_head()),
-    );
+    head_constraints.map_in_place(ctx.len(), |_, _, proof, pair| {
+        proof.bind(pair.proj_head())
+    });
 
-    if let Some((index, _)) = head_constraints.last()
-    && *index >= preserved_constraint_depth
-    {
+    if head_constraints.has_preserved_constraints(preserved_constraint_depth) {
         return Ok(Simplification {
             new_ty, iso, constraints: head_constraints, eliminated: head_eliminated,
         });
@@ -574,9 +543,10 @@ fn simplify_sigma(
             Err(Uninhabited { tags, proof }) => {
                 let proof = Scope::new(ctx.len(), proof);
                 let proof = Scope::make(ctx.len(), |pair| {
+                    let pair = iso.fwd.bind(pair);
                     proof
                     .bind(pair.clone().proj_head())
-                    .bind(iso.fwd.bind(pair).proj_tail())
+                    .bind(pair.proj_tail())
                 });
                 return Err(Uninhabited { tags, proof });
             },
@@ -617,22 +587,19 @@ fn simplify_sigma(
 
     let mut eliminated = head_eliminated.or(tail_eliminated);
 
-    let head_constrained_opt = {
-        tail_constraints
-        .pop_if(|(index, _)| *index == ctx.len())
-        .map(|(_, constraint)| constraint)
-    };
+    let head_constrained_opt = tail_constraints.pop_at_index(ctx.len());
+    tail_constraints.map_in_place(ctx.len(), |_, _, proof, pair| {
+        let proof = Scope::new(ctx.len(), proof);
+        proof.bind(pair.clone().proj_head()).bind(pair.proj_tail())
+    });
 
-    let tail_constraints = Constraint::map_all(
+    let mut constraints = Constraints::union(
+        ctx,
+        &iso.fwd,
+        head_constraints,
         tail_constraints,
-        ctx.len(), 
-        |_, _, proof, pair| {
-            let proof = Scope::new(ctx.len(), proof);
-            proof.bind(pair.clone().proj_head()).bind(pair.proj_tail())
-        },
-    );
-
-    let constraints = Constraint::merge(ctx, head_constraints, tail_constraints, &mut eliminated)?;
+        &mut eliminated,
+    )?;
 
     if let Some(Constraint { unique_tm: unique_head, proof }) = head_constrained_opt {
         let new_ty = tail_new_ty.clone().bind(unique_head.clone());
@@ -651,11 +618,9 @@ fn simplify_sigma(
             new_ty.clone(),
         );
 
-        let constraints = Constraint::map_all(
-            constraints,
-            ctx.len(),
-            |_, _, proof, tail| proof.bind(unique_head.clone().pair(tail)),
-        );
+        constraints.map_in_place(ctx.len(), |_, _, proof, tail| {
+            proof.bind(unique_head.clone().pair(tail))
+        });
 
         return Ok(Simplification { new_ty, iso, constraints, eliminated });
     }
@@ -672,11 +637,9 @@ fn simplify_sigma(
             orig_ty.clone(),
             new_ty.clone(),
         );
-        let constraints = Constraint::map_all(
-            constraints,
-            ctx.len(),
-            |_, _, proof, tail| proof.bind(Tm::unit().pair(tail)),
-        );
+        constraints.map_in_place(ctx.len(), |_, _, proof, tail| {
+            proof.bind(Tm::unit().pair(tail))
+        });
 
         return Ok(Simplification { new_ty, iso, constraints, eliminated });
     }
@@ -726,20 +689,11 @@ fn simplify_pi(
         }
     };
 
-    let arg_constrained_opt = {
-        res_constraints
-        .pop_if(|(index, _)| *index == ctx.len())
-        .map(|(_, constraint)| constraint)
-    };
-
-    let constraints = Constraint::map_all(
-        res_constraints,
-        ctx.len(),
-        |_, _, proof, func| {
-            let proof = Scope::new(ctx.len(), proof);
-            proof.bind(arg_tm.clone()).bind(res_fwd.clone().bind(func.app(arg_tm.clone())))
-        },
-    );
+    let arg_constrained_opt = res_constraints.pop_at_index(ctx.len());
+    res_constraints.map_in_place(ctx.len(), |_, _, proof, func| {
+        let proof = Scope::new(ctx.len(), proof);
+        proof.bind(arg_tm.clone()).bind(res_fwd.clone().bind(func.app(arg_tm.clone())))
+    });
 
     if let Some(Constraint { unique_tm: _unique_arg_tm, proof: _proof }) = arg_constrained_opt {
         // TODO: check for alternate arg tms
@@ -748,12 +702,12 @@ fn simplify_pi(
     let arg_is_eliminated = res_eliminated.get(ctx.len());
     res_eliminated.set_to_zero(ctx.len());
 
-    if constraints.is_empty() && arg_is_eliminated {
+    if res_constraints.is_empty() && arg_is_eliminated {
         // TODO: split arg
     }
 
     let new_ty = orig_ty.clone();
     let iso = Iso::refl();
-    Ok(Simplification { new_ty, iso, constraints, eliminated: res_eliminated })
+    Ok(Simplification { new_ty, iso, constraints: res_constraints, eliminated: res_eliminated })
 }
 

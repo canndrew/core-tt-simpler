@@ -35,7 +35,7 @@ impl Tm {
 
     /// Transport a term across a type-equality
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ from_ty : Type
     /// Γ ⊢ into_ty : Type
     /// Γ ⊢ self : from_ty == into_ty
@@ -59,7 +59,7 @@ impl Tm {
 
     /// Reflect an equality.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ eq_ty : Type
     /// Γ ⊢ eq_tm_0 : eq_ty
     /// Γ ⊢ eq_tm_1 : eq_ty
@@ -81,7 +81,7 @@ impl Tm {
 
     /// Compose two equalities.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ eq_ty : Type
     /// Γ ⊢ eq_tm_0 : eq_ty
     /// Γ ⊢ eq_tm_1 : eq_ty
@@ -138,7 +138,7 @@ impl Tm {
 
     /// Remove `.succs(1)` from both sides of an equality.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ pred_tm_0 : Nat
     /// Γ ⊢ pred_tm_1 : Nat
     /// Γ ⊢ self : pred_tm_0.succs(1) == pred_tm_1.succs(1)
@@ -170,7 +170,7 @@ impl Tm {
 
     /// Remove `.succs(succ_count)` from both sides of an equality.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ pred_tm_0 : Nat
     /// Γ ⊢ pred_tm_1 : Nat
     /// Γ ⊢ self : pred_tm_0.succs(succ_count) == pred_tm_1.succs(succ_count)
@@ -193,7 +193,7 @@ impl Tm {
 
     /// Convert a proof of `0 == x.succs(1)` into a proof of `Never`
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ x : Nat
     /// Γ ⊢ self : 0 == x.succs(1)
     /// ----
@@ -218,7 +218,7 @@ impl Tm {
 
     /// Convert a proof of `x.succs(1) == 0` into a proof of `Never`
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ x : Nat
     /// Γ ⊢ self : x.succs(1) == 0
     /// ----
@@ -244,7 +244,7 @@ impl Tm {
     
     /// Convert a proof that two unequal `Nat` constants are equal into a proof of `Never`.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ self : ubig_0 == ubig_1
     /// ----
     /// Γ ⊢ self.constants_apart(ubig_0, ubig_1) : Never
@@ -277,7 +277,7 @@ impl Tm {
     /// Given two proofs equality between the same two endpoints, proves that the proofs are
     /// equal.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ eq_ty : Ty
     /// Γ ⊢ eq_tm_0 : eq_ty
     /// Γ ⊢ eq_tm_1 : eq_ty
@@ -430,7 +430,7 @@ impl Tm {
     /// Given a proof that two left-injections are equal, prove that the terms being injected are
     /// equal.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Ty
     /// Γ ⊢ rhs_ty : Ty
@@ -444,7 +444,7 @@ impl Tm {
     /// Alternatively, if `self` is an equality between a left and a right injection, this will
     /// return a proof of `Never`.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Ty
     /// Γ ⊢ rhs_ty : Ty
@@ -486,7 +486,7 @@ impl Tm {
     /// Given a proof that two right-injections are equal, prove that the terms being injected are
     /// equal.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Ty
     /// Γ ⊢ rhs_ty : Ty
@@ -500,7 +500,7 @@ impl Tm {
     /// Alternatively, if `self` is an equality between a right and a left injection, this will
     /// return a proof of `Never`.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Ty
     /// Γ ⊢ rhs_ty : Ty
@@ -598,6 +598,29 @@ impl Tm {
         )
     }
 
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty : Type
+    /// Γ ⊢ head_0 : head_ty
+    /// Γ ⊢ head_1 : head_ty
+    /// Γ ⊢ tail_0 : tail_ty
+    /// Γ ⊢ tail_1 : tail_ty
+    /// Γ ⊢ head_eq : head_0 == head_1
+    /// Γ ⊢ tail_eq : tail_0 == tail_1
+    /// ----
+    /// Γ ⊢ Tm::non_dependent_pair_of_equalities_to_equality_of_non_dependent_pairs(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty,
+    ///     head_0,
+    ///     tail_0,
+    ///     tail_1,
+    ///     head_eq,
+    ///     tail_eq,
+    /// ) : head_0.pair(tail_0) == head_1.pair(tail_1)
+    /// ```
+
     pub fn non_dependent_pair_of_equalities_to_equality_of_non_dependent_pairs(
         head_name: Name,
         head_ty: Ty,
@@ -645,6 +668,40 @@ impl Tm {
         )
     }
 
+    /// Convert an equality between two dependent pairs to a pair of equalities between their
+    /// head and tail projections.
+    ///
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty : head_ty |- Type
+    /// Γ ⊢ head_0 : head_ty
+    /// Γ ⊢ head_1 : head_ty
+    /// Γ ⊢ tail_0 : tail_ty.bind(head_0)
+    /// Γ ⊢ tail_1 : tail_ty.bind(head_1)
+    /// Γ ⊢ pair_eq : head_0.pair(tail_0) == head_1.pair(tail_1)
+    /// ----
+    /// Γ ⊢ Tm::equality_of_dependent_pairs_to_dependent_pair_of_equalities(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty,
+    ///     head_0,
+    ///     tail_0,
+    ///     pair_eq,
+    /// ) : Ty::sigma(
+    ///     head_name,
+    ///     Ty::equal(head_ty, head_0, head_1),
+    ///     Scope::make(Γ.len(), |head_eq| {
+    ///         Ty::heterogeneous_equal(
+    ///             tail_ty.bind(head_0),
+    ///             tail_ty.bind_eq(head_0, head_eq),
+    ///             tail_0,
+    ///             tail_1,
+    ///         ),
+    ///     }),
+    /// )
+    /// ```
+
     pub fn equality_of_dependent_pairs_to_dependent_pair_of_equalities(
         head_name: Name,
         head_ty: Ty,
@@ -683,6 +740,34 @@ impl Tm {
             head_0.refl().pair(tail_0.refl()),
         )
     }
+
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty : head_ty ⊢ Type
+    /// Γ ⊢ head_0 : head_ty
+    /// Γ ⊢ head_1 : head_ty
+    /// Γ ⊢ tail_0 : tail_ty.bind(head_0)
+    /// Γ ⊢ tail_1 : tail_ty.bind(head_1)
+    /// Γ ⊢ head_eq : head_0 == head_1
+    /// Γ ⊢ tail_eq : Ty::heterogeneous_equal(
+    ///     tail_ty.bind(head_0),
+    ///     tail_ty.bind_eq(head_0, head_eq),
+    ///     tail_0,
+    ///     tail_1,
+    /// ),
+    /// ----
+    /// Γ ⊢ Tm::dependent_pair_of_equalities_to_equality_of_dependent_pairs(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty,
+    ///     head_0,
+    ///     tail_0,
+    ///     tail_1,
+    ///     head_eq,
+    ///     tail_eq,
+    /// ) : head_0.pair(tail_0) == head_1.pair(tail_1)
+    /// ```
 
     pub fn dependent_pair_of_equalities_to_equality_of_dependent_pairs(
         head_name: Name,
@@ -763,18 +848,44 @@ impl Tm {
         .app(tail_eq)
     }
 
+    /// Apply a non-dependent function to both sides of an equality.
+    ///
+    /// ```ignore
+    /// Γ ⊢ arg_ty : Type
+    /// Γ ⊢ res_ty : Type
+    /// Γ ⊢ arg_tm_0 : arg_ty
+    /// Γ ⊢ arg_tm_1 : arg_ty
+    /// Γ ⊢ func : (arg_tm : arg_ty) -> res_ty
+    /// Γ ⊢ self : arg_tm_0 == arg_tm_1
+    /// ----
+    /// Γ ⊢ self.map_eq(Γ.len(), res_ty, arg_tm_0, func) : func(arg_tm_0) == func(arg_tm_1)
+    /// ```
+
     pub fn map_eq(
         self,
         ctx_len: usize,
         res_ty: Ty,
-        eq_tm_0: Tm,
+        arg_tm_0: Tm,
         func: impl FnOnce(Tm) -> Tm,
     ) -> Tm {
-        Scope::make(ctx_len, func).bind_eq(res_ty, eq_tm_0, self)
+        Scope::make(ctx_len, func).bind_eq(res_ty, arg_tm_0, self)
     }
 }
 
 impl Ty {
+    /// A type representing an equality between two terms of two different but propositionally equal
+    /// types.
+    ///
+    /// ```ignore
+    /// Γ ⊢ ty_0 : Type
+    /// Γ ⊢ ty_1 : Type
+    /// Γ ⊢ tys_eq : ty_0 == ty_1
+    /// Γ ⊢ tm_0 : ty_0
+    /// Γ ⊢ tm_1 : ty_1
+    /// ----
+    /// Γ ⊢ Ty::heterogeneous_equal(ty_0, tys_eq, tm_0, tm_1) : Type
+    /// ```
+
     pub fn heterogeneous_equal(
         ty_0: Ty,
         tys_eq: Tm,

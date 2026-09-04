@@ -25,8 +25,16 @@ impl Ty {
     }
     */
 
-    pub fn try_prove_uninhabited(&self) -> Option<Scope<Tm>> {
-        todo!()
+    pub fn try_prove_uninhabited(
+        self,
+        ctx: &mut Vec<Ty>,
+    ) -> Option<Scope<Tm>> {
+        match self.into_inner() {
+            TyKind::Form { form } => {
+                Arc::unwrap_or_clone(form).try_prove_uninhabited(ctx)
+            },
+            TyKind::Neutral { .. } => None,
+        }
     }
 
     pub fn try_find_arbitrary_tm(
@@ -78,6 +86,75 @@ impl Ty {
 }
 
 impl FormKind {
+    pub fn try_prove_uninhabited(
+        self,
+        ctx: &mut Vec<Ty>,
+    ) -> Option<Scope<Tm>> {
+        let ctx_len = self.ctx_len();
+        match self {
+            | FormKind::Name
+            | FormKind::Universe
+            | FormKind::Nat
+            | FormKind::Unit
+            => None,
+
+            FormKind::Equal { .. } => {
+                // TODO
+                None
+            },
+
+            FormKind::Never => Some(Scope::id()),
+
+            FormKind::Sum { lhs_name: _, lhs_ty, rhs_ty } => {
+                let lhs_proof = lhs_ty.try_prove_uninhabited(ctx)?;
+                let rhs_proof = rhs_ty.try_prove_uninhabited(ctx)?;
+                let proof = Scope::make(ctx_len, |sum| {
+                    sum
+                    .case(
+                        Scope::constant(Ty::never()),
+                        lhs_proof,
+                        rhs_proof,
+                    )
+                });
+                Some(proof)
+            },
+
+            FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
+                match head_ty.clone().try_prove_uninhabited(ctx) {
+                    Some(proof) => {
+                        let proof = Scope::make(ctx_len, |pair| {
+                            proof.bind(pair.proj_head())
+                        });
+                        Some(proof)
+                    },
+                    None => {
+                        let proof = {
+                            let tail_ty = tail_ty.clone().into_inner(ctx_len);
+                            ctx.push(head_ty.clone());
+                            let proof = tail_ty.try_prove_uninhabited(ctx)?;
+                            ctx.pop();
+                            Scope::new(ctx_len, proof)
+                        };
+                        let proof = Scope::make(ctx_len, |pair| {
+                            proof.bind(pair.clone().proj_head()).bind(pair.proj_tail())
+                        });
+                        Some(proof)
+                    },
+                }
+            },
+
+            FormKind::Pi { arg_name: _, arg_ty, res_ty } => {
+                let arg_tm = arg_ty.try_find_arbitrary_tm(ctx)?;
+                let res_ty = res_ty.bind(arg_tm.clone());
+                let proof = res_ty.try_prove_uninhabited(ctx)?;
+                let proof = Scope::make(ctx_len, |func| {
+                    proof.bind(func.app(arg_tm))
+                });
+                Some(proof)
+            },
+        }
+    }
+
     pub fn try_find_arbitrary_tm_excluding_ctx(
         self,
         ctx: &mut Vec<Ty>,
@@ -145,7 +222,7 @@ impl FormKind {
                 } {
                     Some(res_tm) => Some(Tm::func(res_tm)),
                     None => {
-                        match arg_ty.try_prove_uninhabited() {
+                        match arg_ty.try_prove_uninhabited(ctx) {
                             Some(proof) => {
                                 Some(Tm::func(Scope::make(ctx.len(), |arg| {
                                     proof

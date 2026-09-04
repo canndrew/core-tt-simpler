@@ -65,62 +65,64 @@ impl Unify for IntroKind {
             },
 
             (
-                IntroKind::Succs { succ_count_m1: succ_count_m1_0, pred_tm: pred_tm_0 },
-                IntroKind::Succs { succ_count_m1: succ_count_m1_1, pred_tm: pred_tm_1 },
+                IntroKind::Succs { succ_count_m1: mut succ_count_m1_0, pred_tm: mut pred_tm_0 },
+                IntroKind::Succs { succ_count_m1: mut succ_count_m1_1, pred_tm: mut pred_tm_1 },
             ) => {
-                let (succ_count_m1_0, pred_tm_opt_0) = match pred_tm_0.try_reduce() {
-                    None => (succ_count_m1_0, Some(Arc::unwrap_or_clone(pred_tm_0))),
-                    Some(tm_0) => match tm_0.into_inner() {
-                        TmKind::Intro { intro: intro_0 } => {
-                            let intro_0 = Arc::unwrap_or_clone(intro_0);
-                            match intro_0 {
-                                IntroKind::Constant { ubig } => {
-                                    let succ_count_m1_0 = succ_count_m1_0 + ubig;
-                                    (succ_count_m1_0, None)
-                                },
-                                IntroKind::Succs {
-                                    succ_count_m1: additional,
-                                    pred_tm: pred_tm_0,
-                                } => {
-                                    let succ_count_m1_0 = succ_count_m1_0 + additional + 1usize;
-                                    let pred_tm_0 = Arc::unwrap_or_clone(pred_tm_0);
-                                    (succ_count_m1_0, Some(pred_tm_0))
-                                },
-                                _ => unreachable!(),
-                            }
-                        },
-                        TmKind::Neutral { neutral: pred_tm_0 } => {
-                            let pred_tm_0 = Arc::unwrap_or_clone(pred_tm_0);
-                            (succ_count_m1_0, Some(pred_tm_0))
-                        },
-                    },
+                let (succ_count_m1_0, pred_tm_opt_0) = loop {
+                    match pred_tm_0.try_reduce() {
+                        None => break (succ_count_m1_0, Some(Arc::unwrap_or_clone(pred_tm_0))),
+                        Some(tm_0) => match tm_0.into_inner() {
+                            TmKind::Intro { intro: intro_0 } => {
+                                let intro_0 = Arc::unwrap_or_clone(intro_0);
+                                match intro_0 {
+                                    IntroKind::Constant { ubig } => {
+                                        succ_count_m1_0 += ubig;
+                                        break (succ_count_m1_0, None);
+                                    },
+                                    IntroKind::Succs {
+                                        succ_count_m1: additional,
+                                        pred_tm: new_pred_tm_0,
+                                    } => {
+                                        succ_count_m1_0 += additional + 1usize;
+                                        pred_tm_0 = new_pred_tm_0;
+                                    },
+                                    _ => unreachable!(),
+                                }
+                            },
+                            TmKind::Neutral { neutral: pred_tm_0 } => {
+                                let pred_tm_0 = Arc::unwrap_or_clone(pred_tm_0);
+                                break (succ_count_m1_0, Some(pred_tm_0));
+                            },
+                        }
+                    }
                 };
-                let (succ_count_m1_1, pred_tm_opt_1) = match pred_tm_1.try_reduce() {
-                    None => (succ_count_m1_1, Some(Arc::unwrap_or_clone(pred_tm_1))),
-                    Some(tm_1) => match tm_1.into_inner() {
-                        TmKind::Intro { intro: intro_1 } => {
-                            let intro_1 = Arc::unwrap_or_clone(intro_1);
-                            match intro_1 {
-                                IntroKind::Constant { ubig } => {
-                                    let succ_count_m1_1 = succ_count_m1_1 + ubig;
-                                    (succ_count_m1_1, None)
-                                },
-                                IntroKind::Succs {
-                                    succ_count_m1: additional,
-                                    pred_tm: pred_tm_1,
-                                } => {
-                                    let succ_count_m1_1 = succ_count_m1_1 + additional + 1usize;
-                                    let pred_tm_1 = Arc::unwrap_or_clone(pred_tm_1);
-                                    (succ_count_m1_1, Some(pred_tm_1))
-                                },
-                                _ => unreachable!(),
-                            }
-                        },
-                        TmKind::Neutral { neutral: pred_tm_1 } => {
-                            let pred_tm_1 = Arc::unwrap_or_clone(pred_tm_1);
-                            (succ_count_m1_1, Some(pred_tm_1))
-                        },
-                    },
+                let (succ_count_m1_1, pred_tm_opt_1) = loop {
+                    match pred_tm_1.try_reduce() {
+                        None => break (succ_count_m1_1, Some(Arc::unwrap_or_clone(pred_tm_1))),
+                        Some(tm_1) => match tm_1.into_inner() {
+                            TmKind::Intro { intro: intro_1 } => {
+                                let intro_1 = Arc::unwrap_or_clone(intro_1);
+                                match intro_1 {
+                                    IntroKind::Constant { ubig } => {
+                                        succ_count_m1_1 += ubig;
+                                        break (succ_count_m1_1, None);
+                                    },
+                                    IntroKind::Succs {
+                                        succ_count_m1: additional,
+                                        pred_tm: new_pred_tm_1,
+                                    } => {
+                                        succ_count_m1_1 += additional + 1usize;
+                                        pred_tm_1 = new_pred_tm_1;
+                                    },
+                                    _ => unreachable!(),
+                                }
+                            },
+                            TmKind::Neutral { neutral: pred_tm_1 } => {
+                                let pred_tm_1 = Arc::unwrap_or_clone(pred_tm_1);
+                                break (succ_count_m1_1, Some(pred_tm_1));
+                            },
+                        }
+                    }
                 };
                 let succ_count_m1 = as_equal(succ_count_m1_0, &succ_count_m1_1)?;
                 match (pred_tm_opt_0, pred_tm_opt_1) {
@@ -139,33 +141,43 @@ impl Unify for IntroKind {
 
             (
                 IntroKind::Constant { ubig: ubig_0 },
-                IntroKind::Succs { succ_count_m1, pred_tm },
+                IntroKind::Succs { mut succ_count_m1, mut pred_tm },
             ) => {
-                let intro = pred_tm.try_reduce_to_intro()?;
-                match &*intro.weak {
-                    IntroKind::Constant { ubig: additional } => {
-                        let ubig_1 = succ_count_m1 + additional + 1usize;
-                        let ubig = as_equal(ubig_0, &ubig_1)?;
-                        Some(IntroKind::Constant { ubig })
-                    },
-                    IntroKind::Succs { .. } => None,
-                    _ => unreachable!(),
+                loop {
+                    let intro = pred_tm.try_reduce_to_intro()?;
+                    match &*intro.weak {
+                        IntroKind::Constant { ubig: additional } => {
+                            let ubig_1 = succ_count_m1 + additional + 1usize;
+                            let ubig = as_equal(ubig_0, &ubig_1)?;
+                            break Some(IntroKind::Constant { ubig });
+                        },
+                        IntroKind::Succs { succ_count_m1: additional, pred_tm: new_pred_tm } => {
+                            succ_count_m1 += additional + 1usize;
+                            pred_tm = new_pred_tm.clone();
+                        },
+                        _ => unreachable!(),
+                    }
                 }
             },
 
             (
-                IntroKind::Succs { succ_count_m1, pred_tm },
+                IntroKind::Succs { mut succ_count_m1, mut pred_tm },
                 IntroKind::Constant { ubig: ubig_1 },
             ) => {
-                let intro = pred_tm.try_reduce_to_intro()?;
-                match &*intro.weak {
-                    IntroKind::Constant { ubig: additional } => {
-                        let ubig_0 = succ_count_m1 + additional + 1usize;
-                        let ubig = as_equal(ubig_0, &ubig_1)?;
-                        Some(IntroKind::Constant { ubig })
-                    },
-                    IntroKind::Succs { .. } => None,
-                    _ => unreachable!(),
+                loop {
+                    let intro = pred_tm.try_reduce_to_intro()?;
+                    match &*intro.weak {
+                        IntroKind::Constant { ubig: additional } => {
+                            let ubig_0 = succ_count_m1 + additional + 1usize;
+                            let ubig = as_equal(ubig_0, &ubig_1)?;
+                            break Some(IntroKind::Constant { ubig });
+                        },
+                        IntroKind::Succs { succ_count_m1: additional, pred_tm: new_pred_tm } => {
+                            succ_count_m1 += additional + 1usize;
+                            pred_tm = new_pred_tm.clone();
+                        },
+                        _ => unreachable!(),
+                    }
                 }
             },
 
@@ -629,9 +641,29 @@ impl IntroKind {
             },
 
             IntroKind::Succs { succ_count_m1, pred_tm } => {
-                Arc::unwrap_or_clone(pred_tm)
-                .deep_nf_assuming_stuck()
-                .map(|pred_tm| Arc::new(IntroKind::Succs { succ_count_m1, pred_tm }))
+                let Weaken { usages, weak: tm_kind } = Arc::unwrap_or_clone(pred_tm).deep_nf();
+                let intro_kind = match tm_kind {
+                    TmKind::Intro { intro } => {
+                        match Arc::unwrap_or_clone(intro) {
+                            IntroKind::Constant { ubig } => {
+                                IntroKind::Constant {
+                                    ubig: ubig + succ_count_m1 + 1usize,
+                                }
+                            },
+                            IntroKind::Succs { succ_count_m1: succ_count_m1_inner, pred_tm } => {
+                                IntroKind::Succs {
+                                    succ_count_m1: succ_count_m1_inner + succ_count_m1 + 1usize,
+                                    pred_tm,
+                                }
+                            },
+                            _ => unreachable!(),
+                        }
+                    },
+                    TmKind::Neutral { neutral: pred_tm } => {
+                        IntroKind::Succs { succ_count_m1, pred_tm }
+                    },
+                };
+                Weaken { usages, weak: Arc::new(intro_kind) }
             },
 
             IntroKind::Refl { eq_tm } => {

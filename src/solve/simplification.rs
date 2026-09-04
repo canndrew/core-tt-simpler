@@ -2,8 +2,12 @@ use crate::priv_prelude::*;
 
 pub struct Simplification {
     pub new_ty: Ty,
+
+    // between orig_ty and new_ty
     pub iso: Iso,
-    pub constraints: Vec<(usize, Constraint)>,
+
+    // scoped over new_ty
+    pub constraints: Constraints,
     pub eliminated: Usages,
 }
 
@@ -12,7 +16,7 @@ impl Simplification {
         Simplification {
             new_ty: ty,
             iso: Iso::refl(),
-            constraints: Vec::new(),
+            constraints: Constraints::new(),
             eliminated: Usages::empty(),
         }
     }
@@ -21,7 +25,7 @@ impl Simplification {
         new_ty: Ty,
         iso: Iso,
     ) -> Simplification {
-        let constraints = Vec::new();
+        let constraints = Constraints::new();
         let eliminated = Usages::empty();
         Simplification { new_ty, iso, constraints, eliminated }
     }
@@ -33,7 +37,7 @@ impl Simplification {
     ) -> Simplification {
         let new_ty = orig_ty.clone();
         let iso = Iso::refl();
-        let constraints = vec![(index, constraint)];
+        let constraints = Constraints::single(index, constraint);
         let eliminated = Usages::empty();
         Simplification { new_ty, iso, constraints, eliminated }
     }
@@ -44,7 +48,7 @@ impl Simplification {
     ) -> Simplification {
         let new_ty = orig_ty.clone();
         let iso = Iso::refl();
-        let constraints = Vec::new();
+        let constraints = Constraints::new();
         Simplification { new_ty, iso, constraints, eliminated }
     }
 
@@ -57,7 +61,7 @@ impl Simplification {
         let Simplification {
             new_ty: new_ty_0,
             iso: iso_0,
-            constraints: constraints_0,
+            constraints: mut constraints_0,
             eliminated: eliminated_0,
         } = self;
         let Simplification {
@@ -65,23 +69,22 @@ impl Simplification {
             iso: iso_1,
             constraints: constraints_1,
             eliminated: eliminated_1,
-        } = new_ty_0.simplify(ctx, preserved_constraint_depth)?;
+        } = {
+            new_ty_0
+            .simplify(ctx, preserved_constraint_depth)
+            .map_err(|Uninhabited { tags, proof }| {
+                let proof = Scope::make(ctx.len(), |tm| {
+                    proof.bind(iso_0.fwd.clone().bind(tm))
+                });
+                Uninhabited { tags, proof }
+            })?
+        };
 
         let mut eliminated = eliminated_0.or(eliminated_1);
 
-        let constraints_0 = {
-            constraints_0
-            .into_iter()
-            .map(|(index, Constraint { unique_tm, proof })| {
-                let proof = Scope::make(ctx.len(), |tm| {
-                    proof.bind(iso_1.rev.clone().bind(tm))
-                });
-                (index, Constraint { unique_tm, proof })
-            })
-            .collect::<Vec<_>>()
-        };
-
-        let constraints = Constraint::merge(ctx, constraints_0, constraints_1, &mut eliminated)?;
+        constraints_0.map_in_place(ctx.len(), |_, _, proof, tm| {
+            proof.bind(iso_1.rev.clone().bind(tm))
+        });
 
         let iso = Iso::transitivity(
             iso_0,
@@ -89,6 +92,14 @@ impl Simplification {
             orig_ty.clone(),
             new_ty_1.clone(),
         );
+
+        let constraints = Constraints::union(
+            ctx,
+            &iso.fwd,
+            constraints_0,
+            constraints_1,
+            &mut eliminated,
+        )?;
 
         Ok(Simplification { new_ty: new_ty_1, iso, constraints, eliminated })
     }

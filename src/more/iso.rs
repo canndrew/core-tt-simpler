@@ -225,6 +225,16 @@ impl Iso {
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ pred_tm_0 : Nat
+    /// Γ ⊢ pred_tm_1 : Nat
+    /// ----
+    /// Γ ⊢ Iso::succs_of_tms_equal_to_tms_equal(
+    ///     pred_tm_0,
+    ///     succ_count,
+    /// ) : (pred_tm_0.succs(succ_count) == pred_tm_1.succs(succ_count)) ≅ (pred_tm_0 == pred_tm_1)
+    /// ```
+
     pub fn succs_of_tms_equal_to_tms_equal(
         pred_tm_0: Tm,
         succ_count: impl Into<Ubig>,
@@ -312,6 +322,21 @@ impl Iso {
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ lhs_name : Name
+    /// Γ ⊢ lhs_ty : Ty
+    /// Γ ⊢ rhs_ty : Ty
+    /// Γ ⊢ lhs_tm_0 : lhs_ty
+    /// Γ ⊢ lhs_tm_1 : lhs_ty
+    /// ----
+    /// Γ ⊢ Iso::inj_lhs_of_tms_equal_to_tms_equal(
+    ///     lhs_name,
+    ///     lhs_ty,
+    ///     rhs_ty,
+    ///     lhs_tm_0,
+    /// ) : (lhs_tm_0.inj_lhs() == lhs_tm_1.inj_lhs()) ≅ (lhs_tm_0 == lhs_tm_1)
+    /// ```
+
     pub fn inj_lhs_of_tms_equal_to_tms_equal(
         lhs_name: Name,
         lhs_ty: Ty,
@@ -360,6 +385,21 @@ impl Iso {
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
+
+    /// ```ignore
+    /// Γ ⊢ lhs_name : Name
+    /// Γ ⊢ lhs_ty : Ty
+    /// Γ ⊢ rhs_ty : Ty
+    /// Γ ⊢ rhs_tm_0 : rhs_ty
+    /// Γ ⊢ rhs_tm_1 : rhs_ty
+    /// ----
+    /// Γ ⊢ Iso::inj_rhs_of_tms_equal_to_tms_equal(
+    ///     lhs_name,
+    ///     lhs_ty,
+    ///     rhs_ty,
+    ///     rhs_tm_0,
+    /// ) : (rhs_tm_0.inj_rhs() == rhs_tm_1.inj_rhs()) ≅ (rhs_tm_0 == rhs_tm_1)
+    /// ```
 
     pub fn inj_rhs_of_tms_equal_to_tms_equal(
         lhs_name: Name,
@@ -889,6 +929,25 @@ impl Iso {
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty_0 : Type
+    /// Γ ⊢ head_ty_1 : Type
+    /// Γ ⊢ tail_ty : head_ty_0 ⊢ Type
+    /// Γ ⊢ head_iso : head_ty_0 ≅ head_ty_1
+    /// ----
+    /// Γ ⊢ Iso::dependent_sigma_head_congruence(
+    ///     head_name,
+    ///     head_ty_0,
+    ///     head_ty_1,
+    ///     tail_ty,
+    ///     head_iso,
+    /// ) : Ty::sigma(head_name, head_ty_0, tail_ty)
+    ///   ≅ Ty::sigma(head_name, head_ty_1, Scope::make(Γ.len(), |head|
+    ///     tail_ty.bind(head_eq.rev.bind(head))
+    ///   })
+    /// ```
+
     pub fn dependent_sigma_head_congruence(
         head_name: Name,
         head_ty_0: Ty,
@@ -1091,6 +1150,23 @@ impl Iso {
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty_0 : head_ty ⊢ Type
+    /// Γ ⊢ tail_ty_1 : head_ty ⊢ Type
+    /// Γ ⊢ tail_iso : head_ty ⊢ tail_ty_0 ≅ tail_ty_1
+    /// ----
+    /// Γ ⊢ Iso::dependent_sigma_tail_congruence(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty_0,
+    ///     tail_ty_1,
+    ///     tail_iso,
+    /// ) : Ty::sigma(head_name, head_ty, tail_ty_0)
+    ///   ≅ Ty::sigma(head_name, head_ty, tail_ty_1)
+    /// ```
+
     pub fn dependent_sigma_tail_congruence(
         head_name: Name,
         head_ty: Ty,
@@ -1168,6 +1244,23 @@ impl Iso {
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty_0 : Type
+    /// Γ ⊢ head_ty_1 : Type
+    /// Γ ⊢ tail_ty : Type
+    /// Γ ⊢ head_iso : head_ty_0 ≅ head_ty_1
+    /// ----
+    /// Γ ⊢ Iso::non_dependent_sigma_head_congruence(
+    ///     head_name,
+    ///     head_ty_0,
+    ///     head_ty_1,
+    ///     tail_ty,
+    ///     head_iso,
+    /// ) : Ty::sigma(head_name, head_ty_0, Scope::constant(tail_ty))
+    ///   ≅ Ty::sigma(head_name, head_ty_1, Scope::constant(tail_ty))
+    /// ```
+
     pub fn non_dependent_sigma_head_congruence(
         head_name: Name,
         head_ty_0: Ty,
@@ -1229,6 +1322,23 @@ impl Iso {
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
+
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty_0 : Type
+    /// Γ ⊢ tail_ty_1 : Type
+    /// Γ ⊢ tail_iso : tail_ty_0 ≅ tail_ty_1
+    /// ----
+    /// Γ ⊢ Iso::non_dependent_sigma_tail_congruence(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty_0,
+    ///     tail_ty_1,
+    ///     tail_iso,
+    /// ) : Ty::sigma(head_name, head_ty, Scope::constant(tail_ty_0))
+    ///   ≅ Ty::sigma(head_name, head_ty, Scope::constant(tail_ty_1))
+    /// ```
 
     pub fn non_dependent_sigma_tail_congruence(
         head_name: Name,

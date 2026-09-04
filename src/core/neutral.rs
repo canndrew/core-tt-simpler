@@ -388,8 +388,14 @@ impl NeutralData {
     }
 
     pub fn deep_nf_assuming_stuck(self) -> Neutral {
-        debug_assert!(self.try_reduce().is_none());
-        self.kind.deep_nf_assuming_stuck().map(|kind| NeutralData::new_arc(kind))
+        match self.get_cached_reduction() {
+            Some(tm) => {
+                tm.as_neutral().unwrap().deep_nf_assuming_stuck()
+            },
+            None => {
+                self.kind.deep_nf_assuming_stuck().map(|kind| NeutralData::new_arc(kind))
+            },
+        }
     }
 }
 
