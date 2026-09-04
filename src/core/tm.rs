@@ -251,10 +251,10 @@ impl Tm {
         intro.as_tag()
     }
 
-    pub fn unwrap_neutral(self) -> Neutral {
+    pub fn as_neutral(self) -> Option<Neutral> {
         let Weaken { usages, weak: tm_kind } = self;
-        let neutral = tm_kind.unwrap_neutral();
-        Weaken { usages, weak: neutral }
+        let neutral = tm_kind.as_neutral()?;
+        Some(Weaken { usages, weak: neutral })
     }
 
     /*
@@ -315,7 +315,7 @@ impl Unify for TmKind {
                                 });
                                 let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
 
-                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1);
+                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
                                 Some(tm_kind_1)
                             },
                             _ => None,
@@ -357,7 +357,7 @@ impl Unify for TmKind {
                                 });
                                 let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
 
-                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1);
+                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
                                 Some(tm_kind_0)
                             },
                             _ => None,
@@ -445,10 +445,10 @@ impl TmKind {
         }
     }
 
-    pub fn unwrap_neutral(self) -> Arc<NeutralData> {
+    pub fn as_neutral(self) -> Option<Arc<NeutralData>> {
         match self {
-            TmKind::Intro { .. } => panic!("TmKind::unwrap_neutral() called on Intro"),
-            TmKind::Neutral { neutral } => neutral,
+            TmKind::Intro { .. } => None,
+            TmKind::Neutral { neutral } => Some(neutral),
         }
     }
 

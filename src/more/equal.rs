@@ -3,7 +3,7 @@ use crate::priv_prelude::*;
 impl Tm {
     /// Convert an equality between types to a function.
     ///
-    /// ```
+    /// ```ignore
     /// Γ ⊢ from_ty : Type
     /// Γ ⊢ into_ty : Type
     /// Γ ⊢ from_name : Name
@@ -336,7 +336,30 @@ impl Tm {
                 )
             })),
         )
+        .app(eq_1)
     }
+
+    /// Proves that any two heterogeneous equalities over the same type equality between the same
+    /// endpoints are equal.
+    ///
+    /// ```ignore
+    /// Γ ⊢ ty_0 : Type
+    /// Γ ⊢ ty_1 : Type
+    /// Γ ⊢ tys_eq : ty_0 == ty_1
+    /// Γ ⊢ tm_0 : ty_0
+    /// Γ ⊢ tm_1 : ty_1
+    /// Γ ⊢ het_eq_0 : Ty::heterogeneous_equal(ty_0, tys_eq, tm_0, tm_1)
+    /// Γ ⊢ het_eq_1 : Ty::heterogeneous_equal(ty_0, tys_eq, tm_0, tm_1)
+    /// ----
+    /// Γ ⊢ Tm::heterogeneous_equality_contractible(
+    ///     ty_0,
+    ///     tys_eq,
+    ///     tm_0,
+    ///     tm_1,
+    ///     het_eq_0,
+    ///     het_eq_1,
+    /// ) : het_eq_0 == het_eq_1
+    /// ```
 
     pub fn heterogeneous_equality_contractible(
         ty_0: Ty,
@@ -515,6 +538,33 @@ impl Tm {
             rhs_tm_0.refl(),
         )
     }
+
+    /// Convert an equality between two non-dependent pairs to a pair of equalities between their
+    /// head and tail projections.
+    ///
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_ty : Type
+    /// Γ ⊢ tail_ty : Type
+    /// Γ ⊢ head_0 : head_ty
+    /// Γ ⊢ head_1 : head_ty
+    /// Γ ⊢ tail_0 : tail_ty
+    /// Γ ⊢ tail_1 : tail_ty
+    /// Γ ⊢ pair_eq : head_0.pair(tail_0) == head_1.pair(tail_1)
+    /// ----
+    /// Γ ⊢ Tm::equality_of_non_dependent_pairs_to_non_dependent_pair_of_equalities(
+    ///     head_name,
+    ///     head_ty,
+    ///     tail_ty,
+    ///     head_0,
+    ///     tail_0,
+    ///     pair_eq,
+    /// ) : Ty::sigma(
+    ///     head_name,
+    ///     Ty::equal(head_ty, head_0, head_1),
+    ///     Scope::constant(Ty::equal(tail_ty, tail_0, tail_1)),
+    /// )
+    /// ```
 
     pub fn equality_of_non_dependent_pairs_to_non_dependent_pair_of_equalities(
         head_name: Name,

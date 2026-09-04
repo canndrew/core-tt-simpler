@@ -364,11 +364,11 @@ impl NeutralData {
         }
     }
 
-    pub fn infer_ty(
+    pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
-    ) -> Ty {
-        self.kind.infer_ty(ctx_tys)
+    ) -> Option<Ty> {
+        self.kind.try_infer_ty(ctx_tys)
     }
 
     pub fn collect_stuck_vars(&self, usages: &mut Usages) {
@@ -478,17 +478,13 @@ impl NeutralKind {
 
             NeutralKind::UniqueIdentity { elim, motive: _, inhab } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
-                let IntroKind::Refl { eq_tm: _ } = &*elim.into_inner() else {
-                    unreachable!();
-                };
+                debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
                 inhab.clone()
             },
 
             NeutralKind::Cong { elim, motive: _, inhab } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
-                let IntroKind::Refl { eq_tm: _ } = &*elim.into_inner() else {
-                    unreachable!();
-                };
+                debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
                 inhab.clone()
             },
 
@@ -573,59 +569,59 @@ impl NeutralKind {
         Some(*index)
     }
 
-    pub fn infer_ty(
+    pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
-    ) -> Ty {
+    ) -> Option<Ty> {
         match self {
-            NeutralKind::Var { index } => ctx_tys[*index].clone(),
+            NeutralKind::Var { index } => Some(ctx_tys[*index].clone()),
 
-            NeutralKind::Bind { .. } => unreachable!(),
+            NeutralKind::Bind { .. } => None,
 
-            NeutralKind::TagsApart { .. } => Ty::never(),
+            NeutralKind::TagsApart { .. } => Some(Ty::never()),
 
             NeutralKind::Fold { elim, motive, zero_inhab: _, succ_inhab: _ } => {
-                motive.clone().bind(elim.clone())
+                Some(motive.clone().bind(elim.clone()))
             },
 
             NeutralKind::UniqueIdentity { elim, motive, inhab: _ } => {
-                motive.clone().bind(elim.clone())
+                Some(motive.clone().bind(elim.clone()))
             },
 
             NeutralKind::Cong { elim, motive, inhab: _ } => {
-                let neutral = elim.clone().unwrap_neutral();
-                let elim_ty = neutral.infer_ty(ctx_tys);
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
                 let (_eq_ty, _eq_tm_0, eq_tm_1) = elim_ty.as_equal().unwrap();
-                motive.clone().bind(eq_tm_1).bind(elim.clone())
+                Some(motive.clone().bind(eq_tm_1).bind(elim.clone()))
             },
 
             NeutralKind::Explode { elim, motive } => {
-                motive.clone().bind(elim.clone())
+                Some(motive.clone().bind(elim.clone()))
             },
 
             NeutralKind::Case { elim, motive, lhs_inhab: _, rhs_inhab: _ } => {
-                motive.clone().bind(elim.clone())
+                Some(motive.clone().bind(elim.clone()))
             },
 
             NeutralKind::ProjHead { elim } => {
-                let neutral = elim.clone().unwrap_neutral();
-                let elim_ty = neutral.infer_ty(ctx_tys);
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
                 let (_head_name, head_ty, _tail_ty) = elim_ty.as_sigma().unwrap();
-                head_ty
+                Some(head_ty)
             },
 
             NeutralKind::ProjTail { elim } => {
-                let neutral = elim.clone().unwrap_neutral();
-                let elim_ty = neutral.infer_ty(ctx_tys);
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
                 let (_head_name, _head_ty, tail_ty) = elim_ty.as_sigma().unwrap();
-                tail_ty.bind(Weaken::new(elim.clone()).proj_head())
+                Some(tail_ty.bind(Weaken::new(elim.clone()).proj_head()))
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let neutral = elim.clone().unwrap_neutral();
-                let elim_ty = neutral.infer_ty(ctx_tys);
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
                 let (_arg_name, _arg_ty, res_ty) = elim_ty.as_pi().unwrap();
-                res_ty.bind(arg_tm.clone())
+                Some(res_ty.bind(arg_tm.clone()))
             },
         }
     }
@@ -642,7 +638,7 @@ impl NeutralKind {
             | NeutralKind::ProjHead { elim }
             | NeutralKind::ProjTail { elim }
             => {
-                elim.clone().unwrap_neutral().collect_stuck_vars(usages)
+                elim.clone().as_neutral().unwrap().collect_stuck_vars(usages)
             },
 
             | NeutralKind::Fold { elim, .. }
@@ -652,7 +648,7 @@ impl NeutralKind {
             | NeutralKind::Case { elim, .. }
             | NeutralKind::App { elim, .. }
             => {
-                elim.clone().unwrap_neutral().into_inner().collect_stuck_vars(usages)
+                elim.clone().as_neutral().unwrap().into_inner().collect_stuck_vars(usages)
             },
         }
     }
@@ -664,15 +660,17 @@ impl NeutralKind {
             NeutralKind::Bind { .. } => unreachable!(),
 
             NeutralKind::TagsApart { elim } => {
-                Arc::unwrap_or_clone(elim.unwrap_neutral())
-                .deep_nf_assuming_stuck()
+                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
+                .deep_nf()
+                .as_neutral()
+                .unwrap()
                 .map(|neutral| NeutralKind::TagsApart {
                     elim: TmKind::Neutral { neutral },
                 })
             },
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let motive = motive.deep_nf();
                 let zero_inhab = zero_inhab.deep_nf();
                 let succ_inhab = succ_inhab.deep_nf();
@@ -680,27 +678,27 @@ impl NeutralKind {
             },
 
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let motive = motive.deep_nf();
                 let inhab = inhab.deep_nf();
                 Weaken::new(NeutralKind::UniqueIdentity { elim, motive, inhab })
             },
 
             NeutralKind::Cong { elim, motive, inhab } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let motive = motive.deep_nf();
                 let inhab = inhab.deep_nf();
                 Weaken::new(NeutralKind::Cong { elim, motive, inhab })
             },
 
             NeutralKind::Explode { elim, motive } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf();
                 let motive = motive.deep_nf();
                 Weaken::new(NeutralKind::Explode { elim, motive })
             },
 
             NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let motive = motive.deep_nf();
                 let lhs_inhab = lhs_inhab.deep_nf();
                 let rhs_inhab = rhs_inhab.deep_nf();
@@ -708,7 +706,7 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                Arc::unwrap_or_clone(elim.unwrap_neutral())
+                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
                 .deep_nf_assuming_stuck()
                 .map(|neutral| NeutralKind::ProjHead {
                     elim: TmKind::Neutral { neutral },
@@ -716,7 +714,7 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjTail { elim } => {
-                Arc::unwrap_or_clone(elim.unwrap_neutral())
+                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
                 .deep_nf_assuming_stuck()
                 .map(|neutral| NeutralKind::ProjTail {
                     elim: TmKind::Neutral { neutral },
@@ -724,7 +722,7 @@ impl NeutralKind {
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let elim = elim.unwrap_neutral().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let arg_tm = arg_tm.deep_nf();
                 Weaken::new(NeutralKind::App { elim, arg_tm })
             },
@@ -751,10 +749,10 @@ impl Unify for NeutralKind {
             },
 
             (NeutralKind::TagsApart { elim: elim_0 }, NeutralKind::TagsApart { elim: elim_1 }) => {
-                let neutral_0 = elim_0.unwrap_neutral();
-                let neutral_1 = elim_1.unwrap_neutral();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_1.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap();
+                let neutral_1 = elim_1.as_neutral().unwrap();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
 
                 let elim = TmKind::Neutral {
@@ -777,8 +775,8 @@ impl Unify for NeutralKind {
                     succ_inhab: succ_inhab_1,
                 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
                 )?;
@@ -811,10 +809,10 @@ impl Unify for NeutralKind {
                 NeutralKind::UniqueIdentity { elim: elim_0, motive: motive_0, inhab: inhab_0 },
                 NeutralKind::UniqueIdentity { elim: elim_1, motive: motive_1, inhab: inhab_1 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_0.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -836,10 +834,10 @@ impl Unify for NeutralKind {
                 NeutralKind::Cong { elim: elim_0, motive: motive_0, inhab: inhab_0 },
                 NeutralKind::Cong { elim: elim_1, motive: motive_1, inhab: inhab_1 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_0.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -872,8 +870,8 @@ impl Unify for NeutralKind {
                 NeutralKind::Explode { elim: elim_0, motive: motive_0 },
                 NeutralKind::Explode { elim: elim_1, motive: motive_1 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
                 )?;
@@ -902,10 +900,10 @@ impl Unify for NeutralKind {
                     rhs_inhab: rhs_inhab_1,
                 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_0.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -941,10 +939,10 @@ impl Unify for NeutralKind {
             },
 
             (NeutralKind::ProjHead { elim: elim_0 }, NeutralKind::ProjHead { elim: elim_1 }) => {
-                let neutral_0 = elim_0.unwrap_neutral();
-                let neutral_1 = elim_1.unwrap_neutral();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_0.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap();
+                let neutral_1 = elim_1.as_neutral().unwrap();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -955,10 +953,10 @@ impl Unify for NeutralKind {
             },
 
             (NeutralKind::ProjTail { elim: elim_0 }, NeutralKind::ProjTail { elim: elim_1 }) => {
-                let neutral_0 = elim_0.unwrap_neutral();
-                let neutral_1 = elim_1.unwrap_neutral();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_0.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap();
+                let neutral_1 = elim_1.as_neutral().unwrap();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -972,10 +970,10 @@ impl Unify for NeutralKind {
                 NeutralKind::App { elim: elim_0, arg_tm: arg_tm_0 },
                 NeutralKind::App { elim: elim_1, arg_tm: arg_tm_1 },
             ) => {
-                let neutral_0 = elim_0.unwrap_neutral().into_inner();
-                let neutral_1 = elim_1.unwrap_neutral().into_inner();
-                let elim_ty_0 = neutral_0.infer_ty(ctx_tys);
-                let elim_ty_1 = neutral_1.infer_ty(ctx_tys);
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
 
                 let elim = TmKind::Neutral {
@@ -1069,18 +1067,24 @@ impl Neutral {
     }
 
     pub fn proj_tail(elim: Tm) -> Neutral {
-        elim.map(|elim| NeutralData::new_arc(NeutralKind::ProjHead { elim }))
+        elim.map(|elim| NeutralData::new_arc(NeutralKind::ProjTail { elim }))
     }
 
     pub fn app(elim: Tm, arg_tm: Tm) -> Neutral {
         Weaken::new_arc(NeutralData::new(NeutralKind::App { elim, arg_tm }))
     }
 
-    pub fn infer_ty(
+    pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
-    ) -> Ty {
-        self.clone().into_inner().infer_ty(ctx_tys)
+    ) -> Option<Ty> {
+        self.clone().into_inner().try_infer_ty(ctx_tys)
+    }
+
+    pub fn deep_nf(self) -> Tm {
+        let Weaken { usages, weak: neutral } = self;
+        let neutral = Arc::unwrap_or_clone(neutral);
+        neutral.deep_nf().unfiltered(&usages)
     }
 
     pub fn deep_nf_assuming_stuck(self) -> Neutral {

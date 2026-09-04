@@ -67,7 +67,7 @@ pub fn simplify_equal(
 ) -> Result<Simplification, Uninhabited> {
     if let Some(eq_tm) = Unify::unify(ctx, eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()) {
         let new_ty = Ty::unit();
-        let iso = Iso::reflexive_equality_to_unit(eq_tm);
+        let iso = Iso::reflexive_equality_to_unit(eq_ty.clone(), eq_tm);
         return Ok(Simplification::from_iso(new_ty, iso));
     }
 
@@ -141,11 +141,10 @@ pub fn simplify_equal(
 
                 Simplification::from_iso(
                     Ty::equal(eq_ty.clone(), new_eq_tm_0.clone(), new_eq_tm_1),
-                    Iso::succs_injective_bijective(
+                    Iso::succs_of_tms_equal_to_tms_equal(
                         new_eq_tm_0,
                         succ_count,
                     )
-                    .symmetry(),
                 )
             }
         },
@@ -170,11 +169,10 @@ pub fn simplify_equal(
                 let new_eq_tm_1 = Tm::constant(ubig);
                 Simplification::from_iso(
                     Ty::equal(eq_ty.clone(), new_eq_tm_0.clone(), new_eq_tm_1),
-                    Iso::succs_injective_bijective(
+                    Iso::succs_of_tms_equal_to_tms_equal(
                         new_eq_tm_0,
                         succ_count,
                     )
-                    .symmetry(),
                 )
             }
         },
@@ -192,9 +190,9 @@ pub fn simplify_equal(
                 };
                 Simplification::from_iso(
                     Ty::equal(eq_ty.clone(), new_eq_tm_0.clone(), new_eq_tm_1),
-                    Iso::succs_injective_bijective(
+                    Iso::succs_of_tms_equal_to_tms_equal(
                         new_eq_tm_0,
-                        succ_count_m1_0,
+                        succ_count_m1_0 + 1usize,
                     )
                 )
             } else {
@@ -206,9 +204,9 @@ pub fn simplify_equal(
                 let new_eq_tm_1 = Weaken::new(pred_tm_1).into_tm();
                 Simplification::from_iso(
                     Ty::equal(eq_ty.clone(), new_eq_tm_0.clone(), new_eq_tm_1),
-                    Iso::succs_injective_bijective(
+                    Iso::succs_of_tms_equal_to_tms_equal(
                         new_eq_tm_0,
-                        succ_count_m1_1,
+                        succ_count_m1_1 + 1usize,
                     )
                 )
             }
@@ -220,7 +218,7 @@ pub fn simplify_equal(
             let (lhs_name, lhs_ty, rhs_ty) = eq_ty.clone().as_sum().unwrap();
             Simplification::from_iso(
                 Ty::equal(lhs_ty.clone(), lhs_tm_0.clone(), lhs_tm_1),
-                Iso::inj_lhs_injective_bijective(
+                Iso::inj_lhs_of_tms_equal_to_tms_equal(
                     lhs_name, lhs_ty, rhs_ty, lhs_tm_0,
                 ),
             )
@@ -232,7 +230,7 @@ pub fn simplify_equal(
             let (lhs_name, lhs_ty, rhs_ty) = eq_ty.clone().as_sum().unwrap();
             Simplification::from_iso(
                 Ty::equal(rhs_ty.clone(), rhs_tm_0.clone(), rhs_tm_1),
-                Iso::inj_rhs_injective_bijective(
+                Iso::inj_rhs_of_tms_equal_to_tms_equal(
                     lhs_name, lhs_ty, rhs_ty, rhs_tm_0,
                 ),
             )
@@ -706,7 +704,13 @@ fn simplify_pi(
 
     let (res_fwd, mut res_constraints, mut res_eliminated) = {
         let res_ty = res_ty.clone().into_inner(ctx.len());
-        match res_ty.simplify(ctx, preserved_constraint_depth) {
+        let reduction_res = {
+            ctx.push(arg_ty.clone());
+            let reduction_res = res_ty.simplify(ctx, preserved_constraint_depth);
+            ctx.pop();
+            reduction_res
+        };
+        match reduction_res {
             Err(Uninhabited { tags, proof }) => {
                 let proof = Scope::new(ctx.len(), proof);
                 let proof = Scope::make(ctx.len(), |func| {

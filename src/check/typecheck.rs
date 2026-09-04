@@ -466,7 +466,7 @@ impl Check for Spanned<ast::ExprRefl> {
         })
         .map(ch, |_, _, (eq_ty, eq_tm)| {
             let ty = Ty::equal(eq_ty, eq_tm.clone(), eq_tm.clone());
-            (ty, eq_tm)
+            (ty, eq_tm.refl())
         })
     }
 }
@@ -787,7 +787,7 @@ impl Check for Spanned<ast::ExprEnumType> {
                 })
             },
         };
-        for variant in variants {
+        for variant in variants.iter().rev() {
             checked = checked.and_then(ch, |ch, _, rhs_ty| {
                 variant
                 .check(ch)
@@ -1266,10 +1266,13 @@ fn apply_implicit_rhs_injections_to_ty(
         Tm::func(Scope::constant(base_ty.into_tm())),
         Scope::constant(Scope::make(ctx_len + 2, |apply_rhs_injections| {
             Tm::func(Scope::make(ctx_len + 3, |rhs_injections| {
-                let lhs_name = rhs_injections.clone().proj_head();
+                let rhs_injection = rhs_injections.clone().proj_head();
                 let rhs_injections = rhs_injections.proj_tail();
-                let lhs_ty = rhs_injections.clone().proj_head();
-                let rhs_injections = rhs_injections.proj_tail();
+
+                let lhs_name = rhs_injection.clone().proj_head();
+                let rhs_injection = rhs_injection.proj_tail();
+                let lhs_ty = rhs_injection.proj_head();
+
                 Ty::sum(
                     lhs_name.into_name(),
                     lhs_ty.into_ty(),
@@ -1315,7 +1318,7 @@ fn apply_implicit_rhs_injections_to_tm(
         Tm::func(Scope::constant(base_tm)),
         Scope::constant(Scope::make(ctx_len + 2, |apply_rhs_injections| {
             Tm::func(Scope::make(ctx_len + 3, |rhs_injections| {
-                apply_rhs_injections.app(rhs_injections).inj_rhs()
+                apply_rhs_injections.app(rhs_injections.proj_tail()).inj_rhs()
             }))
         })),
     )

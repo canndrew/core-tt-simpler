@@ -145,8 +145,6 @@ impl Contextual for Subst {
     }
 
     fn unfilter_usages(&mut self, usages: &Usages) {
-        println!("self == {:#?}", self);
-        println!("usages == {:#?}", usages);
         self.subst_index = {
             usages
             .unfilter_index(self.subst_index)

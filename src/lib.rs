@@ -10,6 +10,7 @@ mod check;
 mod more;
 mod solve;
 mod builtins;
+mod sanity_check;
 
 pub use {
     self::{
@@ -30,6 +31,7 @@ pub use {
         },
         more::iso::Iso,
         check::{check_ctx::CheckCtx, checked::Checked, typecheck::Check},
+        sanity_check::SanityCheck,
     },
     ubig::Ubig,
 };

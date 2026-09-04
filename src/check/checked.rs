@@ -285,7 +285,8 @@ impl<T> Checked<T> {
         debug_assert!(eliminated.is_empty());
 
         let Some(()) = new_ty.clone().as_unit() else {
-            return Err(SolveError::Ambiguous { ty: new_ty });
+            let ty = new_ty.deep_nf();
+            return Err(SolveError::Ambiguous { ty });
         };
 
         let body = scope.bind(iso.rev.bind(Tm::unit()));
