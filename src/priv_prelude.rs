@@ -11,7 +11,7 @@ pub(crate) use {
     crate::{
         solve,
         util::{as_equal, max_all, iter::{Which, merge_enumerated}},
-        tag::{Tag, MetaTag},
+        tag::{Tag, TagKind, MetaTag},
         core::{
             usages::Usages,
             weaken::Weaken,
@@ -40,4 +40,8 @@ pub(crate) use {
     },
     core_tt_simpler_macros::Contextual,
 };
+
+#[cfg(debug_assertions)]
+#[allow(unused)]
+pub(crate) use crate::debug::{debug_indent, debug, print_on_panic};
 

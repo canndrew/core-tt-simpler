@@ -6,10 +6,14 @@ mod tag;
 mod core;
 mod check;
 
+pub mod pprint;
 mod more;
 mod solve;
 mod builtins;
 mod sanity_check;
+
+#[cfg(debug_assertions)]
+mod debug;
 
 pub use {
     self::{

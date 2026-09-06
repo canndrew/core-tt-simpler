@@ -62,6 +62,7 @@ impl Constraints {
 
     pub fn union(
         ctx: &mut Vec<Ty>,
+        funext: &Tm,
         fwd: &Scope<Tm>,
         constraints_0: Constraints,
         constraints_1: Constraints,
@@ -112,6 +113,7 @@ impl Constraints {
             match solve::simplify::simplify_equal(
                 ctx,
                 index,
+                funext,
                 &equal_ty,
                 &var_ty,
                 &unique_tm_0,

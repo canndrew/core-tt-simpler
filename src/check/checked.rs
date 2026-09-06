@@ -263,6 +263,23 @@ pub enum SolveError {
     },
 }
 
+impl fmt::Display for SolveError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SolveError::Uninhabited { tags } => {
+                writeln!(f, "uninhabited at:")?;
+                for tag in tags {
+                    write!(f, "    {:?}", tag)?;
+                }
+                Ok(())
+            },
+            SolveError::Ambiguous { ty } => {
+                writeln!(f, "failed to solve constraint: {}", crate::pprint::pprint(ty.clone()))
+            },
+        }
+    }
+}
+
 impl<T> Checked<T> {
     pub fn solve(self) -> Result<T, SolveError>
     where
@@ -271,8 +288,72 @@ impl<T> Checked<T> {
     {
         let Checked { constraint_ty, scope } = self;
         let mut ctx = Vec::new();
-        let result = constraint_ty.simplify(&mut ctx, 0);
-        debug_assert_eq!(ctx.len(), 0);
+
+        let funext_ty = Ty::pi(
+            Name::from("arg_name"),
+            Ty::name(),
+            Scope::make(0, |arg_name| {
+                let arg_name = arg_name.into_name();
+                Ty::pi(
+                    Name::from("Arg"),
+                    Ty::universe(),
+                    Scope::make(1, |arg_ty| {
+                        let arg_ty = arg_ty.into_ty();
+                        Ty::pi(
+                            Name::from("Res"),
+                            Ty::pi(
+                                arg_name.clone(),
+                                arg_ty.clone(),
+                                Scope::constant(Ty::universe()),
+                            ),
+                            Scope::make(2, |res_ty| {
+                                let res_ty = Scope::make(3, |arg| res_ty.app(arg).into_ty());
+                                let func_ty = Ty::pi(
+                                    arg_name.clone(),
+                                    arg_ty.clone(),
+                                    res_ty.clone(),
+                                );
+                                Ty::pi(
+                                    Name::from("func_0"),
+                                    func_ty.clone(),
+                                    Scope::make(3, |func_0| {
+                                        Ty::pi(
+                                            Name::from("func_1"),
+                                            func_ty.clone(),
+                                            Scope::make(4, |func_1| {
+                                                Ty::pi(
+                                                    Name::from("pointwise_eq"),
+                                                    Ty::pi(
+                                                        arg_name.clone(),
+                                                        arg_ty.clone(),
+                                                        Scope::make(5, |arg| {
+                                                            Ty::equal(
+                                                                res_ty.clone().bind(arg.clone()),
+                                                                func_0.clone().app(arg.clone()),
+                                                                func_1.clone().app(arg),
+                                                            )
+                                                        }),
+                                                    ),
+                                                    Scope::make(5, |_pointwise_eq| {
+                                                        Ty::equal(func_ty, func_0, func_1)
+                                                    }),
+                                                )
+                                            }),
+                                        )
+                                    }),
+                                )
+                            }),
+                        )
+                    }),
+                )
+            }),
+        );
+
+        ctx.push(funext_ty);
+        let orig_ctx_len = ctx.len();
+        let funext = Tm::var(0);
+        let result = constraint_ty.simplify(&mut ctx, 0, &funext);
+        debug_assert_eq!(ctx.len(), orig_ctx_len);
 
         let simplification = match result {
             Ok(simplification) => simplification,

@@ -32,13 +32,13 @@ fn run() -> Result<(), String> {
     });
     let (ty, tm) = match checked.solve() {
         Ok((ty, tm)) => (ty, tm),
-        Err(err) => return Err(format!("typecheck error: {:#?}", err)),
+        Err(err) => return Err(format!("typecheck error: {}", err)),
     };
     let ty = ty.deep_nf();
     let tm = tm.deep_nf();
 
-    println!("ty == {:#?}", ty);
-    println!("tm == {:#?}", tm);
+    println!("{}", core_tt_simpler::pprint::pprint(ty));
+    println!("{}", core_tt_simpler::pprint::pprint(tm));
 
     Ok(())
 }

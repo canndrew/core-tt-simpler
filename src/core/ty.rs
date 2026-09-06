@@ -18,25 +18,26 @@ impl Ty {
     }
 
     pub fn reduced(self) -> Ty {
-        match &self.weak {
+        match self.weak() {
             TyKind::Form { .. } => self,
             TyKind::Neutral { neutral } => {
                 match neutral.try_reduce() {
                     None => self,
-                    Some(new_tm) => new_tm.unfiltered(&self.usages).into_ty(),
+                    Some(new_tm) => new_tm.unfiltered(self.usages()).into_ty(),
                 }
             },
         }
     }
 
     pub fn try_reduce_to_form(self) -> Option<Form> {
-        match self.weak {
+        let (usages, ty_kind) = self.into_usages_and_weak();
+        match ty_kind {
             TyKind::Form { form } => {
-                Some(Weaken { usages: self.usages, weak: form })
+                Some(Weaken::from_usages_and_weak(usages, form))
             },
             TyKind::Neutral { neutral } => {
                 let intro = neutral.try_reduce_to_intro()?;
-                Some(intro.unfiltered(&self.usages).into_form())
+                Some(intro.unfiltered(&usages).into_form())
             },
         }
     }
@@ -123,8 +124,9 @@ impl Ty {
     }
 
     pub fn deep_nf(self) -> Ty {
-        let Weaken { usages, weak: ty_kind } = self;
-        ty_kind.deep_nf().unfiltered(&usages)
+        self.map_out_unfiltered(|ty_kind| {
+            ty_kind.deep_nf()
+        })
     }
 }
 
@@ -245,7 +247,7 @@ impl Substitutable for Ty {
     type Output = Ty;
 
     fn subst(self, subst: &mut Subst) -> Ty {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self;
         }
         self.into_inner().subst(subst)

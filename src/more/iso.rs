@@ -87,7 +87,12 @@ impl Iso {
         from_ty_0: Ty,
         into_ty_1: Ty,
     ) -> Iso {
-        let ctx_len = max_all([iso_0.ctx_len(), iso_1.ctx_len()]);
+        let ctx_len = max_all([
+            iso_0.ctx_len(),
+            iso_1.ctx_len(),
+            from_ty_0.ctx_len(),
+            into_ty_1.ctx_len(),
+        ]);
 
         let Iso { fwd: fwd_0, rev: rev_0, fwd_rev: fwd_rev_0, rev_fwd: rev_fwd_0 } = iso_0;
         let Iso { fwd: fwd_1, rev: rev_1, fwd_rev: fwd_rev_1, rev_fwd: rev_fwd_1 } = iso_1;
@@ -1578,6 +1583,329 @@ impl Iso {
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
+
+    pub fn dependent_pi_arg_congruence(
+        funext: &Tm,
+        arg_name: Name,
+        arg_ty_0: Ty,
+        arg_ty_1: Ty,
+        res_ty: Scope<Ty>,
+        arg_iso: Iso,
+    ) -> Iso {
+        let ctx_len = max_all([
+            arg_name.ctx_len(),
+            arg_ty_0.ctx_len(),
+            arg_ty_1.ctx_len(),
+            res_ty.ctx_len(),
+            arg_iso.ctx_len(),
+        ]);
+
+        let Iso {
+            fwd: arg_fwd, rev: arg_rev, fwd_rev: arg_fwd_rev, rev_fwd: arg_rev_fwd,
+        } = arg_iso;
+
+        lazy_static! {
+            static ref RES_NAME: Name = Name::from("res");
+        }
+
+        let fwd = Scope::make(ctx_len, |func| {
+            Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
+                func.app(arg_rev.clone().bind(arg_tm_1))
+            }))
+        });
+
+        let rev = Scope::make(ctx_len, |func| {
+            Tm::func(Scope::make(ctx_len + 1, |arg_tm_0| {
+                let arg_tm_1 = arg_fwd.clone().bind(arg_tm_0.clone());
+                let arg_tm_0_round_trip = {
+                    arg_rev.clone().bind(arg_tm_1.clone())
+                };
+
+                res_ty
+                .clone()
+                .bind_eq(
+                    arg_tm_0_round_trip.clone(),
+                    arg_fwd_rev.clone().bind(arg_tm_0),
+                )
+                .transport(
+                    res_ty.clone().bind(arg_tm_0_round_trip),
+                    func.app(arg_tm_1),
+                    RES_NAME.clone(),
+                )
+            }))
+        });
+
+        let fwd_rev = Scope::make(ctx_len, |func| {
+            funext
+            .clone()
+            .app(arg_name.clone().into_tm())
+            .app(arg_ty_0.clone().into_tm())
+            .app(Tm::func(res_ty.clone().map_without_capture(|res_ty| res_ty.into_tm())))
+            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
+            .app(func.clone())
+            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_0| {
+                let arg_tm_1 = arg_fwd.clone().bind(arg_tm_0.clone());
+                let arg_tm_0_round_trip = arg_rev.clone().bind(arg_tm_1.clone());
+                let res_round_trip = func.clone().app(arg_tm_0_round_trip.clone());
+
+                arg_fwd_rev
+                .clone()
+                .bind(arg_tm_0)
+                .cong(
+                    Scope::make(ctx_len + 2, |arg_tm_2| {
+                        Scope::make(ctx_len + 3, |arg_eq| {
+                            Ty::equal(
+                                res_ty.clone().bind(arg_tm_2.clone()),
+                                res_ty
+                                .clone()
+                                .bind_eq(
+                                    arg_tm_0_round_trip.clone(),
+                                    arg_eq,
+                                )
+                                .transport(
+                                    res_ty.clone().bind(arg_tm_0_round_trip.clone()),
+                                    res_round_trip.clone(),
+                                    RES_NAME.clone(),
+                                ),
+                                func.app(arg_tm_2),
+                            )
+                        })
+                    }),
+                    res_round_trip.refl(),
+                )
+            })))
+        });
+
+        let rev_fwd = Scope::make(ctx_len, |func| {
+            funext
+            .clone()
+            .app(arg_name.clone().into_tm())
+            .app(arg_ty_1.clone().into_tm())
+            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
+                res_ty.clone().bind(arg_rev.clone().bind(arg_tm_1)).into_tm()
+            })))
+            .app(fwd.clone().bind(rev.clone().bind(func.clone())))
+            .app(func.clone())
+            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
+                let arg_tm_0 = arg_rev.clone().bind(arg_tm_1.clone());
+                let arg_tm_1_round_trip = arg_fwd.clone().bind(arg_tm_0.clone());
+                let arg_tm_0_round_trip = arg_rev.clone().bind(arg_tm_1_round_trip.clone());
+
+                let arg_tm_1_round_trip_eq_arg_tm_1 = arg_rev_fwd.bind(arg_tm_1.clone());
+
+                Tm::equality_contractible(
+                    arg_ty_0.clone(),
+                    arg_tm_0_round_trip.clone(),
+                    arg_fwd_rev.clone().bind(arg_tm_0.clone()),
+                    arg_rev
+                    .clone()
+                    .bind_eq(
+                        arg_ty_0.clone(),
+                        arg_tm_1_round_trip.clone(),
+                        arg_tm_1_round_trip_eq_arg_tm_1.clone(),
+                    ),
+                )
+                .map_eq(
+                    ctx_len + 2,
+                    res_ty.clone().bind(arg_tm_0.clone()),
+                    arg_tm_0_round_trip.clone(),
+                    |arg_eq| {
+                        res_ty
+                        .clone()
+                        .bind_eq(
+                            arg_tm_0_round_trip.clone(),
+                            arg_eq,
+                        )
+                        .transport(
+                            res_ty.clone().bind(arg_tm_0_round_trip.clone()),
+                            func.clone().app(arg_tm_1_round_trip.clone()),
+                            RES_NAME.clone(),
+                        )
+                    },
+                )
+                .transitivity(
+                    arg_tm_1_round_trip_eq_arg_tm_1
+                    .cong(
+                        Scope::make(ctx_len + 2, |arg_tm_2| {
+                            Scope::make(ctx_len + 3, |arg_eq| {
+                                Ty::equal(
+                                    res_ty.clone().bind(arg_rev.clone().bind(arg_tm_2.clone())),
+                                    res_ty
+                                    .clone()
+                                    .bind_eq(
+                                        arg_tm_0_round_trip.clone(),
+                                        arg_rev
+                                        .bind_eq(
+                                            arg_ty_1,
+                                            arg_tm_1_round_trip.clone(),
+                                            arg_eq,
+                                        )
+                                    )
+                                    .transport(
+                                        res_ty.clone().bind(arg_tm_0_round_trip.clone()),
+                                        func.clone().app(arg_tm_1_round_trip.clone()),
+                                        RES_NAME.clone(),
+                                    ),
+                                    func.clone().app(arg_tm_2),
+                                )
+                            })
+                        }),
+                        func.clone().app(arg_tm_1_round_trip.clone()).refl(),
+                    ),
+                    res_ty.clone().bind(arg_tm_0.clone()),
+                    res_ty
+                    .clone()
+                    .bind_eq(
+                        arg_tm_0_round_trip.clone(),
+                        arg_fwd_rev.bind(arg_tm_0),
+                    )
+                    .transport(
+                        res_ty.bind(arg_tm_0_round_trip),
+                        func.clone().app(arg_tm_1_round_trip.clone()),
+                        RES_NAME.clone(),
+                    ),
+                    func.app(arg_tm_1),
+                )
+            })))
+        });
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+    pub fn dependent_pi_res_congruence(
+        funext: &Tm,
+        arg_name: Name,
+        arg_ty: Ty,
+        res_ty_0: Scope<Ty>,
+        res_ty_1: Scope<Ty>,
+        res_iso: Scope<Iso>,
+    ) -> Iso {
+        let ctx_len = max_all([
+            funext.ctx_len(),
+            arg_name.ctx_len(),
+            arg_ty.ctx_len(),
+            res_ty_0.ctx_len(),
+            res_ty_1.ctx_len(),
+            res_iso.ctx_len(),
+        ]);
+
+        let (res_fwd, res_rev, res_fwd_rev, res_rev_fwd) = res_iso.map_multi(
+            ctx_len,
+            |_, res_iso| {
+                let Iso { fwd, rev, fwd_rev, rev_fwd } = res_iso;
+                (fwd, rev, fwd_rev, rev_fwd)
+            },
+        );
+
+        let fwd = Scope::make(ctx_len, |func| {
+            Tm::func(Scope::make(ctx_len + 1, |arg| {
+                res_fwd
+                .bind(arg.clone())
+                .bind(func.app(arg))
+            }))
+        });
+
+        let rev = Scope::make(ctx_len, |func| {
+            Tm::func(Scope::make(ctx_len + 1, |arg| {
+                res_rev
+                .bind(arg.clone())
+                .bind(func.app(arg))
+            }))
+        });
+
+        let fwd_rev = Scope::make(ctx_len, |func| {
+            funext
+            .clone()
+            .app(arg_name.clone().into_tm())
+            .app(arg_ty.clone().into_tm())
+            .app(Tm::func(res_ty_0.clone().map_without_capture(|res_ty| res_ty.into_tm())))
+            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
+            .app(func.clone())
+            .app(Tm::func(Scope::make(ctx_len + 1, |arg| {
+                res_fwd_rev
+                .bind(arg.clone())
+                .bind(func.app(arg))
+            })))
+        });
+
+        let rev_fwd = Scope::make(ctx_len, |func| {
+            funext
+            .clone()
+            .app(arg_name.clone().into_tm())
+            .app(arg_ty.clone().into_tm())
+            .app(Tm::func(res_ty_1.clone().map_without_capture(|res_ty| res_ty.into_tm())))
+            .app(fwd.clone().bind(rev.clone().bind(func.clone())))
+            .app(func.clone())
+            .app(Tm::func(Scope::make(ctx_len + 1, |arg| {
+                res_rev_fwd
+                .bind(arg.clone())
+                .bind(func.app(arg))
+            })))
+        });
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+    pub fn pi_never_arg(
+        funext: &Tm,
+        arg_name: Name,
+        res_ty: Scope<Ty>,
+    ) -> Iso {
+        let ctx_len = max_all([
+            arg_name.ctx_len(),
+            res_ty.ctx_len(),
+        ]);
+
+        let fwd = Scope::constant(Tm::unit());
+        let rev = Scope::constant(Tm::func(Scope::make(ctx_len + 1, |never| {
+            never.explode(res_ty.clone())
+        })));
+
+        let fwd_rev = Scope::make(ctx_len, |func| {
+            funext
+            .clone()
+            .app(arg_name.into_tm())
+            .app(Ty::never().into_tm())
+            .app(Tm::func(res_ty.clone().map_without_capture(|res_ty| res_ty.into_tm())))
+            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
+            .app(func.clone())
+            .app(Tm::func(Scope::make(ctx_len + 1, |never| {
+                never.clone().explode(Scope::constant(
+                    Ty::equal(
+                        res_ty.clone().bind(never.clone()),
+                        never.clone().explode(res_ty),
+                        func.app(never),
+                    )
+                ))
+            })))
+        });
+
+        let rev_fwd = Scope::constant(Tm::unit().refl());
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+
+    pub fn pi_unit_arg(
+        res_ty: Scope<Ty>,
+    ) -> Iso {
+        let ctx_len = res_ty.ctx_len();
+
+        let fwd = Scope::make(ctx_len, |func| {
+            func.app(Tm::unit())
+        });
+
+        let rev = Scope::make(ctx_len, |res| {
+            Tm::func(Scope::constant(res))
+        });
+
+        let fwd_rev = Scope::make(ctx_len, |func| func.refl());
+
+        let rev_fwd = Scope::make(ctx_len, |res| res.refl());
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
 
     /// ```ignore
     /// Γ ⊢ arg_name : Name

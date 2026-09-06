@@ -355,13 +355,12 @@ impl NeutralData {
 
     pub fn try_reduce_to_intro(&self) -> Option<Intro> {
         let tm = self.try_reduce()?;
-        let Weaken { usages, weak } = tm;
-        match weak {
-            TmKind::Intro { intro } => {
-                Some(Weaken { usages, weak: intro })
-            },
-            TmKind::Neutral { .. } => None,
-        }
+        tm.try_map(|tm_kind| {
+            match tm_kind {
+                TmKind::Intro { intro } => Some(intro),
+                TmKind::Neutral { .. } => None,
+            }
+        })
     }
 
     pub fn try_infer_ty(
@@ -372,7 +371,14 @@ impl NeutralData {
     }
 
     pub fn collect_stuck_vars(&self, usages: &mut Usages) {
-        self.kind.collect_stuck_vars(usages)
+        match self.get_cached_reduction() {
+            Some(tm) => {
+                tm.as_neutral().unwrap().into_inner().collect_stuck_vars(usages);
+            },
+            None => {
+                self.kind.collect_stuck_vars(usages)
+            },
+        }
     }
 
     pub fn deep_nf(self) -> Tm {
@@ -397,6 +403,13 @@ impl NeutralData {
             },
         }
     }
+
+    pub fn as_var(&self) -> Option<usize> {
+        match self.try_reduce() {
+            Some(tm) => tm.as_var(),
+            None => self.kind.as_var(),
+        }
+    }
 }
 
 impl NeutralKind {
@@ -410,10 +423,7 @@ impl NeutralKind {
                 let subst_len = var_tms.len();
 
                 truncated_body_usages.set_run_to_one(subst_index, subst_len);
-                let body = Weaken {
-                    usages: truncated_body_usages,
-                    weak: body.clone(),
-                };
+                let body = Weaken::from_usages_and_weak(truncated_body_usages, body.clone());
                 let mut subst = Subst::from_var_tms(subst_index, var_tms);
                 let body = body.subst(&mut subst);
                 debug_assert_eq!(subst.len(), subst_len);
@@ -422,37 +432,34 @@ impl NeutralKind {
             NeutralKind::TagsApart { .. } => return None,
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
-                let Weaken {
-                    usages: elim_usages, weak: elim,
-                } = elim.clone().try_reduce_to_intro()?;
+                let elim = elim.clone().try_reduce_to_intro()?;
+                let (elim_usages, elim) = elim.into_usages_and_weak();
                 match &*elim {
                     IntroKind::Constant { ubig } => {
                         let mut val = Ubig::ZERO;
                         let mut state = zero_inhab.clone();
                         while val < *ubig {
-                            let elim = Weaken {
-                                usages: Usages::empty(),
-                                weak: TmKind::Intro {
-                                    intro: Arc::new(IntroKind::Constant {
-                                        ubig: val.clone(),
-                                    }),
-                                },
+                            let elim = TmKind::Intro {
+                                intro: Arc::new(IntroKind::Constant {
+                                    ubig: val.clone(),
+                                }),
                             };
+                            let elim = Weaken::from_usages_and_weak(Usages::empty(), elim);
                             state = succ_inhab.clone().bind(elim).bind(state);
                             val.increment();
                         }
                         state
                     },
                     IntroKind::Succs { succ_count_m1, pred_tm } => {
-                        let elim = Weaken {
-                            usages: elim_usages.clone(),
-                            weak: TmKind::Neutral {
+                        let elim = Weaken::from_usages_and_weak(
+                            elim_usages.clone(),
+                            TmKind::Neutral {
                                 neutral: pred_tm.clone(),
                             },
-                        };
-                        let state = Weaken {
-                            usages: Usages::ones(self.ctx_len()),
-                            weak: TmKind::Neutral {
+                        );
+                        let state = Weaken::from_usages_and_weak(
+                            Usages::ones(self.ctx_len()),
+                            TmKind::Neutral {
                                 neutral: NeutralData::new_arc(NeutralKind::Fold {
                                     elim: elim.clone(),
                                     motive: motive.clone(),
@@ -460,19 +467,19 @@ impl NeutralKind {
                                     succ_inhab: succ_inhab.clone(),
                                 }),
                             },
-                        };
+                        );
                         let mut state = succ_inhab.clone().bind(elim.clone()).bind(state);
                         let mut val = Ubig::ZERO;
                         while val < *succ_count_m1 {
-                            let elim = Weaken {
-                                usages: elim_usages.clone(),
-                                weak: TmKind::Intro {
+                            let elim = Weaken::from_usages_and_weak(
+                                elim_usages.clone(),
+                                TmKind::Intro {
                                     intro: Arc::new(IntroKind::Succs {
                                         succ_count_m1: val.clone(),
                                         pred_tm: pred_tm.clone(),
                                     }),
                                 },
-                            };
+                            );
                             state = succ_inhab.clone().bind(elim).bind(state);
                             val.increment();
                         }
@@ -497,13 +504,15 @@ impl NeutralKind {
             NeutralKind::Explode { .. } => return None,
 
             NeutralKind::Case { elim, motive: _, lhs_inhab, rhs_inhab } => {
-                let Weaken { usages, weak: elim } = elim.clone().try_reduce_to_intro()?;
+                let (usages, elim) = elim.clone().try_reduce_to_intro()?.into_usages_and_weak();
                 match &*elim {
                     IntroKind::InjLhs { lhs_tm } => {
-                        lhs_inhab.clone().bind(Weaken { usages, weak: lhs_tm.clone() })
+                        let lhs_tm = Weaken::from_usages_and_weak(usages, lhs_tm.clone());
+                        lhs_inhab.clone().bind(lhs_tm)
                     },
                     IntroKind::InjRhs { rhs_tm } => {
-                        rhs_inhab.clone().bind(Weaken { usages, weak: rhs_tm.clone() })
+                        let rhs_tm = Weaken::from_usages_and_weak(usages, rhs_tm.clone());
+                        rhs_inhab.clone().bind(rhs_tm)
                     },
                     _ => unreachable!(),
                 }
@@ -519,7 +528,7 @@ impl NeutralKind {
                     },
                     TmKind::Neutral { neutral } => {
                         let intro = neutral.try_reduce_to_intro()?;
-                        let Weaken { usages, weak: intro } = intro;
+                        let (usages, intro) = intro.into_usages_and_weak();
                         let IntroKind::Pair { head_tm, tail_tm: _ } = &*intro else {
                             unreachable!();
                         };
@@ -537,7 +546,7 @@ impl NeutralKind {
                     },
                     TmKind::Neutral { neutral } => {
                         let intro = neutral.try_reduce_to_intro()?;
-                        let Weaken { usages, weak: intro } = intro;
+                        let (usages, intro) = intro.into_usages_and_weak();
                         let IntroKind::Pair { head_tm: _, tail_tm } = &*intro else {
                             unreachable!();
                         };
@@ -1010,7 +1019,7 @@ impl Neutral {
         }
 
         let usages = Usages::single_var(index);
-        Weaken { usages, weak: VAR_0.clone() }
+        Weaken::from_usages_and_weak(usages, VAR_0.clone())
     }
 
     pub fn tags_apart(elim: Tm) -> Neutral {
@@ -1088,15 +1097,15 @@ impl Neutral {
     }
 
     pub fn deep_nf(self) -> Tm {
-        let Weaken { usages, weak: neutral } = self;
-        let neutral = Arc::unwrap_or_clone(neutral);
-        neutral.deep_nf().unfiltered(&usages)
+        self.map_out_unfiltered(|neutral| {
+            Arc::unwrap_or_clone(neutral).deep_nf()
+        })
     }
 
     pub fn deep_nf_assuming_stuck(self) -> Neutral {
-        let Weaken { usages, weak: neutral } = self;
-        let neutral = Arc::unwrap_or_clone(neutral);
-        neutral.deep_nf_assuming_stuck().unfiltered(&usages)
+        self.map_out_unfiltered(|neutral| {
+            Arc::unwrap_or_clone(neutral).deep_nf_assuming_stuck()
+        })
     }
 }
 
@@ -1104,7 +1113,7 @@ impl Substitutable for Neutral {
     type Output = Tm;
 
     fn subst(self, subst: &mut Subst) -> Tm {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self.into_tm();
         }
         self.into_inner().subst(subst)
@@ -1146,7 +1155,7 @@ impl Substitutable for NeutralKind {
 
                 truncated_body_usages.set_run_to_one(subst_index, var_tms.len());
                 let pre_subst = Subst::from_var_tms(subst_index, var_tms);
-                let body = Weaken { usages: truncated_body_usages, weak: body };
+                let body = Weaken::from_usages_and_weak(truncated_body_usages, body);
                 return subst.with_composed(pre_subst, |subst| body.subst(subst));
             },
 

@@ -145,7 +145,7 @@ impl Unify for IntroKind {
             ) => {
                 loop {
                     let intro = pred_tm.try_reduce_to_intro()?;
-                    match &*intro.weak {
+                    match &**intro.weak() {
                         IntroKind::Constant { ubig: additional } => {
                             let ubig_1 = succ_count_m1 + additional + 1usize;
                             let ubig = as_equal(ubig_0, &ubig_1)?;
@@ -166,7 +166,7 @@ impl Unify for IntroKind {
             ) => {
                 loop {
                     let intro = pred_tm.try_reduce_to_intro()?;
-                    match &*intro.weak {
+                    match &**intro.weak() {
                         IntroKind::Constant { ubig: additional } => {
                             let ubig_0 = succ_count_m1 + additional + 1usize;
                             let ubig = as_equal(ubig_0, &ubig_1)?;
@@ -277,44 +277,46 @@ impl Intro {
     }
 
     pub fn as_tag(self) -> Option<Tag> {
-        Arc::unwrap_or_clone(self.weak).as_tag()
+        Arc::unwrap_or_clone(self.into_weak()).as_tag()
     }
 
     pub fn as_form(self) -> Option<Form> {
-        let form = Arc::unwrap_or_clone(self.weak).as_form()?;
-        Some(Weaken { usages: self.usages, weak: form })
+        self.try_map(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).as_form()
+        })
     }
 
     pub fn as_constant(self) -> Option<Ubig> {
-        Arc::unwrap_or_clone(self.weak).as_constant()
+        Arc::unwrap_or_clone(self.into_weak()).as_constant()
     }
 
     pub fn as_succs_m1(self) -> Option<(Ubig, Neutral)> {
-        let (succ_count_m1, pred_tm) = Arc::unwrap_or_clone(self.weak).as_succs_m1()?;
-        let pred_tm = Weaken { usages: self.usages, weak: pred_tm };
+        let (usages, intro_kind) = self.into_usages_and_weak();
+        let (succ_count_m1, pred_tm) = Arc::unwrap_or_clone(intro_kind).as_succs_m1()?;
+        let pred_tm = Weaken::from_usages_and_weak(usages, pred_tm);
         Some((succ_count_m1, pred_tm))
     }
 
     pub fn as_refl(self) -> Option<Tm> {
-        let eq_tm = Arc::unwrap_or_clone(self.weak).as_refl()?;
-        let eq_tm = Weaken { usages: self.usages.clone(), weak: eq_tm.clone() };
-        Some(eq_tm)
+        self.try_map(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).as_refl()
+        })
     }
 
     pub fn as_unit(&self) -> Option<()> {
-        self.weak.as_unit()
+        self.weak().as_unit()
     }
 
     pub fn as_inj_lhs(self) -> Option<Tm> {
-        let lhs_tm = Arc::unwrap_or_clone(self.weak).as_inj_lhs()?;
-        let lhs_tm = Weaken { usages: self.usages.clone(), weak: lhs_tm.clone() };
-        Some(lhs_tm)
+        self.try_map(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).as_inj_lhs()
+        })
     }
 
     pub fn as_inj_rhs(self) -> Option<Tm> {
-        let rhs_tm = Arc::unwrap_or_clone(self.weak).as_inj_rhs()?;
-        let rhs_tm = Weaken { usages: self.usages.clone(), weak: rhs_tm.clone() };
-        Some(rhs_tm)
+        self.try_map(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).as_inj_rhs()
+        })
     }
 
     pub fn as_pair(self) -> Option<(Tm, Tm)> {
@@ -322,8 +324,9 @@ impl Intro {
     }
 
     pub fn as_func(self) -> Option<Scope<Tm>> {
-        let res_tm = Arc::unwrap_or_clone(self.weak).as_func()?;
-        let res_tm = Weaken { usages: self.usages.clone(), weak: res_tm.clone() };
+        let res_tm = self.try_map(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).as_func()
+        })?;
         Some(res_tm.lift_scope())
     }
 
@@ -337,10 +340,9 @@ impl Intro {
     */
 
     pub fn deep_nf(self) -> Intro {
-        let Weaken { usages, weak: intro_kind } = self;
-        let intro_kind = Arc::unwrap_or_clone(intro_kind);
-        let intro_kind = intro_kind.deep_nf();
-        intro_kind.unfiltered(&usages)
+        self.map_out_unfiltered(|intro_kind| {
+            Arc::unwrap_or_clone(intro_kind).deep_nf()
+        })
     }
 }
 
@@ -641,7 +643,8 @@ impl IntroKind {
             },
 
             IntroKind::Succs { succ_count_m1, pred_tm } => {
-                let Weaken { usages, weak: tm_kind } = Arc::unwrap_or_clone(pred_tm).deep_nf();
+                let pred_tm = Arc::unwrap_or_clone(pred_tm).deep_nf();
+                let (usages, tm_kind) = pred_tm.into_usages_and_weak();
                 let intro_kind = match tm_kind {
                     TmKind::Intro { intro } => {
                         match Arc::unwrap_or_clone(intro) {
@@ -663,7 +666,7 @@ impl IntroKind {
                         IntroKind::Succs { succ_count_m1, pred_tm }
                     },
                 };
-                Weaken { usages, weak: Arc::new(intro_kind) }
+                Weaken::from_usages_and_weak(usages, Arc::new(intro_kind))
             },
 
             IntroKind::Refl { eq_tm } => {
@@ -706,7 +709,7 @@ impl Substitutable for Intro {
     type Output = Intro;
 
     fn subst(self, subst: &mut Subst) -> Intro {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self;
         }
         self.into_inner().subst(subst)
@@ -750,7 +753,7 @@ impl Substitutable for IntroKind {
 
             IntroKind::Succs { succ_count_m1, pred_tm } => {
                 let pred_tm = pred_tm.subst(subst);
-                match pred_tm.weak {
+                match pred_tm.into_inner() {
                     TmKind::Intro { intro } => {
                         let intro = Arc::unwrap_or_clone(intro);
                         match intro {

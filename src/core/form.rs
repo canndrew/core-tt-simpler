@@ -104,7 +104,7 @@ impl Substitutable for Form {
     type Output = Form;
 
     fn subst(self, subst: &mut Subst) -> Form {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self;
         }
         Weaken::new(self.into_inner().subst(subst))
@@ -225,15 +225,15 @@ impl Form {
     }
 
     pub fn as_name(&self) -> Option<()> {
-        self.weak.as_name()
+        self.weak().as_name()
     }
 
     pub fn as_universe(&self) -> Option<()> {
-        self.weak.as_universe()
+        self.weak().as_universe()
     }
 
     pub fn as_nat(&self) -> Option<()> {
-        self.weak.as_nat()
+        self.weak().as_nat()
     }
 
     pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
@@ -241,11 +241,11 @@ impl Form {
     }
 
     pub fn as_never(self) -> Option<()> {
-        self.weak.as_never()
+        self.weak().as_never()
     }
 
     pub fn as_unit(self) -> Option<()> {
-        self.weak.as_unit()
+        self.weak().as_unit()
     }
 
     pub fn as_sum(self) -> Option<(Name, Ty, Ty)> {
@@ -261,10 +261,9 @@ impl Form {
     }
 
     pub fn deep_nf(self) -> Form {
-        let Weaken { usages, weak: form_kind } = self;
-        let form_kind = Arc::unwrap_or_clone(form_kind);
-        let form_kind = form_kind.deep_nf();
-        form_kind.unfiltered(&usages)
+        self.map_out_unfiltered(|form_kind| {
+            Arc::unwrap_or_clone(form_kind).deep_nf()
+        })
     }
 }
 
@@ -409,6 +408,29 @@ impl FormKind {
                 let arg_name = arg_name.deep_nf();
                 let arg_ty = arg_ty.deep_nf();
                 let res_ty = res_ty.deep_nf();
+
+
+                // debugging
+                print_on_panic!("arg_name == {:#?}", arg_name.clone());
+                print_on_panic!("arg_ty == {:#?}", arg_ty.clone());
+                print_on_panic!("res_ty == {:#?}", res_ty.clone());
+                let kind = FormKind::Pi {
+                    arg_name: arg_name.clone(),
+                    arg_ty: arg_ty.clone(),
+                    res_ty: res_ty.clone(),
+                };
+                print_on_panic!("kind == {:#?}", kind.clone());
+                let mut usages = Usages::empty();
+                kind.collect_usages(&mut usages);
+                print_on_panic!("collect_usages == {:#?}", usages.clone());
+                let filtered_kind = kind.clone().filtered(&usages);
+                print_on_panic!("filtered_kind == {:#?}", filtered_kind);
+
+                print_on_panic!("weakened == {:#?}", Weaken::new(kind));
+
+
+
+
                 Weaken::new_arc(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
         }

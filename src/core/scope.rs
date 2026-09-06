@@ -33,7 +33,7 @@ impl<T: Contextual> Contextual for Scope<T> {
         let mut usages = usages.clone_truncate(new_ctx_len);
         usages.set_to_one(new_ctx_len);
         self.ctx_len = new_ctx_len;
-        self.inner.unfilter_usages(&usages);
+        self.inner.unfilter_usages(&usages)
     }
 }
 
@@ -213,10 +213,11 @@ where
 impl<T> Scope<Weaken<T>> {
     // More efficient than Weaken::new(self.map(Weaken::into_inner))
     pub fn lift_weaken(self) -> Weaken<Scope<T>> {
-        let Scope { ctx_len, inner: Weaken { mut usages, weak } } = self;
+        let Scope { ctx_len, inner } = self;
+        let (mut usages, weak) = inner.into_usages_and_weak();
         usages.set_to_zero(ctx_len);
         let ctx_len = usages.count_ones();
-        Weaken { usages, weak: Scope { ctx_len, inner: weak } }
+        Weaken::from_usages_and_weak(usages, Scope { ctx_len, inner: weak })
     }
 }
 

@@ -14,12 +14,12 @@ pub enum TmKind {
 
 impl Bindable for Tm {
     fn capture_subst(self, subst: Subst) -> Tm {
-        let (subst_index, var_tms) = subst.remove_unused_vars(&self.usages);
+        let (subst_index, var_tms) = subst.remove_unused_vars(self.usages());
         if var_tms.is_empty() {
             return self;
         }
 
-        let Weaken { usages: mut truncated_body_usages, weak: body } = self;
+        let (mut truncated_body_usages, body) = self.into_usages_and_weak();
         truncated_body_usages.truncate(subst_index);
 
         Weaken::new_arc(NeutralData::new(NeutralKind::Bind {
@@ -33,7 +33,7 @@ impl Substitutable for Tm {
     type Output = Tm;
 
     fn subst(self, subst: &mut Subst) -> Tm {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self;
         }
         self.into_inner().subst(subst)
@@ -65,32 +65,34 @@ impl Substitutable for TmKind {
 
 impl Tm {
     pub fn reduced(self) -> Tm {
-        match &self.weak {
+        match self.weak() {
             TmKind::Intro { .. } => self,
             TmKind::Neutral { neutral } => {
                 match neutral.try_reduce() {
                     None => self,
-                    Some(new_tm) => new_tm.unfiltered(&self.usages),
+                    Some(new_tm) => new_tm.unfiltered(self.usages()),
                 }
             },
         }
     }
 
     pub fn try_reduce_to_intro(self) -> Option<Intro> {
-        match self.weak {
+        let (usages, tm_kind) = self.into_usages_and_weak();
+        match tm_kind {
             TmKind::Intro { intro } => {
-                Some(Weaken { usages: self.usages, weak: intro })
+                Some(Weaken::from_usages_and_weak(usages, intro))
             },
             TmKind::Neutral { neutral } => {
                 let intro = neutral.try_reduce_to_intro()?;
-                Some(intro.unfiltered(&self.usages))
+                Some(intro.unfiltered(&usages))
             },
         }
     }
 
     pub fn deep_nf(self) -> Tm {
-        let Weaken { usages, weak: tm_kind } = self;
-        tm_kind.deep_nf().unfiltered(&usages)
+        self.map_out_unfiltered(|tm_kind| {
+            tm_kind.deep_nf()
+        })
     }
 
     pub fn into_name(self) -> Name {
@@ -126,7 +128,7 @@ impl Tm {
         if !succ_count_m1.decrement() {
             return self;
         }
-        let Weaken { usages, weak: tm_kind } = self;
+        let (usages, tm_kind) = self.into_usages_and_weak();
         let intro_kind = match tm_kind {
             TmKind::Intro { intro } => {
                 let intro = Arc::unwrap_or_clone(intro);
@@ -147,7 +149,7 @@ impl Tm {
             },
         };
         let tm_kind = TmKind::Intro { intro: Arc::new(intro_kind) };
-        Weaken { usages, weak: tm_kind }
+        Weaken::from_usages_and_weak(usages, tm_kind)
     }
 
     pub fn fold(
@@ -228,20 +230,11 @@ impl Tm {
     }
 
     pub fn as_var(&self) -> Option<usize> {
-        match &self.weak {
+        match self.weak() {
             TmKind::Intro { .. } => None,
             TmKind::Neutral { neutral } => {
-                match neutral.try_reduce() {
-                    Some(tm) => {
-                        let index = tm.as_var()?;
-                        Some(self.usages.unfilter_index(index))
-                    },
-                    None => {
-                        let index = neutral.kind.as_var()?;
-                        debug_assert_eq!(index, 0);
-                        Some(self.usages.as_single_var().unwrap())
-                    },
-                }
+                let index = neutral.as_var()?;
+                Some(self.usages().unfilter_index(index))
             },
         }
     }
@@ -252,9 +245,7 @@ impl Tm {
     }
 
     pub fn as_neutral(self) -> Option<Neutral> {
-        let Weaken { usages, weak: tm_kind } = self;
-        let neutral = tm_kind.as_neutral()?;
-        Some(Weaken { usages, weak: neutral })
+        self.try_map(|tm_kind| tm_kind.as_neutral())
     }
 
     /*

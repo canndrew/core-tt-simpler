@@ -14,7 +14,7 @@ where
     type Meta = T::Meta;
 
     fn sanity_check(self, ctx: &mut Vec<Ty>, meta: T::Meta) {
-        assert!(self.usages.ctx_len() <= ctx.len());
+        assert!(self.ctx_len() <= ctx.len());
         self.into_inner().sanity_check(ctx, meta)
     }
 }

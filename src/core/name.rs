@@ -23,15 +23,16 @@ impl Name {
     }
 
     pub fn as_tag(&self) -> Option<&Tag> {
-        match &self.weak {
+        match self.weak() {
             NameKind::Tag { tag } => Some(tag),
             NameKind::Neutral { .. } => None,
         }
     }
 
     pub fn deep_nf(self) -> Name {
-        let Weaken { usages, weak: name_kind } = self;
-        name_kind.deep_nf().unfiltered(&usages)
+        self.map_out_unfiltered(|name_kind| {
+            name_kind.deep_nf()
+        })
     }
 }
 
@@ -155,7 +156,7 @@ impl Substitutable for Name {
     type Output = Name;
 
     fn subst(self, subst: &mut Subst) -> Name {
-        if self.usages.ctx_len() <= subst.subst_index() {
+        if self.ctx_len() <= subst.subst_index() {
             return self;
         }
         self.into_inner().subst(subst)

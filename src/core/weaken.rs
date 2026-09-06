@@ -2,8 +2,8 @@ use crate::priv_prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct Weaken<T> {
-    pub usages: Usages,
-    pub weak: T,
+    usages: Usages,
+    weak: T,
 }
 
 impl<T> Weaken<T> {
@@ -13,9 +13,7 @@ impl<T> Weaken<T> {
     {
         let mut usages = Usages::empty();
         weak.collect_usages(&mut usages);
-        if usages.ctx_len() != usages.count_ones() {
-            weak.filter_usages(&usages);
-        }
+        weak.filter_usages(&usages);
         Weaken { usages, weak }
     }
 
@@ -28,16 +26,51 @@ impl<T> Weaken<T> {
         weak
     }
 
-    pub fn map<U>(self, func: impl FnOnce(T) -> U) -> Weaken<U> {
+    pub fn map<U>(self, func: impl FnOnce(T) -> U) -> Weaken<U>
+    where
+        U: Contextual,
+    {
         let Weaken { usages, weak } = self;
         let weak = func(weak);
-        Weaken { usages, weak }
+        let ret = Weaken { usages, weak };
+        debug_assert_eq!(ret.weak.ctx_len(), ret.usages.count_ones());
+        ret
     }
 
     pub fn map_out_unfiltered<U: Contextual>(self, func: impl FnOnce(T) -> U) -> U {
         let Weaken { usages, weak } = self;
         let ret = func(weak);
         ret.unfiltered(&usages)
+    }
+
+    pub fn try_map<U: Contextual>(
+        self,
+        func: impl FnOnce(T) -> Option<U>,
+    ) -> Option<Weaken<U>> {
+        let Weaken { usages, weak } = self;
+        let weak = func(weak)?;
+        Some(Weaken { usages, weak })
+    }
+
+    pub fn into_usages_and_weak(self) -> (Usages, T) {
+        let Weaken { usages, weak } = self;
+        (usages, weak)
+    }
+
+    pub fn from_usages_and_weak(usages: Usages, weak: T) -> Weaken<T> {
+        Weaken { usages, weak }
+    }
+
+    pub fn usages(&self) -> &Usages {
+        &self.usages
+    }
+
+    pub fn weak(&self) -> &T {
+        &self.weak
+    }
+
+    pub fn into_weak(self) -> T {
+        self.weak
     }
 }
 
@@ -54,12 +87,17 @@ impl<T: Contextual> Weaken<Scope<T>> {
     }
 }
 
-impl<T> Weaken<Arc<T>> {
+impl<T: Clone> Weaken<Arc<T>> {
     pub fn new_arc(weak: T) -> Weaken<Arc<T>>
     where
         T: Contextual,
     {
-        Weaken::new(weak).map(Arc::new)
+        let blah_0 = Weaken::new(weak);
+        debug_assert_eq!(blah_0.usages.count_ones(), blah_0.weak.ctx_len());
+        blah_0.map(Arc::new)
+
+
+        //Weaken::new(weak).map(Arc::new)
     }
 }
 
