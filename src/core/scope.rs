@@ -43,7 +43,7 @@ impl<T> Scope<T> {
         T: Contextual,
     {
         let inner_ctx_len = inner.ctx_len();
-        match ctx_len.strict_add(1).cmp(&inner.ctx_len()) {
+        match ctx_len.strict_add(1).cmp(&inner_ctx_len) {
             cmp::Ordering::Less => panic!("inner ctx_len too large to be scoped"),
             cmp::Ordering::Greater => {
                 Scope {
@@ -293,7 +293,7 @@ where
     }
 }
 
-impl<T: Contextual + Bindable> Substitutable for Scope<T> {
+impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Scope<T> {
     type Output = Scope<T>;
 
     fn subst(self, subst: &mut Subst) -> Scope<T> {
@@ -302,6 +302,16 @@ impl<T: Contextual + Bindable> Substitutable for Scope<T> {
 
     fn into_output(self) -> Scope<T> {
         self
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Scope<T>> {
+        let Scope { ctx_len, inner } = self;
+        if var_index >= ctx_len {
+            Some(Scope { ctx_len, inner })
+        } else {
+            let inner = inner.try_strengthen_index(var_index)?;
+            Some(Scope::new(ctx_len, inner))
+        }
     }
 }
 

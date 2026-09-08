@@ -52,6 +52,21 @@ impl<T> Weaken<T> {
         Some(Weaken { usages, weak })
     }
 
+    pub fn do_try_strengthen_index(self, var_index: usize) -> Option<Weaken<T::Output>>
+    where
+        T: Substitutable,
+    {
+        let Weaken { usages, weak } = self;
+        let (usages, bit) = usages.shift_remove(var_index);
+        let weak = if bit {
+            let sub_index = usages.filter_index(var_index);
+            weak.try_strengthen_index(sub_index)?
+        } else {
+            weak.into_output()
+        };
+        Some(Weaken { usages, weak })
+    }
+
     pub fn into_usages_and_weak(self) -> (Usages, T) {
         let Weaken { usages, weak } = self;
         (usages, weak)
@@ -74,6 +89,13 @@ impl<T> Weaken<T> {
     }
 }
 
+impl<T> Weaken<Weaken<T>> {
+    pub fn flatten(self) -> Weaken<T> {
+        let Weaken { usages, weak } = self;
+        weak.unfiltered(&usages)
+    }
+}
+
 impl<T: Contextual> Weaken<Scope<T>> {
     pub fn lift_scope(self) -> Scope<Weaken<T>> {
         let Weaken { mut usages, weak: Scope { ctx_len, inner } } = self;
@@ -87,17 +109,20 @@ impl<T: Contextual> Weaken<Scope<T>> {
     }
 }
 
-impl<T: Clone> Weaken<Arc<T>> {
+impl<T> Weaken<Arc<T>> {
     pub fn new_arc(weak: T) -> Weaken<Arc<T>>
     where
-        T: Contextual,
+        T: Contextual + Clone,
     {
-        let blah_0 = Weaken::new(weak);
-        debug_assert_eq!(blah_0.usages.count_ones(), blah_0.weak.ctx_len());
-        blah_0.map(Arc::new)
+        Weaken::new(weak).map(Arc::new)
+    }
 
-
-        //Weaken::new(weak).map(Arc::new)
+    pub fn into_inner_arc(self) -> T
+    where
+        T: Contextual + Clone,
+    {
+        let Weaken { usages, weak } = self;
+        Arc::unwrap_or_clone(weak).unfiltered(&usages)
     }
 }
 

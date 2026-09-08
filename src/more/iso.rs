@@ -23,6 +23,10 @@ impl Substitutable for Iso {
     fn into_output(self) -> Iso {
         self
     }
+
+    fn try_strengthen_index(self, _var_index: usize) -> Option<Iso> {
+        todo!()
+    }
 }
 
 impl Bindable for Iso {

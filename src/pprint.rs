@@ -79,7 +79,7 @@ macro_rules! voom {
         $ctx:ident,
         $indent:ident,
         $s:ident,
-        $name:ident ($($($(%scope($($var_name:expr, $var_ty:expr),+ $(,)?))? $v:expr),+ $(,)?)?)
+        $name:ident ($($($v:expr),+ $(,)?)?)
         $(,)?
     ) => {{
         #[allow(unused)]
@@ -91,12 +91,7 @@ macro_rules! voom {
                 if printed {
                     $s.push_str(", ");
                 }
-                let vars = ();
-                $($(
-                    let vars = (vars, $var_name, $var_ty);
-                )+)?
-
-                $v.pretty($ctx, $indent, $s, vars);
+                $v.pretty($ctx, $indent, $s, ());
                 #[allow(unused)]
                 let printed = true;
             )+)?
@@ -106,11 +101,7 @@ macro_rules! voom {
                 for _ in 0..($indent + 1) {
                     $s.push_str("    ");
                 }
-                let vars = ();
-                $($(
-                    let vars = (vars, $var_name, $var_ty);
-                )+)?
-                $v.pretty($ctx, $indent + 1, $s, vars);
+                $v.pretty($ctx, $indent + 1, $s, ());
                 $s.push(',');
             )+)?
             $s.push('\n');
@@ -223,7 +214,7 @@ impl Pretty<()> for FormKind {
                     Sigma(
                         head_name.clone(),
                         head_ty.clone(),
-                        %scope(Some(head_name), Some(head_ty)) tail_ty,
+                        Scoped(((), Some(head_name.clone()), Some(head_ty.clone())), tail_ty.clone()),
                     ),
                 );
             },
@@ -233,7 +224,7 @@ impl Pretty<()> for FormKind {
                     Pi(
                         arg_name.clone(),
                         arg_ty.clone(),
-                        %scope(Some(arg_name), Some(arg_ty)) res_ty,
+                        Scoped(((), Some(arg_name.clone()), Some(arg_ty.clone())), res_ty.clone()),
                     ),
                 )
             },
@@ -295,7 +286,7 @@ impl Pretty<()> for IntroKind {
                 voom!(ctx, indent, s, pair(head_tm, tail_tm));
             },
             IntroKind::Func { res_tm } => {
-                voom!(ctx, indent, s, func(%scope(None, None) res_tm));
+                voom!(ctx, indent, s, func(Scoped(((), None, None), res_tm.clone())));
             },
         }
     }
@@ -384,37 +375,37 @@ impl Pretty<()> for NeutralKind {
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 voom!(ctx, indent, s, fold(
                     elim,
-                    %scope(None, Some(Ty::nat())) motive,
+                    Scoped(((), None, Some(Ty::nat())), motive.clone()),
                     zero_inhab,
-                    %scope(None, Some(Ty::nat()), None, None) succ_inhab,
+                    Scoped((((), None, Some(Ty::nat())), None, None), succ_inhab.clone()),
                 ));
             },
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 voom!(ctx, indent, s, unique_identity(
                     elim,
-                    %scope(None, None) motive,
+                    Scoped(((), None, None), motive.clone()),
                     inhab,
                 ));
             },
             NeutralKind::Cong { elim, motive, inhab } => {
                 voom!(ctx, indent, s, cong(
                     elim,
-                    %scope(None, None, None, None) motive,
+                    Scoped((((), None, None), None, None), motive.clone()),
                     inhab,
                 ));
             },
             NeutralKind::Explode { elim, motive } => {
                 voom!(ctx, indent, s, explode(
                     elim,
-                    %scope(None, Some(Ty::never())) motive,
+                    Scoped(((), None, Some(Ty::never())), motive.clone()),
                 ));
             },
             NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
                 voom!(ctx, indent, s, case(
                     elim,
-                    %scope(None, None) motive,
-                    %scope(None, None) lhs_inhab,
-                    %scope(None, None) rhs_inhab,
+                    Scoped(((), None, None), motive.clone()),
+                    Scoped(((), None, None), lhs_inhab.clone()),
+                    Scoped(((), None, None), rhs_inhab.clone()),
                 ));
             },
             NeutralKind::ProjHead { elim } => {

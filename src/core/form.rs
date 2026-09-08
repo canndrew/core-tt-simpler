@@ -113,19 +113,29 @@ impl Substitutable for Form {
     fn into_output(self) -> Form {
         self
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Form> {
+        self.do_try_strengthen_index(var_index)
+    }
 }
 
 impl Substitutable for Arc<FormKind> {
     type Output = Arc<FormKind>;
 
     fn subst(self, subst: &mut Subst) -> Arc<FormKind> {
-        let intro_kind = Arc::unwrap_or_clone(self);
-        let intro_kind = intro_kind.subst(subst);
-        Arc::new(intro_kind)
+        let form_kind = Arc::unwrap_or_clone(self);
+        let form_kind = form_kind.subst(subst);
+        Arc::new(form_kind)
     }
 
     fn into_output(self) -> Arc<FormKind> {
         self
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Arc<FormKind>> {
+        let form_kind = Arc::unwrap_or_clone(self);
+        let form_kind = form_kind.try_strengthen_index(var_index)?;
+        Some(Arc::new(form_kind))
     }
 }
 
@@ -176,6 +186,49 @@ impl Substitutable for FormKind {
 
     fn into_output(self) -> FormKind {
         self
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<FormKind> {
+        let form_kind = match self {
+            FormKind::Name => FormKind::Name,
+
+            FormKind::Universe => FormKind::Universe,
+
+            FormKind::Nat => FormKind::Nat,
+
+            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.try_strengthen_index(var_index)?;
+                let eq_tm_0 = eq_tm_0.try_strengthen_index(var_index)?;
+                let eq_tm_1 = eq_tm_1.try_strengthen_index(var_index)?;
+                FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 }
+            },
+
+            FormKind::Never => FormKind::Never,
+
+            FormKind::Unit => FormKind::Unit,
+
+            FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
+                let lhs_name = lhs_name.try_strengthen_index(var_index)?;
+                let lhs_ty = lhs_ty.try_strengthen_index(var_index)?;
+                let rhs_ty = rhs_ty.try_strengthen_index(var_index)?;
+                FormKind::Sum { lhs_name, lhs_ty, rhs_ty }
+            },
+
+            FormKind::Sigma { head_name, head_ty, tail_ty } => {
+                let head_name = head_name.try_strengthen_index(var_index)?;
+                let head_ty = head_ty.try_strengthen_index(var_index)?;
+                let tail_ty = tail_ty.try_strengthen_index(var_index)?;
+                FormKind::Sigma { head_name, head_ty, tail_ty }
+            },
+
+            FormKind::Pi { arg_name, arg_ty, res_ty } => {
+                let arg_name = arg_name.try_strengthen_index(var_index)?;
+                let arg_ty = arg_ty.try_strengthen_index(var_index)?;
+                let res_ty = res_ty.try_strengthen_index(var_index)?;
+                FormKind::Pi { arg_name, arg_ty, res_ty }
+            },
+        };
+        Some(form_kind)
     }
 }
 

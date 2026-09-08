@@ -256,6 +256,10 @@ impl Substitutable for Ty {
     fn into_output(self) -> Ty {
         self
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Ty> {
+        Some(self.do_try_strengthen_index(var_index)?.flatten())
+    }
 }
 
 impl Substitutable for TyKind {
@@ -275,6 +279,17 @@ impl Substitutable for TyKind {
 
     fn into_output(self) -> Ty {
         Weaken::new(self)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Ty> {
+        match self {
+            TyKind::Form { form } => {
+                Some(Weaken::new(TyKind::Form { form: form.try_strengthen_index(var_index)? }))
+            },
+            TyKind::Neutral { neutral } => {
+                Some(neutral.try_strengthen_index(var_index)?.into_ty())
+            },
+        }
     }
 }
 

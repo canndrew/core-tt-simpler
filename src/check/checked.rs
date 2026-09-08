@@ -18,7 +18,7 @@ impl<T: Contextual + Bindable> Bindable for Checked<T> {
     }
 }
 
-impl<T: Contextual + Bindable> Substitutable for Checked<T> {
+impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Checked<T> {
     type Output = Checked<T>;
 
     fn subst(self, subst: &mut Subst) -> Checked<T> {
@@ -30,6 +30,13 @@ impl<T: Contextual + Bindable> Substitutable for Checked<T> {
 
     fn into_output(self) -> Checked<T> {
         self
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Checked<T>> {
+        let Checked { constraint_ty, scope } = self;
+        let constraint_ty = constraint_ty.try_strengthen_index(var_index)?;
+        let scope = scope.try_strengthen_index(var_index)?;
+        Some(Checked { constraint_ty, scope })
     }
 }
 

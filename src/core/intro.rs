@@ -246,6 +246,29 @@ impl Intro {
         Weaken::new(IntroKind::zero())
     }
 
+    pub fn succs_m1(pred_tm: Tm, succ_count_m1: Ubig) -> Intro {
+        let (usages, pred_tm) = pred_tm.into_usages_and_weak();
+        let intro = match pred_tm {
+            TmKind::Neutral { neutral } => {
+                IntroKind::Succs { succ_count_m1, pred_tm: neutral }
+            },
+            TmKind::Intro { intro } => {
+                match Arc::unwrap_or_clone(intro) {
+                    IntroKind::Constant { ubig } => {
+                        let ubig = ubig + succ_count_m1 + 1usize;
+                        IntroKind::Constant { ubig }
+                    },
+                    IntroKind::Succs { succ_count_m1: additional, pred_tm } => {
+                        let succ_count_m1 = succ_count_m1 + additional + 1usize;
+                        IntroKind::Succs { succ_count_m1, pred_tm }
+                    },
+                    _ => unreachable!(),
+                }
+            },
+        };
+        Weaken::from_usages_and_weak(usages, Arc::new(intro))
+    }
+
     pub fn constant(ubig: Ubig) -> Intro {
         Weaken::new_arc(IntroKind::Constant { ubig })
     }
@@ -718,6 +741,10 @@ impl Substitutable for Intro {
     fn into_output(self) -> Intro {
         self
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Intro> {
+        Some(self.do_try_strengthen_index(var_index)?.flatten())
+    }
 }
 
 impl Substitutable for Arc<IntroKind> {
@@ -730,6 +757,11 @@ impl Substitutable for Arc<IntroKind> {
 
     fn into_output(self) -> Intro {
         Weaken::new(self)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Intro> {
+        let intro_kind = Arc::unwrap_or_clone(self);
+        intro_kind.try_strengthen_index(var_index)
     }
 }
 
@@ -806,6 +838,65 @@ impl Substitutable for IntroKind {
 
     fn into_output(self) -> Intro {
         Weaken::new_arc(self)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Intro> {
+        let intro = match self {
+            IntroKind::Tag { tag } => {
+                Weaken::new_arc(IntroKind::Tag { tag })
+            },
+
+            IntroKind::Form { form } => {
+                let form = form.try_strengthen_index(var_index)?;
+                Weaken::new_arc(IntroKind::Form { form })
+            },
+
+            IntroKind::Constant { ubig } => {
+                Weaken::new_arc(IntroKind::Constant { ubig })
+            },
+
+            IntroKind::Succs { succ_count_m1, pred_tm } => {
+                let pred_tm = pred_tm.try_strengthen_index(var_index)?;
+                Intro::succs_m1(pred_tm, succ_count_m1)
+            },
+
+            IntroKind::Refl { eq_tm } => {
+                eq_tm
+                .try_strengthen_index(var_index)?
+                .map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
+            },
+
+            IntroKind::Unit => {
+                Weaken::new_arc(IntroKind::Unit)
+            },
+
+            IntroKind::InjLhs { lhs_tm } => {
+                lhs_tm
+                .try_strengthen_index(var_index)?
+                .map(|lhs_tm| Arc::new(IntroKind::InjLhs { lhs_tm }))
+            },
+
+            IntroKind::InjRhs { rhs_tm } => {
+                rhs_tm
+                .try_strengthen_index(var_index)?
+                .map(|rhs_tm| Arc::new(IntroKind::InjRhs { rhs_tm }))
+            },
+
+            IntroKind::Pair { head_tm, tail_tm } => {
+                let head_tm = head_tm.try_strengthen_index(var_index)?;
+                let tail_tm = tail_tm.try_strengthen_index(var_index)?;
+                Weaken::new_arc(IntroKind::Pair { head_tm, tail_tm })
+            },
+
+            IntroKind::Func { res_tm } => {
+                res_tm
+                .map_without_capture(Weaken::new)
+                .try_strengthen_index(var_index)?
+                .lift_weaken()
+                .map(|res_tm| Arc::new(IntroKind::Func { res_tm }))
+            },
+        };
+        Some(intro)
     }
 }
 

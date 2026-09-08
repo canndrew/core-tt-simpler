@@ -117,51 +117,74 @@ impl Subst {
     pub fn iter_tms(&self) -> impl Iterator<Item = &Tm> {
         self.var_tms.iter()
     }
-
-    /*
-    pub fn ctx_len(&self) -> usize {
-        self.var_tms.ctx_len()
-    }
-
-    pub fn collect_usages(&self, usages: &mut Usages) {
-        self.var_tms.collect_usages(usages);
-    }
-    */
 }
-
-/*
-impl Contextual for Subst {
-    fn ctx_len(&self) -> usize {
-        self.var_tms.ctx_len()
-    }
-
-    fn collect_usages(&self, usages: &mut Usages) {
-        self.var_tms.collect_usages(usages);
-    }
-
-    fn filter_usages(&mut self, usages: &Usages) {
-        self.subst_index = usages.filter_index(self.subst_index);
-        self.var_tms.filter_usages(usages);
-    }
-
-    fn unfilter_usages(&mut self, usages: &Usages) {
-        self.subst_index = {
-            usages
-            .unfilter_index(self.subst_index)
-            .unwrap_or_else(|| {
-                debug_assert_eq!(self.subst_index, usages.count_ones());
-                usages.ctx_len()
-            })
-        };
-        self.var_tms.unfilter_usages(usages);
-    }
-}
-*/
 
 pub trait Substitutable {
     type Output;
 
     fn subst(self, subst: &mut Subst) -> Self::Output;
     fn into_output(self) -> Self::Output;
+    fn try_strengthen_index(self, var_index: usize) -> Option<Self::Output>;
 }
+
+
+macro_rules! impl_substitutable_tuple {
+    ($($ty:ident,)*) => {
+        impl<$($ty,)*> Substitutable for ($($ty,)*)
+        where
+            $($ty: Substitutable,)*
+        {
+            type Output = ($($ty::Output,)*);
+
+            #[allow(non_snake_case)]
+            #[allow(unused_variables)]
+            fn subst(self, subst: &mut Subst) -> Self::Output {
+                let ($($ty,)*) = self;
+                $(
+                    let $ty = $ty.subst(subst);
+                )*
+                ($($ty,)*)
+            }
+
+            #[allow(non_snake_case)]
+            fn into_output(self) -> Self::Output {
+                let ($($ty,)*) = self;
+                $(
+                    let $ty = $ty.into_output();
+                )*
+                ($($ty,)*)
+            }
+
+            #[allow(non_snake_case)]
+            #[allow(unused_variables)]
+            fn try_strengthen_index(self, var_index: usize) -> Option<Self::Output> {
+                let ($($ty,)*) = self;
+                $(
+                    let $ty = $ty.try_strengthen_index(var_index)?;
+                )*
+                Some(($($ty,)*))
+            }
+        }
+    };
+}
+
+impl_substitutable_tuple!();
+impl_substitutable_tuple!(T0,);
+impl_substitutable_tuple!(T0, T1,);
+impl_substitutable_tuple!(T0, T1, T2,);
+impl_substitutable_tuple!(T0, T1, T2, T3,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14,);
+impl_substitutable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15,);
+
+
 

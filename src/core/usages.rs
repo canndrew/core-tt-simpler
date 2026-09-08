@@ -133,6 +133,11 @@ impl Usages {
         self.ubig.position_of_nth_one(index).unwrap()
     }
 
+    pub fn shift_remove(mut self, index: usize) -> (Usages, bool) {
+        let bit = self.ubig.shift_remove_bit(index);
+        (self, bit)
+    }
+
     pub fn merge_all<const LEN: usize>(usagess: [&Usages; LEN]) -> Usages {
         let mut ubig = Ubig::ZERO;
         for usages in usagess.iter() {

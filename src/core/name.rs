@@ -165,6 +165,10 @@ impl Substitutable for Name {
     fn into_output(self) -> Name {
         self
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Name> {
+        Some(self.do_try_strengthen_index(var_index)?.flatten())
+    }
 }
 
 impl Substitutable for NameKind {
@@ -181,6 +185,15 @@ impl Substitutable for NameKind {
 
     fn into_output(self) -> Name {
         Weaken::new(self)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Name> {
+        match self { 
+            NameKind::Tag { .. } => Some(Weaken::new(self)),
+            NameKind::Neutral { neutral } => {
+                Some(neutral.try_strengthen_index(var_index)?.into_name())
+            },
+        }
     }
 }
 

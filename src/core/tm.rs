@@ -42,6 +42,10 @@ impl Substitutable for Tm {
     fn into_output(self) -> Tm {
         self
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+        Some(self.do_try_strengthen_index(var_index)?.flatten())
+    }
 }
 
 impl Substitutable for TmKind {
@@ -60,6 +64,17 @@ impl Substitutable for TmKind {
 
     fn into_output(self) -> Tm {
         Weaken::new(self)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+        match self {
+            TmKind::Intro { intro } => {
+                Some(intro.try_strengthen_index(var_index)?.map(|intro| TmKind::Intro { intro }))
+            },
+            TmKind::Neutral { neutral } => {
+                neutral.try_strengthen_index(var_index)
+            },
+        }
     }
 }
 

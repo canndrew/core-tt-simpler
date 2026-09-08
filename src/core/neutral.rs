@@ -1122,6 +1122,10 @@ impl Substitutable for Neutral {
     fn into_output(self) -> Tm {
         self.into_tm()
     }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+        Some(self.do_try_strengthen_index(var_index)?.flatten())
+    }
 }
 
 impl Substitutable for Arc<NeutralData> {
@@ -1137,6 +1141,17 @@ impl Substitutable for Arc<NeutralData> {
 
     fn into_output(self) -> Tm {
         Weaken::new(TmKind::Neutral { neutral: self })
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+        match self.try_reduce() {
+            None => {
+                self.kind.clone().try_strengthen_index(var_index)
+            },
+            Some(tm) => {
+                tm.try_strengthen_index(var_index)
+            },
+        }
     }
 }
 
@@ -1222,6 +1237,77 @@ impl Substitutable for NeutralKind {
     fn into_output(self) -> Tm {
         Weaken::new_arc(NeutralData::new(self))
         .map(|neutral| TmKind::Neutral { neutral })
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+        match self {
+            NeutralKind::Var { index } => {
+                match index.cmp(&var_index) {
+                    cmp::Ordering::Less => Some(Tm::var(index)),
+                    cmp::Ordering::Equal => None,
+                    cmp::Ordering::Greater => Some(Tm::var(index - 1)),
+                }
+            },
+
+            NeutralKind::Bind { .. } => unreachable!(),
+
+            NeutralKind::TagsApart { elim } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                Some(elim.tags_apart())
+            },
+
+            NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let motive = motive.try_strengthen_index(var_index)?;
+                let zero_inhab = zero_inhab.try_strengthen_index(var_index)?;
+                let succ_inhab = succ_inhab.try_strengthen_index(var_index)?;
+                Some(elim.fold(motive, zero_inhab, succ_inhab))
+            },
+
+            NeutralKind::UniqueIdentity { elim, motive, inhab } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let motive = motive.try_strengthen_index(var_index)?;
+                let inhab = inhab.try_strengthen_index(var_index)?;
+                Some(elim.unique_identity(motive, inhab))
+            },
+
+            NeutralKind::Cong { elim, motive, inhab } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let motive = motive.try_strengthen_index(var_index)?;
+                let inhab = inhab.try_strengthen_index(var_index)?;
+                Some(elim.cong(motive, inhab))
+            },
+
+            NeutralKind::Explode { elim, motive } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let motive = motive.try_strengthen_index(var_index)?;
+                Some(elim.explode(motive))
+            },
+
+            NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let motive = motive.try_strengthen_index(var_index)?;
+                let lhs_inhab = lhs_inhab.try_strengthen_index(var_index)?;
+                let rhs_inhab = rhs_inhab.try_strengthen_index(var_index)?;
+                Some(elim.case(motive, lhs_inhab, rhs_inhab))
+            },
+
+            NeutralKind::ProjHead { elim } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                Some(elim.proj_head())
+            },
+
+            NeutralKind::ProjTail { elim } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                Some(elim.proj_tail())
+            },
+
+            NeutralKind::App { elim, arg_tm } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let arg_tm = arg_tm.try_strengthen_index(var_index)?;
+                Some(elim.app(arg_tm))
+            },
+        }
     }
 }
 
