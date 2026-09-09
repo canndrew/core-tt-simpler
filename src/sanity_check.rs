@@ -50,12 +50,16 @@ impl SanityCheck for IntroKind {
                 let () = ty.clone().as_nat().unwrap();
                 pred_tm.sanity_check(ctx, ty);
             },
+
+            /*
             IntroKind::Refl { eq_tm } => {
                 let (eq_ty, eq_tm_0, eq_tm_1) = ty.as_equal().unwrap();
                 eq_tm.clone().sanity_check(ctx, eq_ty.clone());
                 let other_eq_tm = Unify::unify(ctx, eq_ty.clone(), eq_tm_0, eq_tm_1).unwrap();
                 Unify::unify(ctx, eq_ty, eq_tm, other_eq_tm.into_inner()).unwrap();
             },
+            */
+
             IntroKind::Unit => {
                 let () = ty.as_unit().unwrap();
             },
@@ -88,11 +92,15 @@ impl SanityCheck for FormKind {
             FormKind::Name => (),
             FormKind::Universe => (),
             FormKind::Nat => (),
+
+            /*
             FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
                 eq_ty.clone().sanity_check(ctx, ());
                 eq_tm_0.sanity_check(ctx, eq_ty.clone());
                 eq_tm_1.sanity_check(ctx, eq_ty);
             },
+            */
+
             FormKind::Never => (),
             FormKind::Unit => (),
             FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
@@ -129,6 +137,8 @@ impl SanityCheck for NeutralKind {
                     assert!(var_tm.ctx_len() <= ctx.len());
                 }
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 if let Some(elim_ty) = elim.clone().as_neutral().unwrap().try_infer_ty(ctx) {
                     let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.clone().as_equal().unwrap();
@@ -140,6 +150,7 @@ impl SanityCheck for NeutralKind {
                 }
                 let () = ty.as_never().unwrap();
             },
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.clone().sanity_check(ctx, Ty::nat());
@@ -160,6 +171,7 @@ impl SanityCheck for NeutralKind {
                 Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 if let Some(neutral) = elim.clone().as_neutral()
                 && let Some(elim_ty) = neutral.try_infer_ty(ctx)
@@ -197,6 +209,7 @@ impl SanityCheck for NeutralKind {
                     Unify::unify(ctx, (), motive.bind(eq_tm_1).bind(elim), ty).unwrap();
                 }
             },
+            */
 
             NeutralKind::Explode { elim, motive } => {
                 elim.clone().sanity_check(ctx, Ty::never());

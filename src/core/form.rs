@@ -7,11 +7,15 @@ pub enum FormKind {
     Name,
     Universe,
     Nat,
+
+    /*
     Equal {
         eq_ty: Ty,
         eq_tm_0: Tm,
         eq_tm_1: Tm,
     },
+    */
+
     Never,
     Unit,
     Sum {
@@ -47,6 +51,7 @@ impl Unify for FormKind {
 
             (FormKind::Nat, FormKind::Nat) => Some(FormKind::Nat),
 
+            /*
             (
                 FormKind::Equal { eq_ty: eq_ty_0, eq_tm_0: eq_tm_0_0, eq_tm_1: eq_tm_1_0 },
                 FormKind::Equal { eq_ty: eq_ty_1, eq_tm_0: eq_tm_0_1, eq_tm_1: eq_tm_1_1 },
@@ -56,6 +61,7 @@ impl Unify for FormKind {
                 let eq_tm_1 = Unify::unify(ctx_tys, eq_ty.clone(), eq_tm_1_0, eq_tm_1_1)?;
                 Some(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
             },
+            */
 
             (FormKind::Never, FormKind::Never) => Some(FormKind::Never),
 
@@ -150,12 +156,14 @@ impl Substitutable for FormKind {
 
             FormKind::Nat => FormKind::Nat,
 
+            /*
             FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
                 let eq_ty = eq_ty.subst(subst);
                 let eq_tm_0 = eq_tm_0.subst(subst);
                 let eq_tm_1 = eq_tm_1.subst(subst);
                 FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 }
             },
+            */
 
             FormKind::Never => FormKind::Never,
 
@@ -196,12 +204,14 @@ impl Substitutable for FormKind {
 
             FormKind::Nat => FormKind::Nat,
 
+            /*
             FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
                 let eq_ty = eq_ty.try_strengthen_index(var_index)?;
                 let eq_tm_0 = eq_tm_0.try_strengthen_index(var_index)?;
                 let eq_tm_1 = eq_tm_1.try_strengthen_index(var_index)?;
                 FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 }
             },
+            */
 
             FormKind::Never => FormKind::Never,
 
@@ -253,9 +263,11 @@ impl Form {
         Weaken::new(FormKind::nat())
     }
 
+    /*
     pub fn equal(eq_ty: Ty, eq_tm_0: Tm, eq_tm_1: Tm) -> Form {
         Weaken::new_arc(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
     }
+    */
 
     pub fn never() -> Form {
         Weaken::new(FormKind::never())
@@ -289,9 +301,11 @@ impl Form {
         self.weak().as_nat()
     }
 
+    /*
     pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
         self.map_out_unfiltered(|form| Arc::unwrap_or_clone(form).as_equal())
     }
+    */
 
     pub fn as_never(self) -> Option<()> {
         self.weak().as_never()
@@ -382,12 +396,14 @@ impl FormKind {
         Some(())
     }
 
+    /*
     pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
         let FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } = self else {
             return None;
         };
         Some((eq_ty, eq_tm_0, eq_tm_1))
     }
+    */
 
     pub fn as_never(&self) -> Option<()> {
         let FormKind::Never = self else {
@@ -432,12 +448,14 @@ impl FormKind {
 
             FormKind::Nat => Weaken::new_arc(FormKind::Nat),
 
+            /*
             FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
                 let eq_ty = eq_ty.deep_nf();
                 let eq_tm_0 = eq_tm_0.deep_nf();
                 let eq_tm_1 = eq_tm_1.deep_nf();
                 Weaken::new_arc(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
             },
+            */
 
             FormKind::Never => Weaken::new_arc(FormKind::Never),
 

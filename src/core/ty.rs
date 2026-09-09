@@ -54,9 +54,11 @@ impl Ty {
         Form::nat().into_ty()
     }
 
+    /*
     pub fn equal(eq_ty: Ty, eq_tm_0: Tm, eq_tm_1: Tm) -> Ty {
         Form::equal(eq_ty, eq_tm_0, eq_tm_1).into_ty()
     }
+    */
 
     pub fn never() -> Ty {
         Form::never().into_ty()
@@ -93,10 +95,12 @@ impl Ty {
         form.as_nat()
     }
 
+    /*
     pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
         let form = self.try_reduce_to_form()?;
         form.as_equal()
     }
+    */
 
     pub fn as_never(self) -> Option<()> {
         let form = self.try_reduce_to_form()?;

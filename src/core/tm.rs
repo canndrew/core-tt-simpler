@@ -126,9 +126,11 @@ impl Tm {
         Intro::tag(tag).into_tm()
     }
 
+    /*
     pub fn tags_apart(self) -> Tm {
         Neutral::tags_apart(self).into_tm()
     }
+    */
 
     pub fn zero() -> Tm {
         Intro::zero().into_tm()
@@ -176,6 +178,7 @@ impl Tm {
         Neutral::fold(self, motive, zero_inhab, succ_inhab).into_tm()
     }
 
+    /*
     pub fn refl(self) -> Tm {
         Intro::refl(self).into_tm()
     }
@@ -195,6 +198,7 @@ impl Tm {
     ) -> Tm {
         Neutral::cong(self, motive, inhab).into_tm()
     }
+    */
 
     pub fn explode(
         self,

@@ -20,9 +20,13 @@ pub enum IntroKind {
         succ_count_m1: Ubig,
         pred_tm: Arc<NeutralData>,
     },
+
+    /*
     Refl {
         eq_tm: TmKind,
     },
+    */
+
     Unit,
     InjLhs {
         lhs_tm: TmKind,
@@ -181,12 +185,14 @@ impl Unify for IntroKind {
                 }
             },
 
+            /*
             (
                 IntroKind::Refl { eq_tm },
                 IntroKind::Refl { .. },
             ) => {
                 Some(IntroKind::Refl { eq_tm })
             },
+            */
 
             (IntroKind::Unit, IntroKind::Unit) => {
                 Some(IntroKind::Unit)
@@ -273,9 +279,11 @@ impl Intro {
         Weaken::new_arc(IntroKind::Constant { ubig })
     }
 
+    /*
     pub fn refl(eq_tm: Tm) -> Intro {
         eq_tm.map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
     }
+    */
 
     pub fn unit() -> Intro {
         Weaken::new(IntroKind::unit())
@@ -320,11 +328,13 @@ impl Intro {
         Some((succ_count_m1, pred_tm))
     }
 
+    /*
     pub fn as_refl(self) -> Option<Tm> {
         self.try_map(|intro_kind| {
             Arc::unwrap_or_clone(intro_kind).as_refl()
         })
     }
+    */
 
     pub fn as_unit(&self) -> Option<()> {
         self.weak().as_unit()
@@ -418,12 +428,14 @@ impl IntroKind {
         Some((succ_count_m1, pred_tm))
     }
 
+    /*
     pub fn as_refl(self) -> Option<TmKind> {
         let IntroKind::Refl { eq_tm } = self else {
             return None;
         };
         Some(eq_tm)
     }
+    */
 
     pub fn as_unit(&self) -> Option<()> {
         let IntroKind::Unit = self else {
@@ -692,11 +704,13 @@ impl IntroKind {
                 Weaken::from_usages_and_weak(usages, Arc::new(intro_kind))
             },
 
+            /*
             IntroKind::Refl { eq_tm } => {
                 eq_tm
                 .deep_nf()
                 .map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
             },
+            */
 
             IntroKind::Unit => Weaken::new_arc(IntroKind::Unit),
 
@@ -806,9 +820,11 @@ impl Substitutable for IntroKind {
                 }
             },
 
+            /*
             IntroKind::Refl { eq_tm } => {
                 eq_tm.subst(subst).map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
             },
+            */
 
             IntroKind::Unit => Weaken::new_arc(IntroKind::Unit),
 
@@ -860,11 +876,13 @@ impl Substitutable for IntroKind {
                 Intro::succs_m1(pred_tm, succ_count_m1)
             },
 
+            /*
             IntroKind::Refl { eq_tm } => {
                 eq_tm
                 .try_strengthen_index(var_index)?
                 .map(|eq_tm| Arc::new(IntroKind::Refl { eq_tm }))
             },
+            */
 
             IntroKind::Unit => {
                 Weaken::new_arc(IntroKind::Unit)

@@ -19,15 +19,21 @@ pub enum NeutralKind {
         truncated_body_usages: Usages,
         body: TmKind,
     },
+
+    /*
     TagsApart {
         elim: TmKind,
     },
+    */
+
     Fold {
         elim: Tm,
         motive: Scope<Ty>,
         zero_inhab: Tm,
         succ_inhab: Scope<Scope<Tm>>,
     },
+
+    /*
     UniqueIdentity {
         elim: Tm,
         motive: Scope<Ty>,
@@ -38,6 +44,8 @@ pub enum NeutralKind {
         motive: Scope<Scope<Ty>>,
         inhab: Tm,
     },
+    */
+
     Explode {
         elim: Tm,
         motive: Scope<Ty>,
@@ -92,9 +100,13 @@ impl Contextual for NeutralKind {
                     truncated_body_usages.ctx_len(),
                 ])
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 elim.ctx_len()
             },
+            */
+
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 max_all([
                     elim.ctx_len(),
@@ -103,6 +115,8 @@ impl Contextual for NeutralKind {
                     succ_inhab.ctx_len(),
                 ])
             },
+
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 max_all([
                     elim.ctx_len(),
@@ -117,6 +131,8 @@ impl Contextual for NeutralKind {
                     inhab.ctx_len(),
                 ])
             },
+            */
+
             NeutralKind::Explode { elim, motive } => {
                 max_all([
                     elim.ctx_len(),
@@ -155,15 +171,21 @@ impl Contextual for NeutralKind {
                 var_tms.collect_usages(usages);
                 usages.or_assign(truncated_body_usages);
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 elim.collect_usages(usages);
             },
+            */
+
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.collect_usages(usages);
                 motive.collect_usages(usages);
                 zero_inhab.collect_usages(usages);
                 succ_inhab.collect_usages(usages);
             },
+
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 elim.collect_usages(usages);
                 motive.collect_usages(usages);
@@ -174,6 +196,8 @@ impl Contextual for NeutralKind {
                 motive.collect_usages(usages);
                 inhab.collect_usages(usages);
             },
+            */
+
             NeutralKind::Explode { elim, motive } => {
                 elim.collect_usages(usages);
                 motive.collect_usages(usages);
@@ -206,15 +230,21 @@ impl Contextual for NeutralKind {
                 var_tms.filter_usages(usages);
                 truncated_body_usages.filter(usages);
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 elim.filter_usages(usages);
             },
+            */
+
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.filter_usages(usages);
                 motive.filter_usages(usages);
                 zero_inhab.filter_usages(usages);
                 succ_inhab.filter_usages(usages);
             },
+
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 elim.filter_usages(usages);
                 motive.filter_usages(usages);
@@ -225,6 +255,8 @@ impl Contextual for NeutralKind {
                 motive.filter_usages(usages);
                 inhab.filter_usages(usages);
             },
+            */
+
             NeutralKind::Explode { elim, motive } => {
                 elim.filter_usages(usages);
                 motive.filter_usages(usages);
@@ -257,15 +289,21 @@ impl Contextual for NeutralKind {
                 var_tms.unfilter_usages(usages);
                 truncated_body_usages.unfilter(usages);
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 elim.unfilter_usages(usages);
             },
+            */
+
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.unfilter_usages(usages);
                 motive.unfilter_usages(usages);
                 zero_inhab.unfilter_usages(usages);
                 succ_inhab.unfilter_usages(usages);
             },
+
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 elim.unfilter_usages(usages);
                 motive.unfilter_usages(usages);
@@ -276,6 +314,8 @@ impl Contextual for NeutralKind {
                 motive.unfilter_usages(usages);
                 inhab.unfilter_usages(usages);
             },
+            */
+
             NeutralKind::Explode { elim, motive } => {
                 elim.unfilter_usages(usages);
                 motive.unfilter_usages(usages);
@@ -429,7 +469,10 @@ impl NeutralKind {
                 debug_assert_eq!(subst.len(), subst_len);
                 body
             },
+
+            /*
             NeutralKind::TagsApart { .. } => return None,
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
@@ -489,6 +532,7 @@ impl NeutralKind {
                 }
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive: _, inhab } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
                 debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
@@ -500,6 +544,7 @@ impl NeutralKind {
                 debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
                 inhab.clone()
             },
+            */
 
             NeutralKind::Explode { .. } => return None,
 
@@ -593,12 +638,15 @@ impl NeutralKind {
 
             NeutralKind::Bind { .. } => None,
 
+            /*
             NeutralKind::TagsApart { .. } => Some(Ty::never()),
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab: _, succ_inhab: _ } => {
                 Some(motive.clone().bind(elim.clone()))
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab: _ } => {
                 Some(motive.clone().bind(elim.clone()))
             },
@@ -609,6 +657,7 @@ impl NeutralKind {
                 let (_eq_ty, _eq_tm_0, eq_tm_1) = elim_ty.as_equal().unwrap();
                 Some(motive.clone().bind(eq_tm_1).bind(elim.clone()))
             },
+            */
 
             NeutralKind::Explode { elim, motive } => {
                 Some(motive.clone().bind(elim.clone()))
@@ -649,7 +698,9 @@ impl NeutralKind {
 
             NeutralKind::Bind { .. } => unreachable!(),
 
+            /*
             | NeutralKind::TagsApart { elim }
+            */
             | NeutralKind::ProjHead { elim }
             | NeutralKind::ProjTail { elim }
             => {
@@ -657,8 +708,10 @@ impl NeutralKind {
             },
 
             | NeutralKind::Fold { elim, .. }
+            /*
             | NeutralKind::UniqueIdentity { elim, .. }
             | NeutralKind::Cong { elim, .. }
+            */
             | NeutralKind::Explode { elim, .. }
             | NeutralKind::Case { elim, .. }
             | NeutralKind::App { elim, .. }
@@ -674,6 +727,7 @@ impl NeutralKind {
 
             NeutralKind::Bind { .. } => unreachable!(),
 
+            /*
             NeutralKind::TagsApart { elim } => {
                 Arc::unwrap_or_clone(elim.as_neutral().unwrap())
                 .deep_nf()
@@ -683,6 +737,7 @@ impl NeutralKind {
                     elim: TmKind::Neutral { neutral },
                 })
             },
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
@@ -692,6 +747,7 @@ impl NeutralKind {
                 Weaken::new(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
                 let motive = motive.deep_nf();
@@ -705,6 +761,7 @@ impl NeutralKind {
                 let inhab = inhab.deep_nf();
                 Weaken::new(NeutralKind::Cong { elim, motive, inhab })
             },
+            */
 
             NeutralKind::Explode { elim, motive } => {
                 let elim = elim.as_neutral().unwrap().deep_nf();
@@ -763,6 +820,7 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::Var { index })
             },
 
+            /*
             (NeutralKind::TagsApart { elim: elim_0 }, NeutralKind::TagsApart { elim: elim_1 }) => {
                 let neutral_0 = elim_0.as_neutral().unwrap();
                 let neutral_1 = elim_1.as_neutral().unwrap();
@@ -775,6 +833,7 @@ impl Unify for NeutralKind {
                 };
                 Some(NeutralKind::TagsApart { elim })
             },
+            */
 
             (
                 NeutralKind::Fold {
@@ -820,6 +879,7 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
             },
 
+            /*
             (
                 NeutralKind::UniqueIdentity { elim: elim_0, motive: motive_0, inhab: inhab_0 },
                 NeutralKind::UniqueIdentity { elim: elim_1, motive: motive_1, inhab: inhab_1 },
@@ -880,6 +940,7 @@ impl Unify for NeutralKind {
                 let elim = Weaken::new(TmKind::Neutral { neutral });
                 Some(NeutralKind::Cong { elim, motive, inhab })
             },
+            */
 
             (
                 NeutralKind::Explode { elim: elim_0, motive: motive_0 },
@@ -1022,9 +1083,11 @@ impl Neutral {
         Weaken::from_usages_and_weak(usages, VAR_0.clone())
     }
 
+    /*
     pub fn tags_apart(elim: Tm) -> Neutral {
         elim.map(|elim| NeutralData::new_arc(NeutralKind::TagsApart { elim }))
     }
+    */
 
     pub fn fold(
         elim: Tm,
@@ -1037,6 +1100,7 @@ impl Neutral {
         }))
     }
 
+    /*
     pub fn unique_identity(
         elim: Tm,
         motive: Scope<Ty>,
@@ -1056,6 +1120,7 @@ impl Neutral {
             elim, motive, inhab,
         }))
     }
+    */
 
     pub fn explode(
         elim: Tm,
@@ -1174,10 +1239,12 @@ impl Substitutable for NeutralKind {
                 return subst.with_composed(pre_subst, |subst| body.subst(subst));
             },
 
+            /*
             NeutralKind::TagsApart { elim } => {
                 let elim = elim.subst(subst).into_inner();
                 NeutralKind::TagsApart { elim }
             },
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.subst(subst);
@@ -1187,6 +1254,7 @@ impl Substitutable for NeutralKind {
                 NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab }
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 let elim = elim.subst(subst);
                 let motive = motive.capture_subst(subst.clone());
@@ -1200,6 +1268,7 @@ impl Substitutable for NeutralKind {
                 let inhab = inhab.capture_subst(subst.clone());
                 NeutralKind::Cong { elim, motive, inhab }
             },
+            */
 
             NeutralKind::Explode { elim, motive } => {
                 let elim = elim.subst(subst);
@@ -1251,10 +1320,12 @@ impl Substitutable for NeutralKind {
 
             NeutralKind::Bind { .. } => unreachable!(),
 
+            /*
             NeutralKind::TagsApart { elim } => {
                 let elim = elim.try_strengthen_index(var_index)?;
                 Some(elim.tags_apart())
             },
+            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.try_strengthen_index(var_index)?;
@@ -1264,6 +1335,7 @@ impl Substitutable for NeutralKind {
                 Some(elim.fold(motive, zero_inhab, succ_inhab))
             },
 
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 let elim = elim.try_strengthen_index(var_index)?;
                 let motive = motive.try_strengthen_index(var_index)?;
@@ -1277,6 +1349,7 @@ impl Substitutable for NeutralKind {
                 let inhab = inhab.try_strengthen_index(var_index)?;
                 Some(elim.cong(motive, inhab))
             },
+            */
 
             NeutralKind::Explode { elim, motive } => {
                 let elim = elim.try_strengthen_index(var_index)?;

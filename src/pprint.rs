@@ -196,9 +196,13 @@ impl Pretty<()> for FormKind {
             FormKind::Nat => {
                 voom!(ctx, indent, s, Nat());
             },
+            
+            /*
             FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
                 voom!(ctx, indent, s, Equal(eq_ty, eq_tm_0, eq_tm_1));
             },
+            */
+
             FormKind::Never => {
                 voom!(ctx, indent, s, Never());
             },
@@ -240,7 +244,9 @@ impl Pretty<()> for FormKind {
             | FormKind::Unit
             => true,
 
+            /*
             | FormKind::Equal { .. }
+            */
             | FormKind::Sum { .. }
             | FormKind::Sigma { .. }
             | FormKind::Pi { .. }
@@ -270,9 +276,13 @@ impl Pretty<()> for IntroKind {
             IntroKind::Succs { succ_count_m1, pred_tm } => {
                 voom!(ctx, indent, s, succs(Fmt(&succ_count_m1), pred_tm.clone()));
             },
+
+            /*
             IntroKind::Refl { eq_tm } => {
                 voom!(ctx, indent, s, refl(eq_tm));
             },
+            */
+
             IntroKind::Unit => {
                 voom!(ctx, indent, s, unit());
             },
@@ -303,7 +313,9 @@ impl Pretty<()> for IntroKind {
             },
 
             | IntroKind::Succs { .. }
+            /*
             | IntroKind::Refl { .. }
+            */
             | IntroKind::InjLhs { .. }
             | IntroKind::InjRhs { .. }
             | IntroKind::Pair { .. }
@@ -369,9 +381,13 @@ impl Pretty<()> for NeutralKind {
                 }
                 s.push(')');
             },
+
+            /*
             NeutralKind::TagsApart { elim } => {
                 voom!(ctx, indent, s, tags_apart(elim));
             },
+            */
+
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 voom!(ctx, indent, s, fold(
                     elim,
@@ -380,6 +396,8 @@ impl Pretty<()> for NeutralKind {
                     Scoped((((), None, Some(Ty::nat())), None, None), succ_inhab.clone()),
                 ));
             },
+
+            /*
             NeutralKind::UniqueIdentity { elim, motive, inhab } => {
                 voom!(ctx, indent, s, unique_identity(
                     elim,
@@ -394,6 +412,8 @@ impl Pretty<()> for NeutralKind {
                     inhab,
                 ));
             },
+            */
+
             NeutralKind::Explode { elim, motive } => {
                 voom!(ctx, indent, s, explode(
                     elim,
@@ -425,10 +445,14 @@ impl Pretty<()> for NeutralKind {
             NeutralKind::Var { .. } => true,
 
             | NeutralKind::Bind { .. }
+            /*
             | NeutralKind::TagsApart { .. }
+            */
             | NeutralKind::Fold { .. }
+            /*
             | NeutralKind::UniqueIdentity { .. }
             | NeutralKind::Cong { .. }
+            */
             | NeutralKind::Explode { .. }
             | NeutralKind::Case { .. }
             | NeutralKind::ProjHead { .. }
