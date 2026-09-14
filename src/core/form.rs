@@ -440,6 +440,28 @@ impl FormKind {
         Some((arg_name, arg_ty, res_ty))
     }
 
+    pub fn is_prop(&self) -> bool {
+        match self {
+            | FormKind::Name
+            | FormKind::Universe
+            | FormKind::Nat
+            | FormKind::Sum { .. }
+            => false,
+
+            | FormKind::Never
+            | FormKind::Unit
+            => true,
+
+            FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
+                head_ty.is_prop() && tail_ty.inner_ref().is_prop()
+            },
+
+            FormKind::Pi { arg_name: _, arg_ty: _, res_ty } => {
+                res_ty.inner_ref().is_prop()
+            },
+        }
+    }
+
     pub fn deep_nf(self) -> Form {
         match self {
             FormKind::Name => Weaken::new_arc(FormKind::Name),
@@ -479,29 +501,6 @@ impl FormKind {
                 let arg_name = arg_name.deep_nf();
                 let arg_ty = arg_ty.deep_nf();
                 let res_ty = res_ty.deep_nf();
-
-
-                // debugging
-                print_on_panic!("arg_name == {:#?}", arg_name.clone());
-                print_on_panic!("arg_ty == {:#?}", arg_ty.clone());
-                print_on_panic!("res_ty == {:#?}", res_ty.clone());
-                let kind = FormKind::Pi {
-                    arg_name: arg_name.clone(),
-                    arg_ty: arg_ty.clone(),
-                    res_ty: res_ty.clone(),
-                };
-                print_on_panic!("kind == {:#?}", kind.clone());
-                let mut usages = Usages::empty();
-                kind.collect_usages(&mut usages);
-                print_on_panic!("collect_usages == {:#?}", usages.clone());
-                let filtered_kind = kind.clone().filtered(&usages);
-                print_on_panic!("filtered_kind == {:#?}", filtered_kind);
-
-                print_on_panic!("weakened == {:#?}", Weaken::new(kind));
-
-
-
-
                 Weaken::new_arc(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
         }

@@ -1,6 +1,5 @@
 use crate::priv_prelude::*;
 
-#[expect(unused)]
 pub fn merge_enumerated<T>(
     iter_0: impl IntoIterator<Item = (usize, T)>,
     iter_1: impl IntoIterator<Item = (usize, T)>,
@@ -10,14 +9,12 @@ pub fn merge_enumerated<T>(
     MergeEnumerated::Both { iter_0, iter_1 }
 }
 
-#[expect(unused)]
 pub enum Which<T> {
     Left(T),
     Right(T),
     Both(T, T),
 }
 
-#[expect(unused)]
 enum MergeEnumerated<I0, I1, T> {
     Finished,
     DrainingLeft {

@@ -138,6 +138,76 @@ pub enum MetaTag {
         inj_span: Span,
     },
 
+    InjRhsRhsTmConstraint {
+        inj_span: Span,
+        rhs_tm_span: Span,
+    },
+    InjRhsLhsName {
+        inj_span: Span,
+        rhs_tm_span: Span,
+    },
+    InjRhsLhsType {
+        inj_span: Span,
+        rhs_tm_span: Span,
+    },
+
+    MatchElimConstraint {
+        elim_span: Span,
+    },
+    MatchElimTypeIsNever {
+        branches_span: Span,
+    },
+    MatchRhsBranchMotive {
+        branches_span: Span,
+    },
+    MatchLhsNameConstraint {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchLhsTy {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchRhsTy {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchElimTypeIsSum {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchLhsBranchMotive {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchLhsInhabConstraint {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchRhsInhabConstraint {
+        branches_span: Span,
+    },
+    MatchLhsInhabTyIsExpectedTy {
+        branch_span: Span,
+        branches_span: Span,
+    },
+    MatchRhsInhabTyIsExpectedTy {
+        branches_span: Span,
+    },
+
+    PairHeadTmConstraint {
+        head_span: Span,
+    },
+    PairTailTy {
+        head_span: Span,
+    },
+    PairTailTyIsExpectedTy {
+        head_span: Span,
+    },
+    PairHeadNameConstraint {
+        head_name_span: Span,
+    },
+
     AppElimConstraint {
         app_span: Span,
         elim_span: Span,
@@ -288,6 +358,22 @@ pub enum MetaTag {
     },
     ReflPatVarTm {
         refl_pat_span: Span,
+    },
+
+    UnitPatVarTyIsUnit {
+        pat_span: Span,
+    },
+    PairPatHeadNameConstraint {
+        head_name_span: Span,
+    },
+    PairPatHeadTy {
+        field_span: Span,
+    },
+    PairPatTailTy {
+        field_span: Span,
+    },
+    PairPatVarTyIsExpectedTy {
+        field_span: Span,
     },
 }
 

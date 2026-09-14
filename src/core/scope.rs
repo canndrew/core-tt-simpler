@@ -198,6 +198,10 @@ impl<T> Scope<T> {
         let inners = func(var_tm, inner)?;
         Some(inners.scope_each(ctx_len))
     }
+
+    pub fn inner_ref(&self) -> &T {
+        &self.inner
+    }
 }
 
 impl<Ts> Scope<Ts>

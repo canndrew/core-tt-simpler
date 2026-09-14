@@ -24,8 +24,13 @@ impl Substitutable for Iso {
         self
     }
 
-    fn try_strengthen_index(self, _var_index: usize) -> Option<Iso> {
-        todo!()
+    fn try_strengthen_index(self, var_index: usize) -> Option<Iso> {
+        let Iso { fwd, rev, fwd_rev, rev_fwd } = self;
+        let fwd = fwd.try_strengthen_index(var_index)?;
+        let rev = rev.try_strengthen_index(var_index)?;
+        let fwd_rev = fwd_rev.try_strengthen_index(var_index)?;
+        let rev_fwd = rev_fwd.try_strengthen_index(var_index)?;
+        Some(Iso { fwd, rev, fwd_rev, rev_fwd })
     }
 }
 
@@ -41,7 +46,6 @@ impl Bindable for Iso {
 }
 
 impl Iso {
-
     /// ```ignore
     /// Γ ⊢ ty : Type
     /// ----
@@ -52,8 +56,8 @@ impl Iso {
         Iso {
             fwd: Scope::id(),
             rev: Scope::id(),
-            fwd_rev: Scope::make(0, |tm| tm.refl()),
-            rev_fwd: Scope::make(0, |tm| tm.refl()),
+            fwd_rev: Scope::make(0, |tm| tm.obs_refl()),
+            rev_fwd: Scope::make(0, |tm| tm.obs_refl()),
         }
     }
 
@@ -173,7 +177,7 @@ impl Iso {
             never
             .clone()
             .explode(Scope::constant(
-                Ty::equal(
+                Ty::obs_equal(
                     from_ty.clone(),
                     rev.clone().bind(never),
                     tm,
@@ -182,15 +186,7 @@ impl Iso {
         });
 
         let rev_fwd = Scope::make(ctx_len, |never| {
-            never
-            .clone()
-            .explode(Scope::constant(
-                Ty::equal(
-                    Ty::never(),
-                    fwd.clone().bind(rev.clone().bind(never.clone())),
-                    never,
-                )
-            ))
+            never.obs_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -207,468 +203,12 @@ impl Iso {
     /// ```
 
     pub fn reflexive_equality_to_unit(
-        eq_ty: Ty,
         eq_tm: Tm,
     ) -> Iso {
-        let ctx_len = max_all([
-            eq_ty.ctx_len(),
-            eq_tm.ctx_len(),
-        ]);
         let fwd = Scope::constant(Tm::unit());
-        let rev = Scope::constant(eq_tm.clone().refl());
-        let fwd_rev = Scope::make(ctx_len, |elim| {
-            elim
-            .unique_identity(
-                Scope::make(ctx_len, |elim| {
-                    Ty::equal(
-                        Ty::equal(eq_ty, eq_tm.clone(), eq_tm.clone()),
-                        elim,
-                        eq_tm.clone().refl(),
-                    )
-                }),
-                eq_tm.refl().refl(),
-            )
-        });
-        let rev_fwd = Scope::constant(Tm::unit().refl());
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    /// ```ignore
-    /// Γ ⊢ pred_tm_0 : Nat
-    /// Γ ⊢ pred_tm_1 : Nat
-    /// ----
-    /// Γ ⊢ Iso::succs_of_tms_equal_to_tms_equal(
-    ///     pred_tm_0,
-    ///     succ_count,
-    /// ) : (pred_tm_0.succs(succ_count) == pred_tm_1.succs(succ_count)) ≅ (pred_tm_0 == pred_tm_1)
-    /// ```
-
-    pub fn succs_of_tms_equal_to_tms_equal(
-        pred_tm_0: Tm,
-        succ_count: impl Into<Ubig>,
-    ) -> Iso {
-        let ctx_len = pred_tm_0.ctx_len();
-
-        let succ_count = succ_count.into();
-        let fwd = Scope::make(ctx_len, |tms_eq| {
-            tms_eq.succs_injective(pred_tm_0.clone(), succ_count.clone())
-        });
-        let rev = Scope::make(ctx_len, |pred_tms_eq| {
-            Scope::make(0, |tm| tm.succs(succ_count.clone()))
-            .bind_eq(
-                Ty::nat(),
-                pred_tm_0.clone(),
-                pred_tms_eq,
-            )
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |tms_eq| {
-            Tm::equality_contractible(
-                Ty::nat(),
-                pred_tm_0.clone().succs(succ_count),
-                rev.clone().bind(fwd.clone().bind(tms_eq.clone())),
-                tms_eq,
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |pred_tms_eq| {
-            Tm::equality_contractible(
-                Ty::nat(),
-                pred_tm_0,
-                fwd.clone().bind(rev.clone().bind(pred_tms_eq.clone())),
-                pred_tms_eq,
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    /// ```ignore
-    /// Γ ⊢ eq_ty : Type
-    /// Γ ⊢ eq_tm_0 : eq_ty
-    /// Γ ⊢ eq_tm_1 : eq_ty
-    /// Γ ⊢ eq_0 : eq_tm_0 == eq_tm_1
-    /// Γ ⊢ eq_1 : eq_tm_0 == eq_tm_1
-    /// ----
-    /// Γ ⊢ Iso::equality_of_equalities_to_unit(
-    ///     eq_ty,
-    ///     eq_tm_0,
-    ///     eq_tm_1,
-    ///     eq_0,
-    ///     eq_1,
-    /// ) : (eq_0 == eq_1) ≅ Unit
-    /// ```
-
-    pub fn equality_of_equalities_to_unit(
-        eq_ty: Ty,
-        eq_tm_0: Tm,
-        eq_tm_1: Tm,
-        eq_0: Tm,
-        eq_1: Tm,
-    ) -> Iso {
-        let ctx_len = max_all([
-            eq_ty.ctx_len(),
-            eq_tm_0.ctx_len(),
-            eq_tm_1.ctx_len(),
-            eq_0.ctx_len(),
-            eq_1.ctx_len(),
-        ]);
-        let eqs_eq = Tm::equality_contractible(eq_ty.clone(), eq_tm_0.clone(), eq_0.clone(), eq_1);
-        let fwd = Scope::constant(Tm::unit());
-        let rev = Scope::constant(eqs_eq.clone());
-
-        let fwd_rev = Scope::make(ctx_len, |tm| {
-            Tm::equality_contractible(
-                Ty::equal(eq_ty, eq_tm_0, eq_tm_1),
-                eq_0,
-                eqs_eq,
-                tm,
-            )
-        });
-        let rev_fwd = Scope::constant(Tm::unit().refl());
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    /// ```ignore
-    /// Γ ⊢ lhs_name : Name
-    /// Γ ⊢ lhs_ty : Ty
-    /// Γ ⊢ rhs_ty : Ty
-    /// Γ ⊢ lhs_tm_0 : lhs_ty
-    /// Γ ⊢ lhs_tm_1 : lhs_ty
-    /// ----
-    /// Γ ⊢ Iso::inj_lhs_of_tms_equal_to_tms_equal(
-    ///     lhs_name,
-    ///     lhs_ty,
-    ///     rhs_ty,
-    ///     lhs_tm_0,
-    /// ) : (lhs_tm_0.inj_lhs() == lhs_tm_1.inj_lhs()) ≅ (lhs_tm_0 == lhs_tm_1)
-    /// ```
-
-    pub fn inj_lhs_of_tms_equal_to_tms_equal(
-        lhs_name: Name,
-        lhs_ty: Ty,
-        rhs_ty: Ty,
-        lhs_tm_0: Tm,
-    ) -> Iso {
-        let ctx_len = max_all([
-            lhs_name.ctx_len(),
-            lhs_ty.ctx_len(),
-            rhs_ty.ctx_len(),
-            lhs_tm_0.ctx_len(),
-        ]);
-
-        let sum_ty = Ty::sum(lhs_name, lhs_ty.clone(), rhs_ty);
-
-        let fwd = Scope::make(ctx_len, |sum_eq| {
-            sum_eq.inj_lhs_injective(lhs_ty.clone(), lhs_tm_0.clone())
-        });
-
-        let rev = Scope::make(ctx_len, |lhs_eq| {
-            Scope::make(ctx_len + 1, |lhs_tm| lhs_tm.inj_lhs())
-            .bind_eq(
-                sum_ty.clone(),
-                lhs_tm_0.clone(),
-                lhs_eq,
-            )
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |sum_eq| {
-            Tm::equality_contractible(
-                sum_ty,
-                lhs_tm_0.clone().inj_lhs(),
-                rev.clone().bind(fwd.clone().bind(sum_eq.clone())),
-                sum_eq,
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |lhs_eq| {
-            Tm::equality_contractible(
-                lhs_ty,
-                lhs_tm_0,
-                fwd.clone().bind(rev.clone().bind(lhs_eq.clone())),
-                lhs_eq,
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    /// ```ignore
-    /// Γ ⊢ lhs_name : Name
-    /// Γ ⊢ lhs_ty : Ty
-    /// Γ ⊢ rhs_ty : Ty
-    /// Γ ⊢ rhs_tm_0 : rhs_ty
-    /// Γ ⊢ rhs_tm_1 : rhs_ty
-    /// ----
-    /// Γ ⊢ Iso::inj_rhs_of_tms_equal_to_tms_equal(
-    ///     lhs_name,
-    ///     lhs_ty,
-    ///     rhs_ty,
-    ///     rhs_tm_0,
-    /// ) : (rhs_tm_0.inj_rhs() == rhs_tm_1.inj_rhs()) ≅ (rhs_tm_0 == rhs_tm_1)
-    /// ```
-
-    pub fn inj_rhs_of_tms_equal_to_tms_equal(
-        lhs_name: Name,
-        lhs_ty: Ty,
-        rhs_ty: Ty,
-        rhs_tm_0: Tm,
-    ) -> Iso {
-        let ctx_len = max_all([
-            lhs_name.ctx_len(),
-            lhs_ty.ctx_len(),
-            rhs_ty.ctx_len(),
-            rhs_tm_0.ctx_len(),
-        ]);
-
-        let sum_ty = Ty::sum(lhs_name, lhs_ty, rhs_ty.clone());
-
-        let fwd = Scope::make(ctx_len, |sum_eq| {
-            sum_eq.inj_rhs_injective(rhs_ty.clone(), rhs_tm_0.clone())
-        });
-
-        let rev = Scope::make(ctx_len, |rhs_eq| {
-            Scope::make(ctx_len + 1, |rhs_tm| rhs_tm.inj_rhs())
-            .bind_eq(
-                sum_ty.clone(),
-                rhs_tm_0.clone(),
-                rhs_eq,
-            )
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |sum_eq| {
-            Tm::equality_contractible(
-                sum_ty,
-                rhs_tm_0.clone().inj_rhs(),
-                rev.clone().bind(fwd.clone().bind(sum_eq.clone())),
-                sum_eq,
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |rhs_eq| {
-            Tm::equality_contractible(
-                rhs_ty,
-                rhs_tm_0,
-                fwd.clone().bind(rev.clone().bind(rhs_eq.clone())),
-                rhs_eq,
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    pub fn equality_of_non_dependent_pairs_to_non_dependent_pair_of_equalities(
-        head_name: Name,
-        head_ty: Ty,
-        tail_ty: Ty,
-        head_0: Tm,
-        head_1: Tm,
-        tail_0: Tm,
-        tail_1: Tm,
-    ) -> Iso {
-        let ctx_len = max_all([
-            head_name.ctx_len(),
-            head_ty.ctx_len(),
-            tail_ty.ctx_len(),
-            head_0.ctx_len(),
-            head_1.ctx_len(),
-            tail_0.ctx_len(),
-            tail_1.ctx_len(),
-        ]);
-
-        let fwd = Scope::make(ctx_len, |pair_eq| {
-            Tm::equality_of_non_dependent_pairs_to_non_dependent_pair_of_equalities(
-                head_name.clone(),
-                head_ty.clone(),
-                tail_ty.clone(),
-                head_0.clone(),
-                tail_0.clone(),
-                pair_eq,
-            )
-        });
-
-        let rev = Scope::make(ctx_len, |eq_pair| {
-            Tm::non_dependent_pair_of_equalities_to_equality_of_non_dependent_pairs(
-                head_name.clone(),
-                head_ty.clone(),
-                tail_ty.clone(),
-                head_0.clone(),
-                tail_0.clone(),
-                tail_1.clone(),
-                eq_pair.clone().proj_head(),
-                eq_pair.proj_tail(),
-            )
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |pair_eq| {
-            Tm::equality_contractible(
-                Ty::sigma(head_name.clone(), head_ty.clone(), Scope::constant(tail_ty.clone())),
-                head_0.clone().pair(tail_0.clone()),
-                rev.clone().bind(fwd.clone().bind(pair_eq.clone())),
-                pair_eq,
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |eq_pair_1| {
-            let eq_pair_0 = fwd.clone().bind(rev.clone().bind(eq_pair_1.clone()));
-
-            let head_eq_0 = eq_pair_0.clone().proj_head();
-            let tail_eq_0 = eq_pair_0.proj_tail();
-            let head_eq_1 = eq_pair_1.clone().proj_head();
-            let tail_eq_1 = eq_pair_1.proj_tail();
-
-            let head_eq_eq = Tm::equality_contractible(
-                head_ty.clone(), head_0.clone(), head_eq_0.clone(), head_eq_1,
-            );
-            let tail_eq_eq = Tm::equality_contractible(
-                tail_ty.clone(), tail_0.clone(), tail_eq_0.clone(), tail_eq_1.clone(),
-            );
-            Tm::non_dependent_pair_of_equalities_to_equality_of_non_dependent_pairs(
-                head_name,
-                Ty::equal(head_ty, head_0, head_1),
-                Ty::equal(tail_ty, tail_0, tail_1),
-                head_eq_0,
-                tail_eq_0,
-                tail_eq_1,
-                head_eq_eq,
-                tail_eq_eq,
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    pub fn equality_of_dependent_pairs_to_dependent_pair_of_equalities(
-        head_name: Name,
-        head_ty: Ty,
-        tail_ty: Scope<Ty>,
-        head_0: Tm,
-        head_1: Tm,
-        tail_0: Tm,
-        tail_1: Tm,
-    ) -> Iso {
-        let ctx_len = max_all([
-            head_name.ctx_len(),
-            head_ty.ctx_len(),
-            tail_ty.ctx_len(),
-            head_0.ctx_len(),
-            head_1.ctx_len(),
-            tail_0.ctx_len(),
-            tail_1.ctx_len(),
-        ]);
-
-        let fwd = Scope::make(ctx_len, |pair_eq| {
-            Tm::equality_of_dependent_pairs_to_dependent_pair_of_equalities(
-                head_name.clone(),
-                head_ty.clone(),
-                tail_ty.clone(),
-                head_0.clone(),
-                tail_0.clone(),
-                pair_eq,
-            )
-        });
-
-        let rev = Scope::make(ctx_len, |eq_pair| {
-            Tm::dependent_pair_of_equalities_to_equality_of_dependent_pairs(
-                head_name.clone(),
-                head_ty.clone(),
-                tail_ty.clone(),
-                head_0.clone(),
-                tail_0.clone(),
-                tail_1.clone(),
-                eq_pair.clone().proj_head(),
-                eq_pair.proj_tail(),
-            )
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |pair_eq| {
-            Tm::equality_contractible(
-                Ty::sigma(head_name.clone(), head_ty.clone(), tail_ty.clone()),
-                head_0.clone().pair(tail_0.clone()),
-                rev.clone().bind(fwd.clone().bind(pair_eq.clone())),
-                pair_eq,
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |eq_pair_1| {
-            lazy_static! {
-                static ref TAIL_EQ_NAME: Name = Name::from("tail_eq");
-            }
-
-            let eq_pair_0 = fwd.clone().bind(rev.clone().bind(eq_pair_1.clone()));
-            
-            let head_eq_0 = eq_pair_0.clone().proj_head();
-            let tail_eq_0 = eq_pair_0.clone().proj_tail();
-            let head_eq_1 = eq_pair_1.clone().proj_head();
-            let tail_eq_1 = eq_pair_1.proj_tail();
-
-            let head_eq_eq = Tm::equality_contractible(
-                head_ty.clone(), head_0.clone(), head_eq_0.clone(), head_eq_1.clone(),
-            );
-
-            let tail_ty_bind_head_0 = tail_ty.clone().bind(head_0.clone());
-            let eq_pair_ty = Ty::sigma(
-                head_name.clone(),
-                Ty::equal(head_ty, head_0.clone(), head_1),
-                Scope::make(ctx_len + 3, |head_eq| {
-                    Ty::heterogeneous_equal(
-                        tail_ty_bind_head_0.clone(),
-                        tail_ty.clone().bind_eq(head_0.clone(), head_eq),
-                        tail_0.clone(),
-                        tail_1.clone(),
-                    )
-                }),
-            );
-
-            head_eq_eq
-            .cong(
-                Scope::make(ctx_len, |head_eq_1| {
-                    Scope::constant(
-                        Ty::pi(
-                            TAIL_EQ_NAME.clone(),
-                            Ty::heterogeneous_equal(
-                                tail_ty_bind_head_0.clone(),
-                                tail_ty.clone().bind_eq(head_0.clone(), head_eq_1.clone()),
-                                tail_0.clone(),
-                                tail_1.clone(),
-                            ),
-                            Scope::make(ctx_len + 2, |tail_eq_1| {
-                                Ty::equal(
-                                    eq_pair_ty.clone(),
-                                    eq_pair_0.clone(),
-                                    head_eq_1.pair(tail_eq_1),
-                                )
-                            }),
-                        )
-                    )
-                }),
-                Tm::func(Scope::make(ctx_len, |tail_eq_1| {
-                    Tm::heterogeneous_equality_contractible(
-                        tail_ty_bind_head_0,
-                        tail_ty.bind_eq(head_0, head_eq_0.clone()),
-                        tail_0,
-                        tail_1,
-                        tail_eq_0,
-                        tail_eq_1,
-                    )
-                    .cong(
-                        Scope::make(ctx_len + 1, |tail_eq_1| {
-                            Scope::constant(
-                                Ty::equal(
-                                    eq_pair_ty,
-                                    eq_pair_0.clone(),
-                                    head_eq_0.pair(tail_eq_1),
-                                )
-                            )
-                        }),
-                        eq_pair_0.refl(),
-                    )
-                })),
-            )
-            .app(tail_eq_1)
-        });
+        let rev = Scope::constant(eq_tm.clone().obs_refl());
+        let fwd_rev = Scope::make(0, |elim| elim.obs_refl());
+        let rev_fwd = Scope::constant(Tm::unit().obs_refl());
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
@@ -743,30 +283,26 @@ impl Iso {
             sum_0
             .case(
                 Scope::make(ctx_len + 1, |sum_0| {
-                    Ty::equal(
+                    Ty::obs_equal(
                         sum_ty_0.clone(),
                         rev.clone().bind(fwd.clone().bind(sum_0.clone())),
                         sum_0,
                     )
                 }),
                 Scope::make(ctx_len + 1, |lhs_0| {
-                    lhs_fwd_rev
-                    .bind(lhs_0.clone())
-                    .map_eq(
-                        ctx_len + 2,
+                    Scope::make(ctx_len + 2, |lhs| lhs.inj_lhs())
+                    .bind_eq(
                         sum_ty_0.clone(),
-                        lhs_rev.clone().bind(lhs_fwd.clone().bind(lhs_0)),
-                        |lhs| lhs.inj_lhs(),
+                        lhs_rev.clone().bind(lhs_fwd.clone().bind(lhs_0.clone())),
+                        lhs_fwd_rev.bind(lhs_0),
                     )
                 }),
                 Scope::make(ctx_len + 1, |rhs_0| {
-                    rhs_fwd_rev
-                    .bind(rhs_0.clone())
-                    .map_eq(
-                        ctx_len + 2,
-                        sum_ty_0,
-                        rhs_rev.clone().bind(rhs_fwd.clone().bind(rhs_0)),
-                        |rhs| rhs.inj_rhs(),
+                    Scope::make(ctx_len + 2, |rhs| rhs.inj_rhs())
+                    .bind_eq(
+                        sum_ty_0.clone(),
+                        rhs_rev.clone().bind(rhs_fwd.clone().bind(rhs_0.clone())),
+                        rhs_fwd_rev.bind(rhs_0),
                     )
                 }),
             )
@@ -776,30 +312,26 @@ impl Iso {
             sum_1
             .case(
                 Scope::make(ctx_len + 1, |sum_1| {
-                    Ty::equal(
+                    Ty::obs_equal(
                         sum_ty_1.clone(),
                         fwd.clone().bind(rev.clone().bind(sum_1.clone())),
                         sum_1,
                     )
                 }),
                 Scope::make(ctx_len + 1, |lhs_1| {
-                    lhs_rev_fwd
-                    .bind(lhs_1.clone())
-                    .map_eq(
-                        ctx_len + 2,
+                    Scope::make(ctx_len + 2, |lhs| lhs.inj_lhs())
+                    .bind_eq(
                         sum_ty_1.clone(),
-                        lhs_fwd.bind(lhs_rev.bind(lhs_1)),
-                        |lhs| lhs.inj_lhs(),
+                        lhs_fwd.bind(lhs_rev.bind(lhs_1.clone())),
+                        lhs_rev_fwd.bind(lhs_1),
                     )
                 }),
                 Scope::make(ctx_len + 1, |rhs_1| {
-                    rhs_rev_fwd
-                    .bind(rhs_1.clone())
-                    .map_eq(
-                        ctx_len + 2,
-                        sum_ty_1,
-                        rhs_fwd.bind(rhs_rev.bind(rhs_1)),
-                        |rhs| rhs.inj_rhs(),
+                    Scope::make(ctx_len + 2, |rhs| rhs.inj_rhs())
+                    .bind_eq(
+                        sum_ty_1.clone(),
+                        rhs_fwd.bind(rhs_rev.bind(rhs_1.clone())),
+                        rhs_rev_fwd.bind(rhs_1),
                     )
                 }),
             )
@@ -843,7 +375,7 @@ impl Iso {
             sum
             .case(
                 Scope::make(ctx_len + 1, |sum| {
-                    Ty::equal(
+                    Ty::obs_equal(
                         sum_ty.clone(),
                         rev.clone().bind(fwd.clone().bind(sum.clone())),
                         sum,
@@ -853,7 +385,7 @@ impl Iso {
                     let sum = never.clone().inj_lhs();
                     never
                     .explode(Scope::constant(
-                        Ty::equal(
+                        Ty::obs_equal(
                             sum_ty,
                             rev.clone().bind(fwd.clone().bind(sum.clone())),
                             sum,
@@ -861,13 +393,13 @@ impl Iso {
                     ))
                 }),
                 Scope::make(ctx_len + 1, |rhs| {
-                    rhs.inj_rhs().refl()
+                    rhs.inj_rhs().obs_refl()
                 }),
             )
         });
 
         let rev_fwd = Scope::make(ctx_len, |rhs| {
-            rhs.refl()
+            rhs.obs_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -908,20 +440,20 @@ impl Iso {
             sum
             .case(
                 Scope::make(ctx_len + 1, |sum| {
-                    Ty::equal(
+                    Ty::obs_equal(
                         sum_ty.clone(),
                         rev.clone().bind(fwd.clone().bind(sum.clone())),
                         sum,
                     )
                 }),
                 Scope::make(ctx_len + 1, |lhs| {
-                    lhs.inj_lhs().refl()
+                    lhs.inj_lhs().obs_refl()
                 }),
                 Scope::make(ctx_len + 1, |never| {
                     let sum = never.clone().inj_rhs();
                     never
                     .explode(Scope::constant(
-                        Ty::equal(
+                        Ty::obs_equal(
                             sum_ty,
                             rev.clone().bind(fwd.clone().bind(sum.clone())),
                             sum,
@@ -932,7 +464,7 @@ impl Iso {
         });
 
         let rev_fwd = Scope::make(ctx_len, |lhs| {
-            lhs.refl()
+            lhs.obs_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -983,40 +515,37 @@ impl Iso {
         let tail_ty_0 = tail_ty.clone();
         let tail_ty_1 = Scope::make(ctx_len, |head| tail_ty.bind(head_rev.clone().bind(head)));
 
-        let sigma_ty_0 = Ty::sigma(
-            head_name.clone(),
-            head_ty_0.clone(),
-            tail_ty_0.clone(),
-        );
-        let sigma_ty_1 = Ty::sigma(
-            head_name,
-            head_ty_1.clone(),
-            tail_ty_1.clone(),
-        );
-
         let fwd = Scope::make(ctx_len, |pair_0| {
             let head_0 = pair_0.clone().proj_head();
-            let tail_0 = pair_0.proj_tail();
             let head_1 = head_fwd.clone().bind(head_0.clone());
+
+            let bound_tail_ty_0 = tail_ty_0.clone().bind(head_0.clone());
+            let bound_tail_ty_1 = tail_ty_1.clone().bind(head_1.clone());
+
+            let tail_0 = pair_0.proj_tail();
             let tail_1 = {
-                tail_ty_0
+                head_fwd_rev
                 .clone()
-                .bind_eq(
-                    head_0.clone(),
-                    head_fwd_rev
-                    .clone()
-                    .bind(head_0.clone())
-                    .symmetry(
-                        head_ty_0.clone(),
-                        head_rev.clone().bind(head_1.clone()),
-                    )
+                .bind(head_0)
+                .obs_cong(
+                    Scope::make(ctx_len + 1, |head_0| {
+                        Scope::constant(
+                            Ty::obs_equal(
+                                Ty::universe(),
+                                tail_ty_0.clone().bind(head_0).into_tm(),
+                                bound_tail_ty_1.clone().into_tm(),
+                            ),
+                        )
+                    }),
+                    bound_tail_ty_1.clone().into_tm().obs_refl(),
                 )
-                .transport(
-                    tail_ty_0.clone().bind(head_0),
+                .cast(
+                    bound_tail_ty_0,
+                    bound_tail_ty_1,
                     tail_0,
-                    TAIL_NAME.clone(),
                 )
             };
+
             head_1.pair(tail_1)
         });
 
@@ -1032,128 +561,79 @@ impl Iso {
 
         let fwd_rev = Scope::make(ctx_len, |pair_0| {
             let head_0 = pair_0.clone().proj_head();
-            let tail_0 = pair_0.clone().proj_tail();
+            let head_1 = head_fwd.clone().bind(head_0.clone());
+            let head_eq = head_fwd_rev.clone().bind(head_0.clone());
 
-            head_fwd_rev
-            .clone()
-            .bind(head_0.clone())
-            .symmetry(
-                head_ty_0.clone(),
-                head_rev.clone().bind(head_fwd.clone().bind(head_0.clone())),
-            )
-            .cong(
-                Scope::make(ctx_len + 1, |head_2| {
-                    Scope::make(ctx_len + 2, |head_eq| {
-                        Ty::equal(
-                            sigma_ty_0,
-                            head_2
-                            .pair(
-                                tail_ty_0
-                                .clone()
-                                .bind_eq(head_0.clone(), head_eq)
-                                .transport(
-                                    tail_ty_0.clone().bind(head_0),
-                                    tail_0,
-                                    TAIL_NAME.clone(),
-                                )
+            let bound_tail_ty_0 = tail_ty_0.clone().bind(head_0);
+            let bound_tail_ty_1 = tail_ty_1.clone().bind(head_1);
+
+            let bound_tail_ty_eq = {
+                head_eq
+                .clone()
+                .obs_cong(
+                    Scope::make(ctx_len + 1, |head_0| {
+                        Scope::constant(
+                            Ty::obs_equal(
+                                Ty::universe(),
+                                tail_ty_0.clone().bind(head_0).into_tm(),
+                                bound_tail_ty_1.clone().into_tm(),
                             ),
-                            pair_0.clone(),
                         )
-                    })
-                }),
-                pair_0.refl(),
-            )
+                    }),
+                    bound_tail_ty_1.clone().into_tm().obs_refl(),
+                )
+            };
+
+            let tail_0 = pair_0.clone().proj_tail();
+            let tail_eq = {
+                bound_tail_ty_eq
+                .cast_round_trip(
+                    bound_tail_ty_0,
+                    bound_tail_ty_1,
+                    tail_0,
+                )
+            };
+
+            head_eq.pair(tail_eq)
         });
 
         let rev_fwd = Scope::make(ctx_len, |pair_1| {
             let head_1 = pair_1.clone().proj_head();
-            let tail_1 = pair_1.clone().proj_tail();
+            let tail_1 = pair_1.proj_tail();
 
             let head_0 = head_rev.clone().bind(head_1.clone());
-            let head_1_round_trip = head_fwd.bind(head_0.clone());
-            let head_1_eq_head_1_round_trip = {
-                head_rev_fwd
-                .bind(head_1.clone())
-                .symmetry(
-                    head_ty_1,
-                    head_1_round_trip.clone(),
-                )
-            };
-            let tail_ty_at_head_0 = tail_ty_0.clone().bind(head_0.clone());
+            let head_eq = head_rev_fwd.clone().bind(head_1);
 
-            let tail_ty_eq_0 = {
-                tail_ty_0
-                .bind_eq(
-                    head_0.clone(),
-                    head_fwd_rev
-                    .bind(head_0)
-                    .symmetry(
-                        head_ty_0,
-                        head_rev.bind(head_1_round_trip.clone()),
-                    )
-                )
-            };
-            let tail_ty_eq_1 = {
-                tail_ty_1
-                .clone()
-                .bind_eq(
-                    head_1.clone(),
-                    head_1_eq_head_1_round_trip.clone(),
-                )
-            };
+            let bound_tail_ty_0 = tail_ty_0.clone().bind(head_0.clone());
+            let bound_tail_ty_1 = tail_ty_1.clone().bind(head_fwd.bind(head_0.clone()));
 
-            Tm::equality_contractible(
-                Ty::universe(),
-                tail_ty_at_head_0.clone().into_tm(),
-                tail_ty_eq_0.clone(),
-                tail_ty_eq_1,
-            )
-            .map_eq(
-                ctx_len + 1,
-                sigma_ty_1.clone(),
-                tail_ty_eq_0,
-                |tail_ty_eq| {
-                    head_1_round_trip
-                    .pair(
-                        tail_ty_eq
-                        .transport(
-                            tail_ty_at_head_0.clone(),
-                            tail_1.clone(),
-                            TAIL_NAME.clone(),
-                        )
-                    )
-                },
-            )
-            .transitivity(
-                head_1_eq_head_1_round_trip
-                .cong(
-                    Scope::make(ctx_len + 1, |head_2| {
-                        Scope::make(ctx_len + 2, |head_eq| {
-                            Ty::equal(
-                                sigma_ty_1.clone(),
-                                head_2
-                                .pair(
-                                    tail_ty_1
-                                    .bind_eq(
-                                        head_1,
-                                        head_eq,
-                                    )
-                                    .transport(
-                                        tail_ty_at_head_0,
-                                        tail_1,
-                                        TAIL_NAME.clone(),
-                                    ),
-                                ),
-                                pair_1.clone(),
+            let bound_tail_ty_eq = {
+                head_fwd_rev
+                .bind(head_0)
+                .obs_cong(
+                    Scope::make(ctx_len + 1, |head_0| {
+                        Scope::constant(
+                            Ty::obs_equal(
+                                Ty::universe(),
+                                tail_ty_0.bind(head_0).into_tm(),
+                                bound_tail_ty_1.clone().into_tm(),
                             )
-                        })
+                        )
                     }),
-                    pair_1.clone().refl(),
-                ),
-                sigma_ty_1,
-                fwd.clone().bind(rev.clone().bind(pair_1.clone())),
-                pair_1,
-            )
+                    bound_tail_ty_1.clone().into_tm().obs_refl(),
+                )
+            };
+
+            let tail_eq = {
+                bound_tail_ty_eq
+                .cast_round_trip(
+                    bound_tail_ty_0,
+                    bound_tail_ty_1,
+                    tail_1,
+                )
+            };
+
+            head_eq.pair(tail_eq)
         });
         
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -1217,18 +697,25 @@ impl Iso {
             let head = pair_0.clone().proj_head();
             let tail_0 = pair_0.proj_tail();
 
-            tail_fwd_rev
-            .clone()
-            .bind(head.clone())
-            .bind(tail_0.clone())
-            .map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name.clone(), head_ty.clone(), tail_ty_0),
-                tail_rev
+            let bound_tail_ty_0 = tail_ty_0.bind(head.clone());
+
+            Tm::cast_refl()
+            .transitivity(
+                tail_fwd_rev.bind(head.clone()).bind(tail_0.clone()),
+                bound_tail_ty_0.clone(),
+                bound_tail_ty_0
                 .clone()
-                .bind(head.clone())
-                .bind(tail_fwd.clone().bind(head.clone()).bind(tail_0)),
-                |tail| head.pair(tail),
+                .into_tm()
+                .obs_refl()
+                .cast(
+                    bound_tail_ty_0.clone(),
+                    bound_tail_ty_0.clone(),
+                    tail_rev
+                    .clone()
+                    .bind(head.clone())
+                    .bind(tail_fwd.clone().bind(head).bind(tail_0.clone())),
+                ),
+                tail_0,
             )
         });
 
@@ -1236,23 +723,32 @@ impl Iso {
             let head = pair_1.clone().proj_head();
             let tail_1 = pair_1.proj_tail();
 
-            tail_rev_fwd
-            .clone()
-            .bind(head.clone())
-            .bind(tail_1.clone())
-            .map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name, head_ty, tail_ty_1),
-                tail_fwd
-                .bind(head.clone())
-                .bind(tail_rev.bind(head.clone()).bind(tail_1)),
-                |tail| head.pair(tail),
+            let bound_tail_ty_1 = tail_ty_1.bind(head.clone());
+
+            Tm::cast_refl()
+            .transitivity(
+                tail_rev_fwd.bind(head.clone()).bind(tail_1.clone()),
+                bound_tail_ty_1.clone(),
+                bound_tail_ty_1
+                .clone()
+                .into_tm()
+                .obs_refl()
+                .cast(
+                    bound_tail_ty_1.clone(),
+                    bound_tail_ty_1.clone(),
+                    tail_fwd
+                    .clone()
+                    .bind(head.clone())
+                    .bind(tail_rev.clone().bind(head).bind(tail_1.clone())),
+                ),
+                tail_1,
             )
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /*
     /// ```ignore
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_ty_0 : Type
@@ -1410,6 +906,7 @@ impl Iso {
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
+    */
 
     /// ```ignore
     /// Γ ⊢ head_name : Name
@@ -1429,11 +926,240 @@ impl Iso {
         });
 
         let fwd_rev = Scope::make(0, |pair| {
-            pair.refl()
+            pair.obs_refl()
         });
 
         let rev_fwd = Scope::make(0, |tail| {
-            tail.refl()
+            tail.obs_refl()
+        });
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ lhs_name : Name
+    /// Γ ⊢ lhs_ty : Type
+    /// Γ ⊢ rhs_ty : Type
+    /// Γ ⊢ tail_ty : Ty::sum(lhs_name, lhs_ty, rhs_ty) ⊢ Type
+    /// ----
+    /// Γ ⊢ Iso::sigma_sum_head(head_name, lhs_name, lhs_ty, rhs_ty, tail_ty)
+    ///   : Ty::sigma(head_name, Ty::sum(lhs_name, lhs_ty, rhs_ty), tail_ty)
+    ///   ≅ Ty::sum(
+    ///       lhs_name,
+    ///       Ty::sigma(
+    ///           head_name,
+    ///           lhs_ty,
+    ///           Scope::make(Γ.len(), |lhs| tail_ty.bind(lhs.inj_lhs())),
+    ///       ),
+    ///       Ty::sigma(
+    ///           head_name,
+    ///           rhs_ty,
+    ///           Scope::make(Γ.len(), |rhs| tail_ty.bind(rhs.inj_rhs())),
+    ///       ),
+    ///   )
+    /// ```
+
+    pub fn sigma_sum_head(
+        head_name: Name,
+        lhs_name: Name,
+        lhs_ty: Ty,
+        rhs_ty: Ty,
+        tail_ty: Scope<Ty>,
+    ) -> Iso {
+        let ctx_len = max_all([
+            head_name.ctx_len(),
+            lhs_name.ctx_len(),
+            lhs_ty.ctx_len(),
+            rhs_ty.ctx_len(),
+            tail_ty.ctx_len(),
+        ]);
+
+        let sum_ty = Ty::sum(lhs_name.clone(), lhs_ty.clone(), rhs_ty.clone());
+        let sigma_ty = Ty::sigma(head_name.clone(), sum_ty.clone(), tail_ty.clone());
+        let distributed_sum_ty = Ty::sum(
+            lhs_name.clone(),
+            Ty::sigma(
+                head_name.clone(),
+                lhs_ty.clone(),
+                Scope::make(ctx_len + 3, |lhs| {
+                    tail_ty.clone().bind(lhs.inj_lhs())
+                }),
+            ),
+            Ty::sigma(
+                head_name.clone(),
+                rhs_ty.clone(),
+                Scope::make(ctx_len + 3, |rhs| {
+                    tail_ty.clone().bind(rhs.inj_rhs())
+                }),
+            ),
+        );
+
+        let fwd = Scope::make(ctx_len, |sigma| {
+            let sum = sigma.clone().proj_head();
+            let tail = sigma.proj_tail();
+
+            sum
+            .case(
+                Scope::make(ctx_len + 1, |sum| {
+                    Ty::pi(
+                        Name::from("tail"),
+                        tail_ty.clone().bind(sum),
+                        Scope::constant(distributed_sum_ty.clone()),
+                    )
+                }),
+                Scope::make(ctx_len + 1, |lhs| {
+                    Tm::func(Scope::make(ctx_len + 2, |tail| {
+                        lhs.pair(tail.clone()).inj_lhs()
+                    }))
+                }),
+                Scope::make(ctx_len + 1, |rhs| {
+                    Tm::func(Scope::make(ctx_len + 2, |tail| {
+                        rhs.pair(tail.clone()).inj_rhs()
+                    }))
+                }),
+            )
+            .app(tail)
+        });
+
+        let rev = Scope::make(ctx_len, |sum| {
+            sum
+            .case(
+                Scope::constant(sigma_ty.clone()),
+                Scope::make(ctx_len + 1, |sigma| {
+                    let lhs = sigma.clone().proj_head();
+                    let tail = sigma.proj_tail();
+                    lhs.inj_lhs().pair(tail)
+                }),
+                Scope::make(ctx_len + 1, |sigma| {
+                    let rhs = sigma.clone().proj_head();
+                    let tail = sigma.proj_tail();
+                    rhs.inj_rhs().pair(tail)
+                }),
+            )
+        });
+
+        let fwd_rev = Scope::make(ctx_len, |sigma| {
+            let sum = sigma.clone().proj_head();
+            let tail = sigma.proj_tail();
+
+            sum
+            .case(
+                Scope::make(ctx_len + 1, |sum| {
+                    Ty::pi(
+                        Name::from("tail"),
+                        tail_ty.clone().bind(sum.clone()),
+                        Scope::make(ctx_len + 2, |tail| {
+                            let sigma = sum.pair(tail);
+                            Ty::obs_equal(
+                                sigma_ty.clone(),
+                                rev.clone().bind(fwd.clone().bind(sigma.clone())),
+                                sigma,
+                            )
+                        }),
+                    )
+                }),
+                Scope::make(ctx_len + 1, |lhs| {
+                    Tm::func(Scope::make(ctx_len + 2, |tail| {
+                        lhs.inj_lhs().pair(tail).obs_refl()
+                    }))
+                }),
+                Scope::make(ctx_len + 1, |rhs| {
+                    Tm::func(Scope::make(ctx_len + 2, |tail| {
+                        rhs.inj_rhs().pair(tail).obs_refl()
+                    }))
+                }),
+            )
+            .app(tail)
+        });
+
+        let rev_fwd = Scope::make(ctx_len, |sum| {
+            sum
+            .case(
+                Scope::make(ctx_len + 1, |sum| {
+                    Ty::obs_equal(
+                        distributed_sum_ty.clone(),
+                        fwd.clone().bind(rev.clone().bind(sum.clone())),
+                        sum,
+                    )
+                }),
+                Scope::make(ctx_len + 1, |sigma| {
+                    let lhs = sigma.clone().proj_head();
+                    let tail = sigma.proj_tail();
+                    lhs.pair(tail).inj_lhs().obs_refl()
+                }),
+                Scope::make(ctx_len + 1, |sigma| {
+                    let rhs = sigma.clone().proj_head();
+                    let tail = sigma.proj_tail();
+                    rhs.pair(tail).inj_rhs().obs_refl()
+                }),
+            )
+        });
+
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+    /// ```ignore
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ head_head_name : Name
+    /// Γ ⊢ head_head_ty : Type
+    /// Γ ⊢ head_tail_ty : head_head_ty ⊢ Type
+    /// Γ ⊢ tail_ty : Ty::sigma(head_head_name, head_head_ty, head_tail_ty) ⊢ Type
+    /// ----
+    /// Γ ⊢ Iso::sigma_sigma_head(
+    ///     head_name,
+    ///     head_head_name,
+    ///     head_head_ty,
+    ///     head_tail_ty,
+    ///     tail_ty,
+    /// ) : Ty::sigma(
+    ///     head_name,
+    ///     Ty::sigma(
+    ///         head_head_name,
+    ///         head_head_ty,
+    ///         head_tail_ty,
+    ///     ),
+    ///     tail_ty,
+    /// ) ≅ Ty::sigma(
+    ///     head_head_name,
+    ///     head_head_ty,
+    ///     Scope::make(Γ.len(), |head_head| {
+    ///         Ty::sigma(
+    ///             head_name,
+    ///             head_tail_ty.bind(head_head),
+    ///             Scope::make(Γ.len() + 1, |head_tail| {
+    ///                 tail_ty.bind(head_head.pair(head_tail))
+    ///             }),
+    ///         )
+    ///     }),
+    /// )
+    /// ```
+
+    pub fn sigma_sigma_head() -> Iso {
+        let fwd = Scope::make(0, |sigma_0| {
+            let head = sigma_0.clone().proj_head();
+            let head_head = head.clone().proj_head();
+            let head_tail = head.proj_tail();
+            let tail = sigma_0.proj_tail();
+
+            head_head.pair(head_tail.pair(tail))
+        });
+
+        let rev = Scope::make(0, |sigma_1| {
+            let head_head = sigma_1.clone().proj_head();
+            let sigma_1 = sigma_1.proj_tail();
+            let head_tail = sigma_1.clone().proj_head();
+            let tail = sigma_1.proj_tail();
+
+            head_head.pair(head_tail).pair(tail)
+        });
+
+        let fwd_rev = Scope::make(0, |sigma_0| {
+            sigma_0.obs_refl()
+        });
+
+        let rev_fwd = Scope::make(0, |sigma_1| {
+            sigma_1.obs_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -1457,11 +1183,11 @@ impl Iso {
         });
 
         let fwd_rev = Scope::make(0, |pair| {
-            pair.refl()
+            pair.obs_refl()
         });
 
         let rev_fwd = Scope::make(0, |head| {
-            head.refl()
+            head.obs_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
@@ -1502,6 +1228,8 @@ impl Iso {
             static ref TAIL_NAME: Name = Name::from("tail");
         }
 
+        let unique_bound_tail_ty = tail_ty.clone().bind(unique_head.clone());
+
         let fwd = Scope::make(ctx_len, |pair| {
             let head = pair.clone().proj_head();
             let tail = pair.proj_tail();
@@ -1510,12 +1238,12 @@ impl Iso {
             .clone()
             .bind_eq(
                 head.clone(),
-                constrains.clone().bind(head.clone()).bind(tail.clone())
+                constrains.clone().bind(head.clone()).bind(tail.clone()),
             )
-            .transport(
-                tail_ty.clone().bind(head.clone()),
+            .cast(
+                tail_ty.clone().bind(head),
+                unique_bound_tail_ty.clone(),
                 tail,
-                TAIL_NAME.clone(),
             )
         });
 
@@ -1527,69 +1255,43 @@ impl Iso {
             let head = pair.clone().proj_head();
             let tail = pair.clone().proj_tail();
 
-            constrains
+            tail_ty
             .clone()
-            .bind(head.clone())
-            .bind(tail.clone())
-            .cong(
-                Scope::make(ctx_len + 1, |head_1| {
-                    Scope::make(ctx_len + 2, |head_eq| {
-                        Ty::equal(
-                            Ty::sigma(head_name, head_ty, tail_ty.clone()),
-                            head_1
-                            .pair(
-                                tail_ty
-                                .clone()
-                                .bind_eq(
-                                    head.clone(),
-                                    head_eq,
-                                )
-                                .transport(
-                                    tail_ty.clone().bind(head),
-                                    tail,
-                                    TAIL_NAME.clone(),
-                                )
-                            ),
-                            pair.clone(),
-                        )
-                    })
-                }),
-                pair.refl(),
+            .bind_eq(
+                head.clone(),
+                constrains.clone().bind(head.clone()).bind(tail.clone()),
+            )
+            .cast_round_trip(
+                tail_ty.bind(head),
+                unique_bound_tail_ty,
+                tail,
             )
         });
 
-        let rev_fwd = Scope::make(ctx_len, |tail| {
-            let bound_tail_ty = tail_ty.clone().bind(unique_head.clone());
-
-            constrains
-            .bind(unique_head.clone())
-            .bind(tail.clone())
-            .unique_identity(
-                Scope::make(ctx_len + 1, |head_eq| {
-                    Ty::equal(
-                        bound_tail_ty.clone(),
-                        tail_ty
-                        .bind_eq(
-                            unique_head.clone(),
-                            head_eq,
-                        )
-                        .transport(
-                            bound_tail_ty,
-                            tail.clone(),
-                            TAIL_NAME.clone(),
-                        ),
-                        tail.clone(),
-                    )
-                }),
-                tail.refl(),
-            )
+        let rev_fwd = Scope::make(ctx_len, |_tail| {
+            Tm::cast_refl()
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ arg_name : Name
+    /// Γ ⊢ arg_ty_0 : Type
+    /// Γ ⊢ arg_ty_1 : Type
+    /// Γ ⊢ res_ty : arg_ty_0 ⊢ Type
+    /// Γ ⊢ arg_iso : arg_ty_0 ≅ arg_ty_1
+    /// ----
+    /// Γ ⊢ Iso::dependent_pi_arg_congruence(
+    ///     arg_name,
+    ///     arg_ty_0,
+    ///     arg_ty_1,
+    ///     res_ty,
+    ///     arg_iso,
+    /// ) : Ty::pi(arg_name, arg_ty_0, res_ty) ≅ Ty::pi(arg_name, arg_ty_1, res_ty)
+    /// ```
+
     pub fn dependent_pi_arg_congruence(
-        funext: &Tm,
         arg_name: Name,
         arg_ty_0: Ty,
         arg_ty_1: Ty,
@@ -1613,171 +1315,117 @@ impl Iso {
         }
 
         let fwd = Scope::make(ctx_len, |func| {
-            Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
-                func.app(arg_rev.clone().bind(arg_tm_1))
+            Tm::func(Scope::make(ctx_len + 1, |arg_1| {
+                func.app(arg_rev.clone().bind(arg_1))
             }))
         });
 
         let rev = Scope::make(ctx_len, |func| {
-            Tm::func(Scope::make(ctx_len + 1, |arg_tm_0| {
-                let arg_tm_1 = arg_fwd.clone().bind(arg_tm_0.clone());
-                let arg_tm_0_round_trip = {
-                    arg_rev.clone().bind(arg_tm_1.clone())
-                };
+            Tm::func(Scope::make(ctx_len + 1, |arg_0| {
+                let arg_1 = arg_fwd.clone().bind(arg_0.clone());
+                let arg_0_round_trip = arg_rev.clone().bind(arg_1.clone());
 
                 res_ty
                 .clone()
                 .bind_eq(
-                    arg_tm_0_round_trip.clone(),
-                    arg_fwd_rev.clone().bind(arg_tm_0),
+                    arg_0_round_trip.clone(),
+                    arg_fwd_rev.clone().bind(arg_0.clone()),
                 )
-                .transport(
-                    res_ty.clone().bind(arg_tm_0_round_trip),
-                    func.app(arg_tm_1),
-                    RES_NAME.clone(),
+                .cast(
+                    res_ty.clone().bind(arg_0_round_trip),
+                    res_ty.clone().bind(arg_0),
+                    func.app(arg_1),
                 )
             }))
         });
 
         let fwd_rev = Scope::make(ctx_len, |func| {
-            funext
-            .clone()
-            .app(arg_name.clone().into_tm())
-            .app(arg_ty_0.clone().into_tm())
-            .app(Tm::func(res_ty.clone().map_without_capture(|res_ty| res_ty.into_tm())))
-            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
-            .app(func.clone())
-            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_0| {
-                let arg_tm_1 = arg_fwd.clone().bind(arg_tm_0.clone());
-                let arg_tm_0_round_trip = arg_rev.clone().bind(arg_tm_1.clone());
-                let res_round_trip = func.clone().app(arg_tm_0_round_trip.clone());
+            Tm::func(Scope::make(ctx_len + 1, |arg_0| {
+                let arg_0_round_trip = arg_rev.clone().bind(arg_fwd.clone().bind(arg_0.clone()));
 
                 arg_fwd_rev
-                .clone()
-                .bind(arg_tm_0)
-                .cong(
-                    Scope::make(ctx_len + 2, |arg_tm_2| {
+                .bind(arg_0)
+                .obs_cong(
+                    Scope::make(ctx_len + 2, |arg_0| {
                         Scope::make(ctx_len + 3, |arg_eq| {
-                            Ty::equal(
-                                res_ty.clone().bind(arg_tm_2.clone()),
+                            Ty::obs_equal(
+                                res_ty.clone().bind(arg_0.clone()),
                                 res_ty
                                 .clone()
                                 .bind_eq(
-                                    arg_tm_0_round_trip.clone(),
+                                    arg_0_round_trip.clone(),
                                     arg_eq,
                                 )
-                                .transport(
-                                    res_ty.clone().bind(arg_tm_0_round_trip.clone()),
-                                    res_round_trip.clone(),
-                                    RES_NAME.clone(),
+                                .cast(
+                                    res_ty.clone().bind(arg_0_round_trip.clone()),
+                                    res_ty.clone().bind(arg_0.clone()),
+                                    func.clone().app(arg_0_round_trip),
                                 ),
-                                func.app(arg_tm_2),
+                                func.app(arg_0),
                             )
                         })
                     }),
-                    res_round_trip.refl(),
+                    Tm::cast_refl(),
                 )
-            })))
+            }))
         });
 
         let rev_fwd = Scope::make(ctx_len, |func| {
-            funext
-            .clone()
-            .app(arg_name.clone().into_tm())
-            .app(arg_ty_1.clone().into_tm())
-            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
-                res_ty.clone().bind(arg_rev.clone().bind(arg_tm_1)).into_tm()
-            })))
-            .app(fwd.clone().bind(rev.clone().bind(func.clone())))
-            .app(func.clone())
-            .app(Tm::func(Scope::make(ctx_len + 1, |arg_tm_1| {
-                let arg_tm_0 = arg_rev.clone().bind(arg_tm_1.clone());
-                let arg_tm_1_round_trip = arg_fwd.clone().bind(arg_tm_0.clone());
-                let arg_tm_0_round_trip = arg_rev.clone().bind(arg_tm_1_round_trip.clone());
+            let res_ty_1 = Scope::make(ctx_len + 1, |arg_1| {
+                res_ty.clone().bind(arg_rev.clone().bind(arg_1))
+            });
 
-                let arg_tm_1_round_trip_eq_arg_tm_1 = arg_rev_fwd.bind(arg_tm_1.clone());
+            Tm::func(Scope::make(ctx_len + 1, |arg_1| {
+                let arg_1_round_trip = arg_fwd.bind(arg_rev.bind(arg_1.clone()));
 
-                Tm::equality_contractible(
-                    arg_ty_0.clone(),
-                    arg_tm_0_round_trip.clone(),
-                    arg_fwd_rev.clone().bind(arg_tm_0.clone()),
-                    arg_rev
-                    .clone()
-                    .bind_eq(
-                        arg_ty_0.clone(),
-                        arg_tm_1_round_trip.clone(),
-                        arg_tm_1_round_trip_eq_arg_tm_1.clone(),
-                    ),
-                )
-                .map_eq(
-                    ctx_len + 2,
-                    res_ty.clone().bind(arg_tm_0.clone()),
-                    arg_tm_0_round_trip.clone(),
-                    |arg_eq| {
-                        res_ty
-                        .clone()
-                        .bind_eq(
-                            arg_tm_0_round_trip.clone(),
-                            arg_eq,
-                        )
-                        .transport(
-                            res_ty.clone().bind(arg_tm_0_round_trip.clone()),
-                            func.clone().app(arg_tm_1_round_trip.clone()),
-                            RES_NAME.clone(),
-                        )
-                    },
-                )
-                .transitivity(
-                    arg_tm_1_round_trip_eq_arg_tm_1
-                    .cong(
-                        Scope::make(ctx_len + 2, |arg_tm_2| {
-                            Scope::make(ctx_len + 3, |arg_eq| {
-                                Ty::equal(
-                                    res_ty.clone().bind(arg_rev.clone().bind(arg_tm_2.clone())),
-                                    res_ty
-                                    .clone()
-                                    .bind_eq(
-                                        arg_tm_0_round_trip.clone(),
-                                        arg_rev
-                                        .bind_eq(
-                                            arg_ty_1,
-                                            arg_tm_1_round_trip.clone(),
-                                            arg_eq,
-                                        )
-                                    )
-                                    .transport(
-                                        res_ty.clone().bind(arg_tm_0_round_trip.clone()),
-                                        func.clone().app(arg_tm_1_round_trip.clone()),
-                                        RES_NAME.clone(),
-                                    ),
-                                    func.clone().app(arg_tm_2),
+                arg_rev_fwd
+                .bind(arg_1)
+                .obs_cong(
+                    Scope::make(ctx_len + 2, |arg_1| {
+                        let bound_res_ty_1 = res_ty_1.clone().bind(arg_1.clone());
+                        Scope::make(ctx_len + 3, |arg_eq| {
+                            Ty::obs_equal(
+                                bound_res_ty_1.clone(),
+                                res_ty_1
+                                .clone()
+                                .bind_eq(
+                                    arg_1_round_trip.clone(),
+                                    arg_eq,
                                 )
-                            })
-                        }),
-                        func.clone().app(arg_tm_1_round_trip.clone()).refl(),
-                    ),
-                    res_ty.clone().bind(arg_tm_0.clone()),
-                    res_ty
-                    .clone()
-                    .bind_eq(
-                        arg_tm_0_round_trip.clone(),
-                        arg_fwd_rev.bind(arg_tm_0),
-                    )
-                    .transport(
-                        res_ty.bind(arg_tm_0_round_trip),
-                        func.clone().app(arg_tm_1_round_trip.clone()),
-                        RES_NAME.clone(),
-                    ),
-                    func.app(arg_tm_1),
+                                .cast(
+                                    res_ty_1.bind(arg_1_round_trip.clone()),
+                                    bound_res_ty_1,
+                                    func.clone().app(arg_1_round_trip),
+                                ),
+                                func.app(arg_1),
+                            )
+                        })
+                    }),
+                    Tm::cast_refl(),
                 )
-            })))
+            }))
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ arg_name : Name
+    /// Γ ⊢ arg_ty : Type
+    /// Γ ⊢ res_ty_0 : arg_ty ⊢ Type
+    /// Γ ⊢ res_ty_1 : arg_ty ⊢ Type
+    /// Γ ⊢ res_iso : arg_ty |- res_ty_0 ≅ res_ty_1
+    /// ----
+    /// Γ ⊢ Iso::dependent_pi_res_congruence(
+    ///     arg_name,
+    ///     arg_ty,
+    ///     res_ty_0,
+    ///     res_ty_1,
+    ///     res_iso,
+    /// ) : Ty::pi(arg_name, arg_ty, res_ty_0) ≅ Ty::pi(arg_name, arg_ty, res_ty_1)
+    /// ```
+
     pub fn dependent_pi_res_congruence(
-        funext: &Tm,
         arg_name: Name,
         arg_ty: Ty,
         res_ty_0: Scope<Ty>,
@@ -1785,7 +1433,6 @@ impl Iso {
         res_iso: Scope<Iso>,
     ) -> Iso {
         let ctx_len = max_all([
-            funext.ctx_len(),
             arg_name.ctx_len(),
             arg_ty.ctx_len(),
             res_ty_0.ctx_len(),
@@ -1818,47 +1465,37 @@ impl Iso {
         });
 
         let fwd_rev = Scope::make(ctx_len, |func| {
-            funext
-            .clone()
-            .app(arg_name.clone().into_tm())
-            .app(arg_ty.clone().into_tm())
-            .app(Tm::func(res_ty_0.clone().map_without_capture(|res_ty| res_ty.into_tm())))
-            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
-            .app(func.clone())
-            .app(Tm::func(Scope::make(ctx_len + 1, |arg| {
+            Tm::func(Scope::make(ctx_len + 1, |arg| {
                 res_fwd_rev
                 .bind(arg.clone())
                 .bind(func.app(arg))
-            })))
+            }))
         });
 
         let rev_fwd = Scope::make(ctx_len, |func| {
-            funext
-            .clone()
-            .app(arg_name.clone().into_tm())
-            .app(arg_ty.clone().into_tm())
-            .app(Tm::func(res_ty_1.clone().map_without_capture(|res_ty| res_ty.into_tm())))
-            .app(fwd.clone().bind(rev.clone().bind(func.clone())))
-            .app(func.clone())
-            .app(Tm::func(Scope::make(ctx_len + 1, |arg| {
+            Tm::func(Scope::make(ctx_len + 1, |arg| {
                 res_rev_fwd
                 .bind(arg.clone())
                 .bind(func.app(arg))
-            })))
+            }))
         });
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ arg_name : Name
+    /// Γ ⊢ res_ty : Ty::never() ⊢ Type
+    /// ----
+    /// Γ ⊢ Iso::pi_never_arg(res_ty)
+    ///   : Ty::pi(arg_name, Ty::never(), res_ty)
+    ///   ≅ Ty::unit()
+    /// ```
+
     pub fn pi_never_arg(
-        funext: &Tm,
-        arg_name: Name,
         res_ty: Scope<Ty>,
     ) -> Iso {
-        let ctx_len = max_all([
-            arg_name.ctx_len(),
-            res_ty.ctx_len(),
-        ]);
+        let ctx_len = res_ty.ctx_len();
 
         let fwd = Scope::constant(Tm::unit());
         let rev = Scope::constant(Tm::func(Scope::make(ctx_len + 1, |never| {
@@ -1866,29 +1503,32 @@ impl Iso {
         })));
 
         let fwd_rev = Scope::make(ctx_len, |func| {
-            funext
-            .clone()
-            .app(arg_name.into_tm())
-            .app(Ty::never().into_tm())
-            .app(Tm::func(res_ty.clone().map_without_capture(|res_ty| res_ty.into_tm())))
-            .app(rev.clone().bind(fwd.clone().bind(func.clone())))
-            .app(func.clone())
-            .app(Tm::func(Scope::make(ctx_len + 1, |never| {
-                never.clone().explode(Scope::constant(
-                    Ty::equal(
+            Tm::func(Scope::make(ctx_len + 1, |never| {
+                never
+                .clone()
+                .explode(Scope::constant(
+                    Ty::obs_equal(
                         res_ty.clone().bind(never.clone()),
-                        never.clone().explode(res_ty),
-                        func.app(never),
+                        func.app(never.clone()),
+                        never.explode(res_ty),
                     )
                 ))
-            })))
+            }))
         });
 
-        let rev_fwd = Scope::constant(Tm::unit().refl());
+        let rev_fwd = Scope::constant(Tm::unit().obs_refl());
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 
+    /// ```ignore
+    /// Γ ⊢ arg_name : Name
+    /// Γ ⊢ res_ty : Ty::unit() ⊢ Type
+    /// ----
+    /// Γ ⊢ Iso::pi_unit_arg(res_ty)
+    ///   : Ty::pi(arg_name, Ty::unit(), res_ty)
+    ///   ≅ res_ty.bind(Tm::unit())
+    /// ```
 
     pub fn pi_unit_arg(
         res_ty: Scope<Ty>,
@@ -1903,13 +1543,12 @@ impl Iso {
             Tm::func(Scope::constant(res))
         });
 
-        let fwd_rev = Scope::make(ctx_len, |func| func.refl());
+        let fwd_rev = Scope::make(ctx_len, |func| func.obs_refl());
 
-        let rev_fwd = Scope::make(ctx_len, |res| res.refl());
+        let rev_fwd = Scope::make(ctx_len, |res| res.obs_refl());
 
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
-
 
     /// ```ignore
     /// Γ ⊢ arg_name : Name
@@ -1921,8 +1560,132 @@ impl Iso {
     pub fn pi_unit_res() -> Iso {
         let fwd = Scope::constant(Tm::unit());
         let rev = Scope::constant(Tm::func(Scope::constant(Tm::unit())));
-        let fwd_rev = Scope::make(0, |func| func.refl());
-        let rev_fwd = Scope::constant(Tm::unit().refl());
+        let fwd_rev = Scope::make(0, |func| func.obs_refl());
+        let rev_fwd = Scope::constant(Tm::unit());
+        Iso { fwd, rev, fwd_rev, rev_fwd }
+    }
+
+    /// ```ignore
+    /// ----
+    /// Γ ⊢ Iso::nat_into_sum_of_zero_and_succ()
+    ///   : Ty::nat()
+    ///   ≅ Ty::sum(
+    ///     Name::from("zero"),
+    ///     Ty::unit(),
+    ///     Ty::sum(
+    ///         Name::from("succ"),
+    ///         Ty::nat(),
+    ///         Ty::never(),
+    ///     )
+    /// )
+    /// ```
+
+    pub fn nat_into_sum_of_zero_and_succ() -> Iso {
+        let output_ty = Ty::sum(
+            Name::from("zero"),
+            Ty::unit(),
+            Ty::sum(
+                Name::from("succ"),
+                Ty::nat(),
+                Ty::never(),
+            ),
+        );
+
+        let fwd = Scope::make(0, |n| {
+            n
+            .fold(
+                Scope::constant(output_ty.clone()),
+                Tm::unit().inj_lhs(),
+                Scope::make(1, |n| {
+                    Scope::constant(
+                        n.inj_lhs().inj_rhs()
+                    )
+                }),
+            )
+        });
+
+        let rev = Scope::make(0, |sum| {
+            sum
+            .case(
+                Scope::constant(Ty::nat()),
+                Scope::constant(Tm::zero()),
+                Scope::make(1, |sum| {
+                    sum
+                    .case(
+                        Scope::constant(Ty::nat()),
+                        Scope::make(2, |n| n.succs(Ubig::ONE)),
+                        Scope::make(2, |never| {
+                            never.explode(Scope::constant(Ty::nat()))
+                        }),
+                    )
+                }),
+            )
+        });
+
+        let fwd_rev = Scope::make(0, |n| {
+            n
+            .fold(
+                Scope::make(1, |n| {
+                    Ty::obs_equal(
+                        Ty::nat(),
+                        rev.clone().bind(fwd.clone().bind(n.clone())),
+                        n,
+                    )
+                }),
+                Tm::zero().obs_refl(),
+                Scope::make(1, |n| {
+                    Scope::constant(
+                        n.succs(Ubig::ONE).obs_refl()
+                    )
+                })
+            )
+        });
+
+        let rev_fwd = Scope::make(0, |sum| {
+            sum
+            .case(
+                Scope::make(1, |sum| {
+                    Ty::obs_equal(
+                        output_ty.clone(),
+                        fwd.clone().bind(rev.clone().bind(sum.clone())),
+                        sum,
+                    )
+                }),
+                Scope::constant(
+                    Tm::unit().inj_lhs().obs_refl()
+                ),
+                Scope::make(1, |sum| {
+                    sum
+                    .case(
+                        Scope::make(2, |sum| {
+                            let sum = sum.inj_rhs();
+                            Ty::obs_equal(
+                                output_ty.clone(),
+                                fwd.clone().bind(rev.clone().bind(sum.clone())),
+                                sum,
+                            )
+                        }),
+                        Scope::make(2, |n| {
+                            n.inj_lhs().inj_rhs().obs_refl()
+                        }),
+                        Scope::make(2, |never| {
+                            let sum = never.clone().inj_rhs().inj_rhs();
+                            never
+                            .explode(
+                                Scope::constant(
+                                    Ty::obs_equal(
+                                        output_ty.clone(),
+                                        fwd.clone().bind(rev.clone().bind(sum.clone())),
+                                        sum,
+                                    )
+                                )
+                            )
+                        }),
+                    )
+                }),
+            )
+        });
+
         Iso { fwd, rev, fwd_rev, rev_fwd }
     }
 }

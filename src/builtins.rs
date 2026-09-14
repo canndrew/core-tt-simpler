@@ -25,6 +25,7 @@ lazy_static! {
             tm: Ty::name().into_tm(),
         });
 
+        /*
         builtins.push(Builtin {
             name: "cong",
             ty: Ty::pi(
@@ -115,6 +116,7 @@ lazy_static! {
                 }))
             })),
         });
+        */
 
         builtins.push(Builtin {
             name: "fold",
@@ -177,6 +179,37 @@ lazy_static! {
                             )
                         }))
                     }))
+                }))
+            })),
+        });
+
+        builtins.push(Builtin {
+            name: "explode",
+            ty: Ty::pi(
+                Name::from("Motive"),
+                Ty::pi(
+                    Name::from("elim"),
+                    Ty::never(),
+                    Scope::constant(Ty::universe()),
+                ),
+                Scope::make(0, |motive| {
+                    Ty::pi(
+                        Name::from("elim"),
+                        Ty::never(),
+                        Scope::make(1, |elim| {
+                            motive.app(elim).into_ty()
+                        }),
+                    )
+                }),
+            ),
+            tm: Tm::func(Scope::make(0, |motive| {
+                Tm::func(Scope::make(1, |elim| {
+                    elim
+                    .explode(
+                        Scope::make(2, |elim| {
+                            motive.app(elim).into_ty()
+                        })
+                    )
                 }))
             })),
         });
@@ -273,6 +306,113 @@ lazy_static! {
                                         )
                                     }))
                                 }))
+                            }))
+                        }))
+                    }))
+                }))
+            })),
+        });
+
+        /*
+        let ctx_len = 0;
+        builtins.push(Builtin {
+            name: "transitivity",
+            ty: pi!(ctx_len @
+                (
+                    Ty: Ty::universe(),
+                    val_0: Ty.clone(),
+                    val_1: Ty.clone(),
+                    val_2: Ty.clone(),
+                    eq_0: Ty::obs_equal(Ty.clone(), val_0.clone(), val_1.clone()),
+                    eq_1: Ty::obs_equal(Ty.clone(), val_1, val_2.clone()),
+                ) -> Ty::obs_equal(
+                    Ty, val_0, val_2,
+                )
+            ),
+        });
+        */
+
+        builtins.push(Builtin {
+            name: "transitivity",
+            ty: Ty::pi(
+                Name::from("Ty"),
+                Ty::universe(),
+                Scope::make(0, |ty| {
+                    let ty = ty.into_ty();
+                    Ty::pi(
+                        Name::from("val_0"),
+                        ty.clone(),
+                        Scope::make(1, |tm_0| {
+                            Ty::pi(
+                                Name::from("val_1"),
+                                ty.clone(),
+                                Scope::make(2, |tm_1| {
+                                    Ty::pi(
+                                        Name::from("val_2"),
+                                        ty.clone(),
+                                        Scope::make(3, |tm_2| {
+                                            Ty::pi(
+                                                Name::from("eq_0"),
+                                                Ty::obs_equal(
+                                                    ty.clone(),
+                                                    tm_0.clone(),
+                                                    tm_1.clone(),
+                                                ),
+                                                Scope::constant(
+                                                    Ty::pi(
+                                                        Name::from("eq_1"),
+                                                        Ty::obs_equal(
+                                                            ty.clone(),
+                                                            tm_1,
+                                                            tm_2.clone(),
+                                                        ),
+                                                        Scope::constant(
+                                                            Ty::obs_equal(
+                                                                ty,
+                                                                tm_0,
+                                                                tm_2,
+                                                            )
+                                                        ),
+                                                    )
+                                                ),
+                                            )
+                                        }),
+                                    )
+                                }),
+                            )
+                        }),
+                    )
+                }),
+            ),
+            tm: Tm::func(Scope::make(0, |ty| {
+                let ty = ty.into_ty();
+                Tm::func(Scope::make(1, |tm_0| {
+                    Tm::func(Scope::make(2, |_tm_1| {
+                        Tm::func(Scope::make(3, |tm_2| {
+                            Tm::func(Scope::make(4, |eq_0| {
+                                eq_0
+                                .obs_cong(
+                                    Scope::make(5, |tm_1| {
+                                        Scope::make(6, |_eq_0| {
+                                            Ty::pi(
+                                                Name::from("eq_1"),
+                                                Ty::obs_equal(
+                                                    ty.clone(),
+                                                    tm_1,
+                                                    tm_2.clone(),
+                                                ),
+                                                Scope::make(7, |_eq_1| {
+                                                    Ty::obs_equal(
+                                                        ty,
+                                                        tm_0,
+                                                        tm_2,
+                                                    )
+                                                }),
+                                            )
+                                        })
+                                    }),
+                                    Tm::func(Scope::make(5, |eq_1| eq_1)),
+                                )
                             }))
                         }))
                     }))

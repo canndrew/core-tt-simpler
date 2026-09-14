@@ -1,20 +1,17 @@
 pub(crate) use {
     std::{
         cmp, iter, fmt, mem,
-        //collections::{btree_map, BTreeMap},
+        collections::{btree_map, BTreeMap},
         sync::{Arc, OnceLock},
     },
     lazy_static::lazy_static,
     ubig::Ubig,
-    //parser::{Span, Spanned},
-    parser::Span,
+    parser::{Span, Spanned},
     //derive_where::derive_where,
     crate::{
-        //solve,
-        //util::{as_equal, max_all, iter::{Which, merge_enumerated}},
-        util::{as_equal, max_all},
-        //tag::{Tag, TagKind, MetaTag},
-        tag::{Tag, TagKind},
+        util::{as_equal, max_all, iter::{Which, merge_enumerated}},
+        tag::{Tag, TagKind, MetaTag},
+        //macros::pi,
         core::{
             usages::Usages,
             weaken::Weaken,
@@ -29,8 +26,6 @@ pub(crate) use {
             subst::{Subst, Substitutable},
             unify::Unify,
         },
-        //untyped::{Span, UntypedTm, UntypedTmKind, UntypedName, UntypedTy, UntypedScope},
-        /*
         check::{
             check_ctx::CheckCtx,
             checked::Checked,
@@ -41,7 +36,6 @@ pub(crate) use {
             constraint::{Constraint, Constraints},
         },
         builtins::Builtin,
-        */
     },
     core_tt_simpler_macros::Contextual,
 };

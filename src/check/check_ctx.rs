@@ -13,31 +13,6 @@ impl CheckCtx {
         }
     }
 
-    pub fn with_builtins<T: Contextual + Substitutable>(
-        func: impl FnOnce(&mut CheckCtx) -> T,
-    ) -> <T as Substitutable>::Output {
-        let builtins = crate::builtins::BUILTINS.as_slice();
-        let mut var_tys = Vec::new();
-        let mut var_names = Vec::new();
-        let mut var_tms = Vec::new();
-        for (index, Builtin { name, ty, tm }) in builtins.iter().enumerate() {
-            let name = Name::from(*name);
-            var_tys.push(ty.clone());
-            var_names.push((Name::from(name), index));
-            var_tms.push(tm.clone());
-        }
-
-        let mut ch = CheckCtx { var_tys, var_names };
-        let ret = func(&mut ch);
-        let CheckCtx { var_tys, var_names } = ch;
-        debug_assert_eq!(var_tys.len(), builtins.len());
-        debug_assert_eq!(var_names.len(), builtins.len());
-        debug_assert!(ret.ctx_len() <= builtins.len());
-
-        let mut subst = Subst::from_var_tms(0, var_tms);
-        ret.subst(&mut subst)
-    }
-
     pub fn ctx_len(&self) -> usize {
         self.var_tys.len()
     }
@@ -99,6 +74,33 @@ impl CheckCtx {
                 break Some((self.var_tys[*index].clone(), *index));
             }
         }
+    }
+
+    pub fn with_builtins<T: Contextual + Substitutable>(
+        func: impl FnOnce(&mut CheckCtx) -> T,
+    ) -> (Vec<(Name, Ty)>, <T as Substitutable>::Output) {
+        let builtins = crate::builtins::BUILTINS.as_slice();
+        let mut var_tys = Vec::new();
+        let mut var_names = Vec::new();
+        let mut var_tms = Vec::new();
+        for (index, Builtin { name, ty, tm }) in builtins.iter().enumerate() {
+            let name = Name::from(*name);
+            var_tys.push(ty.clone());
+            var_names.push((Name::from(name), index));
+            var_tms.push(tm.clone());
+        }
+
+        let mut ch = CheckCtx { var_tys, var_names };
+        let ret = func(&mut ch);
+        let CheckCtx { var_tys, var_names } = ch;
+        debug_assert_eq!(var_tys.len(), builtins.len());
+        debug_assert_eq!(var_names.len(), builtins.len());
+        debug_assert!(ret.ctx_len() <= builtins.len());
+
+        let mut subst = Subst::from_var_tms(0, var_tms);
+        let ret = ret.subst(&mut subst);
+        let ctx = var_names.into_iter().map(|(name, _)| name).zip(var_tys).collect();
+        (ctx, ret)
     }
 }
 

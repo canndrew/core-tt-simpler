@@ -5,13 +5,13 @@ mod util;
 mod tag;
 mod core;
 //mod check;
+pub mod check;
+//mod macros;
 
 pub mod pprint;
-/*
 mod more;
 mod solve;
-mod builtins;
-*/
+pub mod builtins;
 mod sanity_check;
 
 #[cfg(debug_assertions)]
@@ -34,10 +34,8 @@ pub use {
             unify::Unify,
             subst::{Subst, Substitutable},
         },
-        /*
         more::iso::Iso,
         check::{check_ctx::CheckCtx, checked::Checked, typecheck::Check},
-        */
         sanity_check::SanityCheck,
     },
     ubig::Ubig,

@@ -28,15 +28,15 @@ impl Scope<Tm> {
 
         let res_tm_0 = self.clone().bind(arg_tm_0);
         arg_eq
-        .cong(
+        .obs_cong(
             Scope::make(ctx_len, |arg_tm_1| Scope::constant(
-                Ty::equal(
+                Ty::obs_equal(
                     res_ty,
                     res_tm_0.clone(),
                     self.bind(arg_tm_1),
                 )
             )),
-            res_tm_0.refl(),
+            res_tm_0.obs_refl(),
         )
     }
 }

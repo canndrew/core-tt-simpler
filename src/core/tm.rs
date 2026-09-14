@@ -126,12 +126,6 @@ impl Tm {
         Intro::tag(tag).into_tm()
     }
 
-    /*
-    pub fn tags_apart(self) -> Tm {
-        Neutral::tags_apart(self).into_tm()
-    }
-    */
-
     pub fn zero() -> Tm {
         Intro::zero().into_tm()
     }
@@ -179,10 +173,6 @@ impl Tm {
     }
 
     /*
-    pub fn refl(self) -> Tm {
-        Intro::refl(self).into_tm()
-    }
-
     pub fn unique_identity(
         self,
         motive: Scope<Ty>,
@@ -248,6 +238,26 @@ impl Tm {
         Neutral::app(self, arg_tm).into_tm()
     }
 
+    pub fn obs_refl(self) -> Tm {
+        Intro::obs_refl(self).into_tm()
+    }
+
+    pub fn obs_cong(
+        self,
+        motive: Scope<Scope<Ty>>,
+        inhab: Tm,
+    ) -> Tm {
+        Intro::obs_cong(self, motive, inhab).into_tm()
+    }
+
+    pub fn cast_refl() -> Tm {
+        Intro::cast_refl().into_tm()
+    }
+
+    pub fn cast(self, ty_0: Ty, ty_1: Ty, tm_0: Tm) -> Tm {
+        Neutral::cast(self, ty_0, ty_1, tm_0).into_tm()
+    }
+
     pub fn as_var(&self) -> Option<usize> {
         match self.weak() {
             TmKind::Intro { .. } => None,
@@ -263,18 +273,13 @@ impl Tm {
         intro.as_tag()
     }
 
+    pub fn as_intro(self) -> Option<Intro> {
+        self.try_map(|tm_kind| tm_kind.as_intro())
+    }
+
     pub fn as_neutral(self) -> Option<Neutral> {
         self.try_map(|tm_kind| tm_kind.as_neutral())
     }
-
-    /*
-    pub fn try_infer_ty(
-        &self,
-        ctx_tys: &mut impl FnMut(usize) -> Ty,
-    ) -> Option<Ty> {
-        self.clone().into_inner().try_infer_ty(ctx_tys)
-    }
-    */
 }
 
 impl Unify for TmKind {
@@ -286,6 +291,10 @@ impl Unify for TmKind {
         tm_kind_0: TmKind,
         tm_kind_1: TmKind,
     ) -> Option<TmKind> {
+        if ty.is_prop() {
+            return Some(tm_kind_0);
+        }
+
         match (tm_kind_0, tm_kind_1) {
             (TmKind::Intro { intro: intro_0 }, TmKind::Intro { intro: intro_1 }) => {
                 let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
@@ -325,7 +334,9 @@ impl Unify for TmKind {
                                 });
                                 let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
 
-                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
+                                let _res_tm = Unify::unify(
+                                    ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1,
+                                )?;
                                 Some(tm_kind_1)
                             },
                             _ => None,
@@ -452,6 +463,13 @@ impl TmKind {
             TmKind::Neutral { neutral } => {
                 TyKind::Neutral { neutral }
             },
+        }
+    }
+
+    pub fn as_intro(self) -> Option<Arc<IntroKind>> {
+        match self {
+            TmKind::Intro { intro } => Some(intro),
+            TmKind::Neutral { .. } => None,
         }
     }
 

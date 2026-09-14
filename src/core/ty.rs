@@ -80,6 +80,10 @@ impl Ty {
         Form::pi(arg_name, arg_ty, res_ty).into_ty()
     }
 
+    pub fn obs_equal(eq_ty: Ty, eq_tm_0: Tm, eq_tm_1: Tm) -> Ty {
+        Neutral::obs_equal(eq_ty, eq_tm_0, eq_tm_1).into_ty()
+    }
+
     pub fn as_name(self) -> Option<()> {
         let form = self.try_reduce_to_form()?;
         form.as_name()
@@ -127,6 +131,14 @@ impl Ty {
         form.as_pi()
     }
 
+    pub fn as_neutral(self) -> Option<Neutral> {
+        self.try_map(|ty_kind| ty_kind.as_neutral())
+    }
+
+    pub fn is_prop(&self) -> bool {
+        self.weak().is_prop()
+    }
+
     pub fn deep_nf(self) -> Ty {
         self.map_out_unfiltered(|ty_kind| {
             ty_kind.deep_nf()
@@ -144,6 +156,20 @@ impl TyKind {
             TyKind::Neutral { neutral } => {
                 TmKind::Neutral { neutral }
             },
+        }
+    }
+
+    pub fn as_neutral(self) -> Option<Arc<NeutralData>> {
+        match self {
+            TyKind::Form { .. } => None,
+            TyKind::Neutral { neutral } => Some(neutral),
+        }
+    }
+
+    pub fn is_prop(&self) -> bool {
+        match self {
+            TyKind::Form { form } => form.is_prop(),
+            TyKind::Neutral { neutral } => neutral.is_prop(),
         }
     }
 

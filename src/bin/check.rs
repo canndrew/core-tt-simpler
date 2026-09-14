@@ -1,4 +1,3 @@
-/*
 use {
     std::{
         env, fs,
@@ -6,19 +5,15 @@ use {
     },
     core_tt_simpler::{CheckCtx, Check},
 };
-*/
 
 fn main() {
-    /*
     let err = match run() {
         Ok(()) => return,
         Err(err) => err,
     };
     eprintln!("{}", err);
-    */
 }
 
-/*
 fn run() -> Result<(), String> {
     let Some(path) = env::args_os().skip(1).next() else {
         return Err(format!("expected a filename"));
@@ -32,10 +27,10 @@ fn run() -> Result<(), String> {
         Ok(prec_stmt) => prec_stmt,
         Err(err) => return Err(format!("parse error: {}", err)),
     };
-    let checked = CheckCtx::with_builtins(|ch| {
+    let (ctx, checked) = CheckCtx::with_builtins(|ch| {
         prec_stmt.check(ch)
     });
-    let (ty, tm) = match checked.solve() {
+    let (ty, tm) = match checked.solve(ctx) {
         Ok((ty, tm)) => (ty, tm),
         Err(err) => return Err(format!("typecheck error: {}", err)),
     };
@@ -47,4 +42,3 @@ fn run() -> Result<(), String> {
 
     Ok(())
 }
-*/

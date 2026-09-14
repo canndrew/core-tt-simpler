@@ -67,7 +67,6 @@ enum Op {
     Tag {
         index: usize,
     },
-    TagsApart,
 
     Universe,
 
@@ -80,7 +79,8 @@ enum Op {
 
     Equal,
     Refl,
-    Cong,
+    // TODO
+    //Cong,
 
     Never,
     Explode,
@@ -105,7 +105,8 @@ enum Op {
 
 #[derive(Debug)]
 struct State {
-    stacks: Vec<(Ty, Vec<FuzzTm>)>,
+    ctx: Vec<Ty>,
+    stacks: Vec<Vec<FuzzTm>>,
     stack: Vec<FuzzTm>,
     tags: Vec<Arc<str>>,
 }
@@ -113,6 +114,7 @@ struct State {
 impl State {
     pub fn new() -> State {
         State {
+            ctx: Vec::new(),
             stacks: Vec::new(),
             stack: Vec::new(),
             tags: Vec::new(),
@@ -125,6 +127,7 @@ impl State {
     }
 
     pub fn execute(&mut self, op: Op) -> Option<()> {
+        let ctx_len = self.ctx.len();
         match op {
             Op::EnterScope => {
                 let var_ty = self.stack.last()?;
@@ -132,8 +135,9 @@ impl State {
                 var_ty_ty.as_universe()?;
                 let var_ty = var_ty.into_ty();
 
-                let tm = Tm::var(self.stacks.len());
-                self.stacks.push((var_ty.clone(), mem::take(&mut self.stack)));
+                let tm = Tm::var(ctx_len);
+                self.ctx.push(var_ty.clone());
+                self.stacks.push(mem::take(&mut self.stack));
                 self.push(var_ty, tm);
             },
 
@@ -142,7 +146,8 @@ impl State {
                     return None;
                 }
                 let mut body = self.stack.pop()?;
-                let (var_ty, stack) = self.stacks.pop().unwrap();
+                let var_ty = self.ctx.pop().unwrap();
+                let stack = self.stacks.pop().unwrap();
                 self.stack = stack;
 
                 body.var_tys.insert(0, var_ty);
@@ -171,22 +176,6 @@ impl State {
 
                 let ty = Ty::name();
                 let tm = Tm::tag(tag);
-                self.push(ty, tm);
-            },
-
-            Op::TagsApart => {
-                let elim = self.stack.last()?;
-                let (elim_ty, elim) = elim.scoped_0()?;
-                let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.as_equal()?;
-                eq_ty.as_name()?;
-                let tag_0 = eq_tm_0.as_tag()?;
-                let tag_1 = eq_tm_1.as_tag()?;
-                if tag_0 == tag_1 {
-                    return None;
-                }
-
-                let ty = Ty::never();
-                let tm = Tm::tags_apart(elim);
                 self.push(ty, tm);
             },
 
@@ -228,7 +217,7 @@ impl State {
                 let (elim_ty, elim) = elim.scoped_0()?;
                 elim_ty.as_nat()?;
 
-                let (motive_elim_ty, motive) = motive.scoped_1(self.stacks.len())?;
+                let (motive_elim_ty, motive) = motive.scoped_1(ctx_len)?;
                 motive_elim_ty.as_nat()?;
                 let (motive_ty, motive) = motive.lift_tuple();
                 motive_ty.try_strengthen().ok()?.as_universe()?;
@@ -236,24 +225,35 @@ impl State {
 
                 let (zero_inhab_ty, zero_inhab) = zero_inhab.scoped_0()?;
                 Unify::unify(
+                    &mut self.ctx,
+                    (),
                     zero_inhab_ty,
                     motive
                     .clone()
                     .bind(Tm::zero())
                 )?;
 
-                let (succ_inhab_elim_ty, succ_inhab) = succ_inhab.scoped_2(self.stacks.len())?;
+                let (succ_inhab_elim_ty, succ_inhab) = succ_inhab.scoped_2(ctx_len)?;
                 succ_inhab_elim_ty.as_nat()?;
                 let (succ_inhab_state_ty, succ_inhab) = succ_inhab.lift_tuple();
-                Unify::unify(succ_inhab_state_ty, motive.clone())?;
-                let (succ_inhab_ty, succ_inhab) = succ_inhab.map_without_capture(Scope::lift_tuple).lift_tuple();
                 Unify::unify(
+                    &mut self.ctx,
+                    (Ty::nat(), Scope::constant(())),
+                    succ_inhab_state_ty,
+                    motive.clone(),
+                )?;
+                let (succ_inhab_ty, succ_inhab) = {
+                    succ_inhab.map_without_capture(Scope::lift_tuple).lift_tuple()
+                };
+                Unify::unify(
+                    &mut self.ctx,
+                    (Ty::nat(), Scope::constant(())),
                     succ_inhab_ty
                     .try_map_without_capture(|succ_inhab_ty| {
                         succ_inhab_ty.try_strengthen().ok()
                     })?,
                     Scope::make(
-                        self.stacks.len(),
+                        ctx_len,
                         |elim| motive.clone().bind(elim.succs(Ubig::ONE)),
                     ),
                 )?;
@@ -270,10 +270,10 @@ impl State {
 
                 let (eq_ty_0, eq_tm_0) = eq_tm_0.scoped_0()?;
                 let (eq_ty_1, eq_tm_1) = eq_tm_1.scoped_0()?;
-                let eq_ty = Unify::unify(eq_ty_0, eq_ty_1)?;
+                let eq_ty = Unify::unify(&mut self.ctx, (), eq_ty_0, eq_ty_1)?;
 
                 let ty = Ty::universe();
-                let tm = Ty::equal(eq_ty, eq_tm_0, eq_tm_1).into_tm();
+                let tm = Ty::obs_equal(eq_ty, eq_tm_0, eq_tm_1).into_tm();
                 self.push(ty, tm);
             },
 
@@ -281,11 +281,12 @@ impl State {
                 let eq_tm = self.stack.last()?;
                 let (eq_ty, eq_tm) = eq_tm.scoped_0()?;
 
-                let ty = Ty::equal(eq_ty, eq_tm.clone(), eq_tm.clone());
-                let tm = eq_tm.refl();
+                let ty = Ty::obs_equal(eq_ty, eq_tm.clone(), eq_tm.clone());
+                let tm = eq_tm.obs_refl();
                 self.push(ty, tm);
             },
 
+            /*
             Op::Cong => {
                 let index = self.stack.len().checked_sub(3)?;
                 let elim = &self.stack[index];
@@ -296,6 +297,9 @@ impl State {
                 let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.as_equal()?;
 
                 let (motive_eq_tm_1_ty, motive) = motive.scoped_2(self.stacks.len())?;
+                if !motive.inner().inner().is_prop() {
+                    return None;
+                }
                 let eq_ty = Unify::unify(motive_eq_tm_1_ty, eq_ty)?;
                 let (motive_elim_ty, motive) = motive.lift_tuple();
                 motive_elim_ty
@@ -324,6 +328,7 @@ impl State {
                 let tm = Tm::cong(elim, motive, inhab);
                 self.push(ty, tm);
             },
+            */
 
             Op::Never => {
                 let ty = Ty::universe();
@@ -339,7 +344,7 @@ impl State {
                 let (elim_ty, elim) = elim.scoped_0()?;
                 elim_ty.as_never()?;
 
-                let (motive_elim_ty, motive) = motive.scoped_1(self.stacks.len())?;
+                let (motive_elim_ty, motive) = motive.scoped_1(ctx_len)?;
                 motive_elim_ty.as_never()?;
                 let (motive_ty, motive) = motive.lift_tuple();
                 motive_ty.try_strengthen().ok()?.as_universe()?;
@@ -437,37 +442,35 @@ impl State {
                 let (elim_ty, elim) = elim.scoped_0()?;
                 let (_lhs_name, lhs_ty, rhs_ty) = elim_ty.clone().as_sum()?;
 
-                let (motive_elim_ty, motive) = motive.scoped_1(self.stacks.len())?;
-                Unify::unify(motive_elim_ty, elim_ty)?;
+                let (motive_elim_ty, motive) = motive.scoped_1(ctx_len)?;
+                Unify::unify(&mut self.ctx, (), motive_elim_ty, elim_ty)?;
                 let (motive_ty, motive) = motive.lift_tuple();
                 motive_ty.try_strengthen().ok()?.as_universe()?;
                 let motive = motive.map_without_capture(|motive| motive.into_ty());
 
-                let (lhs_inhab_var_ty, lhs_inhab) = lhs_inhab.scoped_1(self.stacks.len())?;
-                Unify::unify(lhs_inhab_var_ty, lhs_ty)?;
+                let (lhs_inhab_var_ty, lhs_inhab) = lhs_inhab.scoped_1(ctx_len)?;
+                Unify::unify(&mut self.ctx, (), lhs_inhab_var_ty, lhs_ty.clone())?;
                 let (lhs_inhab_ty, lhs_inhab) = lhs_inhab.lift_tuple();
-                lhs_inhab_ty
-                .try_map(self.stacks.len(), |lhs_tm, lhs_inhab_ty| {
-                    Unify::unify(
-                        lhs_inhab_ty,
-                        motive
-                        .clone()
-                        .bind(lhs_tm.inj_lhs()),
-                    )
-                })?;
+                Unify::unify(
+                    &mut self.ctx,
+                    (lhs_ty.clone(), Scope::constant(())),
+                    lhs_inhab_ty,
+                    Scope::make(ctx_len, |lhs| {
+                        motive.clone().bind(lhs.inj_lhs())
+                    }),
+                )?;
 
-                let (rhs_inhab_var_ty, rhs_inhab) = rhs_inhab.scoped_1(self.stacks.len())?;
-                Unify::unify(rhs_inhab_var_ty, rhs_ty)?;
+                let (rhs_inhab_var_ty, rhs_inhab) = rhs_inhab.scoped_1(ctx_len)?;
+                Unify::unify(&mut self.ctx, (), rhs_inhab_var_ty, rhs_ty.clone())?;
                 let (rhs_inhab_ty, rhs_inhab) = rhs_inhab.lift_tuple();
-                rhs_inhab_ty
-                .try_map(self.stacks.len(), |rhs_tm, rhs_inhab_ty| {
-                    Unify::unify(
-                        rhs_inhab_ty,
-                        motive
-                        .clone()
-                        .bind(rhs_tm.inj_rhs()),
-                    )
-                })?;
+                Unify::unify(
+                    &mut self.ctx,
+                    (rhs_ty.clone(), Scope::constant(())),
+                    rhs_inhab_ty,
+                    Scope::make(ctx_len, |rhs| {
+                        motive.clone().bind(rhs.inj_rhs())
+                    }),
+                )?;
 
                 let ty = motive.clone().bind(elim.clone());
                 let tm = Tm::case(elim, motive, lhs_inhab, rhs_inhab);
@@ -488,8 +491,8 @@ impl State {
                 head_ty_ty.as_universe()?;
                 let head_ty = head_ty.into_ty();
 
-                let (tail_ty_var_ty, tail_ty) = tail_ty.scoped_1(self.stacks.len())?;
-                let head_ty = Unify::unify(tail_ty_var_ty, head_ty)?;
+                let (tail_ty_var_ty, tail_ty) = tail_ty.scoped_1(ctx_len)?;
+                let head_ty = Unify::unify(&mut self.ctx, (), tail_ty_var_ty, head_ty)?;
                 let (tail_ty_ty, tail_ty) = tail_ty.lift_tuple();
                 tail_ty_ty.try_strengthen().ok()?.as_universe()?;
                 let tail_ty = tail_ty.map_without_capture(|tail_ty| tail_ty.into_ty());
@@ -512,14 +515,16 @@ impl State {
 
                 let (head_ty, head_tm) = head_tm.scoped_0()?;
 
-                let (tail_ty_var_ty, tail_ty) = tail_ty.scoped_1(self.stacks.len())?;
-                let head_ty = Unify::unify(tail_ty_var_ty, head_ty)?;
+                let (tail_ty_var_ty, tail_ty) = tail_ty.scoped_1(ctx_len)?;
+                let head_ty = Unify::unify(&mut self.ctx, (), tail_ty_var_ty, head_ty)?;
                 let (tail_ty_ty, tail_ty) = tail_ty.lift_tuple();
                 tail_ty_ty.try_strengthen().ok()?.as_universe()?;
                 let tail_ty = tail_ty.map_without_capture(|tail_ty| tail_ty.into_ty());
 
                 let (bound_tail_ty, tail_tm) = tail_tm.scoped_0()?;
                 Unify::unify(
+                    &mut self.ctx,
+                    (),
                     bound_tail_ty,
                     tail_ty
                     .clone()
@@ -565,8 +570,8 @@ impl State {
                 arg_ty_ty.as_universe()?;
                 let arg_ty = arg_ty.into_ty();
 
-                let (res_ty_var_ty, res_ty) = res_ty.scoped_1(self.stacks.len())?;
-                let arg_ty = Unify::unify(res_ty_var_ty, arg_ty)?;
+                let (res_ty_var_ty, res_ty) = res_ty.scoped_1(ctx_len)?;
+                let arg_ty = Unify::unify(&mut self.ctx, (), res_ty_var_ty, arg_ty)?;
                 let (res_ty_ty, res_ty) = res_ty.lift_tuple();
                 res_ty_ty.try_strengthen().ok()?.as_universe()?;
                 let res_ty = res_ty.map_without_capture(|res_ty| res_ty.into_ty());
@@ -585,7 +590,7 @@ impl State {
                 arg_name_ty.as_name()?;
                 let arg_name = arg_name.into_name();
 
-                let (arg_ty, res_tm) = res_tm.scoped_1(self.stacks.len())?;
+                let (arg_ty, res_tm) = res_tm.scoped_1(ctx_len)?;
                 let (res_ty, res_tm) = res_tm.lift_tuple();
 
                 let ty = Ty::pi(arg_name, arg_ty, res_ty);
@@ -602,7 +607,7 @@ impl State {
                 let (_arg_name, arg_ty, res_ty) = elim_ty.as_pi()?;
 
                 let (arg_tm_ty, arg_tm) = arg_tm.scoped_0()?;
-                Unify::unify(arg_tm_ty, arg_ty)?;
+                Unify::unify(&mut self.ctx, (), arg_tm_ty, arg_ty)?;
 
                 let ty = res_ty.bind(arg_tm.clone());
                 let tm = elim.app(arg_tm);
@@ -622,6 +627,4 @@ fuzz_target!(|ops: Vec<Op>| {
         let _ = state.execute(op);
     }
 });
-
-
 

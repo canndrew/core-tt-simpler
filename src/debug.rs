@@ -39,6 +39,7 @@ impl Drop for Indenter {
     }
 }
 
+#[allow(unused)]
 macro_rules! debug_indent {
     () => {
         let _indenter = crate::debug::Indenter::new();
@@ -90,9 +91,12 @@ impl<T: fmt::Display> Drop for PrintOnPanic<T> {
     }
 }
 
+#[allow(unused)]
 macro_rules! print_on_panic {
     ($($t:tt)*) => {
-        let print_on_panic_args = format_args!("[{}:{}] {}", file!(), line!(), format_args!($($t)*));
+        let print_on_panic_args = format_args!(
+            "[{}:{}] {}", file!(), line!(), format_args!($($t)*),
+        );
         let _x = crate::debug::PrintOnPanic::new(print_on_panic_args);
     };
 }

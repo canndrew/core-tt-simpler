@@ -113,11 +113,7 @@ macro_rules! voom {
     }};
 }
 
-impl<V, T: Pretty<V> + Contextual + Clone> Pretty<V> for Weaken<T>
-where
-    // TODO: remove
-    T: fmt::Debug,
-{
+impl<V, T: Pretty<V> + Contextual + Clone> Pretty<V> for Weaken<T> {
     fn pretty(
         self,
         ctx: &mut Vec<(Option<Name>, Option<Ty>)>,
@@ -125,9 +121,6 @@ where
         s: &mut String,
         vars: V,
     ) {
-        debug_indent!();
-        print_on_panic!("ctx == {:#?}", ctx.clone());
-        print_on_panic!("self == {:#?}", self);
         self.clone().into_inner().pretty(ctx, indent, s, vars)
     }
 
@@ -277,11 +270,21 @@ impl Pretty<()> for IntroKind {
                 voom!(ctx, indent, s, succs(Fmt(&succ_count_m1), pred_tm.clone()));
             },
 
-            /*
-            IntroKind::Refl { eq_tm } => {
+            IntroKind::ObsRefl { eq_tm } => {
                 voom!(ctx, indent, s, refl(eq_tm));
             },
-            */
+
+            IntroKind::ObsCong { elim, motive, inhab } => {
+                voom!(ctx, indent, s, cong(
+                    elim,
+                    Scoped((((), None, None), None, None), motive.clone()),
+                    inhab,
+                ));
+            },
+
+            IntroKind::CastRefl => {
+                voom!(ctx, indent, s, cast_refl());
+            },
 
             IntroKind::Unit => {
                 voom!(ctx, indent, s, unit());
@@ -306,6 +309,7 @@ impl Pretty<()> for IntroKind {
             | IntroKind::Tag { .. }
             | IntroKind::Constant { .. }
             | IntroKind::Unit
+            | IntroKind::CastRefl
             => true,
 
             IntroKind::Form { form } => {
@@ -313,9 +317,8 @@ impl Pretty<()> for IntroKind {
             },
 
             | IntroKind::Succs { .. }
-            /*
-            | IntroKind::Refl { .. }
-            */
+            | IntroKind::ObsRefl { .. }
+            | IntroKind::ObsCong { .. }
             | IntroKind::InjLhs { .. }
             | IntroKind::InjRhs { .. }
             | IntroKind::Pair { .. }
@@ -382,12 +385,6 @@ impl Pretty<()> for NeutralKind {
                 s.push(')');
             },
 
-            /*
-            NeutralKind::TagsApart { elim } => {
-                voom!(ctx, indent, s, tags_apart(elim));
-            },
-            */
-
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 voom!(ctx, indent, s, fold(
                     elim,
@@ -437,6 +434,13 @@ impl Pretty<()> for NeutralKind {
             NeutralKind::App { elim, arg_tm } => {
                 voom!(ctx, indent, s, app(elim, arg_tm));
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                voom!(ctx, indent, s, ObsEqual(eq_ty, eq_tm_0, eq_tm_1));
+            },
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                voom!(ctx, indent, s, cast(elim, ty_0, ty_1, tm_0));
+            },
         }
     }
 
@@ -445,9 +449,6 @@ impl Pretty<()> for NeutralKind {
             NeutralKind::Var { .. } => true,
 
             | NeutralKind::Bind { .. }
-            /*
-            | NeutralKind::TagsApart { .. }
-            */
             | NeutralKind::Fold { .. }
             /*
             | NeutralKind::UniqueIdentity { .. }
@@ -458,6 +459,8 @@ impl Pretty<()> for NeutralKind {
             | NeutralKind::ProjHead { .. }
             | NeutralKind::ProjTail { .. }
             | NeutralKind::App { .. }
+            | NeutralKind::ObsEqual { .. } 
+            | NeutralKind::Cast { .. } 
             => false
         }
     }
@@ -471,7 +474,7 @@ impl Pretty<()> for NeutralData {
         s: &mut String,
         (): (),
     ) {
-        if let Some(tm) = self.get_cached_reduction() {
+        if let Some(tm) = self.try_reduce() {
             tm.pretty(ctx, indent, s, ())
         } else {
             self.kind.pretty(ctx, indent, s, ());
@@ -573,11 +576,7 @@ impl Pretty<()> for TmKind {
     }
 }
 
-impl<V, T: Pretty<V> + Contextual + Clone> Pretty<(V, Option<Name>, Option<Ty>)> for Scope<T>
-where
-    // TODO: remove
-    T: fmt::Debug,
-{
+impl<V, T: Pretty<V> + Contextual + Clone> Pretty<(V, Option<Name>, Option<Ty>)> for Scope<T> {
     fn pretty(
         self,
         ctx: &mut Vec<(Option<Name>, Option<Ty>)>,

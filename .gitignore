@@ -3,3 +3,4 @@ core-tt-simpler-macros/target
 fuzz/artifacts
 fuzz/corpus
 fuzz/target
+agda/*.agdai

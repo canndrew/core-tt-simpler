@@ -41,6 +41,11 @@ impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Che
 }
 
 impl<T> Checked<T> {
+    pub fn into_constraint_ty_and_scope(self) -> (Ty, Scope<T>) {
+        let Checked { constraint_ty, scope } = self;
+        (constraint_ty, scope)
+    }
+
     pub fn pure(val: T) -> Checked<T>
     where
         T: Contextual,
@@ -194,7 +199,6 @@ impl Checked<Ty> {
 impl Checked<(Ty, Tm)> {
     pub fn cast(
         ch: &mut CheckCtx,
-        tm_name: Name,
         meta: MetaTag,
         from_ty: Ty,
         into_ty: Ty,
@@ -202,30 +206,20 @@ impl Checked<(Ty, Tm)> {
     ) -> Checked<Tm> {
         Checked::assume(
             meta,
-            Ty::equal(Ty::universe(), from_ty.clone().into_tm(), into_ty.into_tm()),
+            Ty::obs_equal(Ty::universe(), from_ty.clone().into_tm(), into_ty.clone().into_tm()),
         )
-        .map(ch, |ch, _, tys_eq| {
-            tys_eq
-            .cong(
-                Scope::make(ch.ctx_len(), |into_ty| {
-                    Scope::constant(
-                        Ty::pi(tm_name, from_ty, Scope::constant(into_ty.into_ty()))
-                    )
-                }),
-                Tm::func(Scope::id()),
-            )
-            .app(tm)
+        .map(ch, |_, _, tys_eq| {
+            tys_eq.cast(from_ty, into_ty, tm)
         })
     }
 
     pub fn cast_to_ty(
         ch: &mut CheckCtx,
-        tm_name: Name,
         meta: MetaTag,
         from_ty: Ty,
         tm: Tm,
     ) -> Checked<Ty> {
-        Checked::cast(ch, tm_name, meta, from_ty, Ty::universe(), tm)
+        Checked::cast(ch, meta, from_ty, Ty::universe(), tm)
         .map(ch, |_, _, ty| ty.into_ty())
     }
 }
@@ -260,124 +254,3 @@ impl<T: Contextual + Bindable> Scope<Checked<T>> {
     }
 }
 
-#[derive(Debug)]
-pub enum SolveError {
-    Uninhabited {
-        tags: Vec<Tag>,
-    },
-    Ambiguous {
-        ty: Ty,
-    },
-}
-
-impl fmt::Display for SolveError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SolveError::Uninhabited { tags } => {
-                writeln!(f, "uninhabited at:")?;
-                for tag in tags {
-                    write!(f, "    {:?}", tag)?;
-                }
-                Ok(())
-            },
-            SolveError::Ambiguous { ty } => {
-                writeln!(f, "failed to solve constraint: {}", crate::pprint::pprint(ty.clone()))
-            },
-        }
-    }
-}
-
-impl<T> Checked<T> {
-    pub fn solve(self) -> Result<T, SolveError>
-    where
-        T: Contextual,
-        T: Bindable,
-    {
-        let Checked { constraint_ty, scope } = self;
-        let mut ctx = Vec::new();
-
-        let funext_ty = Ty::pi(
-            Name::from("arg_name"),
-            Ty::name(),
-            Scope::make(0, |arg_name| {
-                let arg_name = arg_name.into_name();
-                Ty::pi(
-                    Name::from("Arg"),
-                    Ty::universe(),
-                    Scope::make(1, |arg_ty| {
-                        let arg_ty = arg_ty.into_ty();
-                        Ty::pi(
-                            Name::from("Res"),
-                            Ty::pi(
-                                arg_name.clone(),
-                                arg_ty.clone(),
-                                Scope::constant(Ty::universe()),
-                            ),
-                            Scope::make(2, |res_ty| {
-                                let res_ty = Scope::make(3, |arg| res_ty.app(arg).into_ty());
-                                let func_ty = Ty::pi(
-                                    arg_name.clone(),
-                                    arg_ty.clone(),
-                                    res_ty.clone(),
-                                );
-                                Ty::pi(
-                                    Name::from("func_0"),
-                                    func_ty.clone(),
-                                    Scope::make(3, |func_0| {
-                                        Ty::pi(
-                                            Name::from("func_1"),
-                                            func_ty.clone(),
-                                            Scope::make(4, |func_1| {
-                                                Ty::pi(
-                                                    Name::from("pointwise_eq"),
-                                                    Ty::pi(
-                                                        arg_name.clone(),
-                                                        arg_ty.clone(),
-                                                        Scope::make(5, |arg| {
-                                                            Ty::equal(
-                                                                res_ty.clone().bind(arg.clone()),
-                                                                func_0.clone().app(arg.clone()),
-                                                                func_1.clone().app(arg),
-                                                            )
-                                                        }),
-                                                    ),
-                                                    Scope::make(5, |_pointwise_eq| {
-                                                        Ty::equal(func_ty, func_0, func_1)
-                                                    }),
-                                                )
-                                            }),
-                                        )
-                                    }),
-                                )
-                            }),
-                        )
-                    }),
-                )
-            }),
-        );
-
-        ctx.push(funext_ty);
-        let orig_ctx_len = ctx.len();
-        let funext = Tm::var(0);
-        let result = constraint_ty.simplify(&mut ctx, 0, &funext);
-        debug_assert_eq!(ctx.len(), orig_ctx_len);
-
-        let simplification = match result {
-            Ok(simplification) => simplification,
-            Err(Uninhabited { tags, proof: _ }) => {
-                return Err(SolveError::Uninhabited { tags });
-            },
-        };
-        let Simplification { new_ty, iso, constraints, eliminated } = simplification;
-        debug_assert!(constraints.is_empty());
-        debug_assert!(eliminated.is_empty());
-
-        let Some(()) = new_ty.clone().as_unit() else {
-            let ty = new_ty.deep_nf();
-            return Err(SolveError::Ambiguous { ty });
-        };
-
-        let body = scope.bind(iso.rev.bind(Tm::unit()));
-        Ok(body)
-    }
-}

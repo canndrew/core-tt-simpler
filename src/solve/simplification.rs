@@ -56,7 +56,6 @@ impl Simplification {
         self,
         ctx: &mut Vec<Ty>,
         preserved_constraint_depth: usize,
-        funext: &Tm,
         orig_ty: &Ty,
     ) -> Result<Simplification, Uninhabited> {
         let Simplification {
@@ -72,7 +71,7 @@ impl Simplification {
             eliminated: eliminated_1,
         } = {
             new_ty_0
-            .simplify(ctx, preserved_constraint_depth, funext)
+            .simplify(ctx, preserved_constraint_depth)
             .map_err(|Uninhabited { tags, proof }| {
                 let proof = Scope::make(ctx.len(), |tm| {
                     proof.bind(iso_0.fwd.clone().bind(tm))
@@ -96,7 +95,6 @@ impl Simplification {
 
         let constraints = Constraints::union(
             ctx,
-            funext,
             &iso.fwd,
             constraints_0,
             constraints_1,

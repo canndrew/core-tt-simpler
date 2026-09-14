@@ -62,7 +62,6 @@ impl Constraints {
 
     pub fn union(
         ctx: &mut Vec<Ty>,
-        funext: &Tm,
         fwd: &Scope<Tm>,
         constraints_0: Constraints,
         constraints_1: Constraints,
@@ -90,7 +89,7 @@ impl Constraints {
                 continue;
             }
 
-            let equal_ty = Ty::equal(
+            let equal_ty = Ty::obs_equal(
                 var_ty.clone(),
                 unique_tm_0.clone(),
                 unique_tm_1.clone(),
@@ -98,10 +97,6 @@ impl Constraints {
             let transitively_eq = Scope::make(ctx.len(), |tm| {
                 proof_0
                 .bind(tm.clone())
-                .symmetry(
-                    var_ty.clone(),
-                    Tm::var(index),
-                )
                 .transitivity(
                     proof_1.bind(tm),
                     var_ty.clone(),
@@ -110,15 +105,7 @@ impl Constraints {
                 )
             });
 
-            match solve::simplify::simplify_equal(
-                ctx,
-                index,
-                funext,
-                &equal_ty,
-                &var_ty,
-                &unique_tm_0,
-                &unique_tm_1,
-            ) {
+            match equal_ty.simplify(ctx, index) {
                 Err(Uninhabited { tags, proof }) => {
                     let proof = Scope::make(ctx.len(), |tm| {
                         proof.bind(transitively_eq.bind(fwd.clone().bind(tm)))

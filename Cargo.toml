@@ -10,3 +10,7 @@ parser = { path = "/home/shum/work/src/simplicity-hl-again/parser" }
 core-tt-simpler-macros = { path = "core-tt-simpler-macros" }
 #derive-where = "*"
 
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+

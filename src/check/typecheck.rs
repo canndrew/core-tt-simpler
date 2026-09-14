@@ -23,7 +23,6 @@ impl Check for Spanned<ast::Name> {
                 .and_then(ch, |ch, _, (name_ty, name)| {
                     Checked::cast(
                         ch,
-                        MetaTag::QuotedName { span: expr.span() }.into(),
                         MetaTag::QuotedNameHasTypeName { span: self.span() },
                         name_ty,
                         Ty::name(),
@@ -122,8 +121,11 @@ impl Check for ast::PrecInj {
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
         match self {
-            ast::PrecInj::Inj(expr_inj) => {
-                expr_inj.check(ch)
+            ast::PrecInj::InjLhs(expr_inj_lhs) => {
+                expr_inj_lhs.check(ch)
+            },
+            ast::PrecInj::InjRhs(expr_inj_rhs) => {
+                expr_inj_rhs.check(ch)
             },
             ast::PrecInj::Refl(expr_refl) => {
                 expr_refl.check(ch)
@@ -249,7 +251,6 @@ impl Check for Spanned<ast::LetStmt> {
                         .and_then(ch, |ch, _, (var_ty_ty, var_ty)| {
                             Checked::cast_to_ty(
                                 ch,
-                                MetaTag::LetStmtVarTy { var_ty_span: var_ty_span.clone() }.into(),
                                 MetaTag::LetStmtVarTyIsAType { var_ty_span: var_ty_span.clone() },
                                 var_ty_ty,
                                 var_ty,
@@ -260,7 +261,6 @@ impl Check for Spanned<ast::LetStmt> {
                             .and_then(ch, |ch, _, (var_tm_ty, var_tm)| {
                                 Checked::cast(
                                     ch,
-                                    MetaTag::LetStmtVarTm { var_tm_span: var_expr.span() }.into(),
                                     MetaTag::LetStmtVarTmTypeMatchesAnnotatedType {
                                         var_tm_span: var_expr.span(),
                                         var_ty_span: var_ty_span,
@@ -305,7 +305,6 @@ impl Check for Spanned<ast::ExprFuncType> {
                 .and_then(ch, |ch, _, (res_ty_ty, res_ty)| {
                     Checked::cast_to_ty(
                         ch,
-                        MetaTag::FuncResTy { res_ty_span: return_ty.span() }.into(),
                         MetaTag::FuncResTyIsAType { res_ty_span: return_ty.span() },
                         res_ty_ty,
                         res_ty
@@ -351,7 +350,6 @@ impl Check for Spanned<ast::ExprEqual> {
             .and_then(ch, |ch, _, (eq_ty_1, eq_tm_1)| {
                 Checked::cast(
                     ch,
-                    MetaTag::EqualEqTm0 { eq_tm_0_span: eq_expr_0.span() }.into(),
                     MetaTag::EqualEndpointTypesAreTheSame {
                         equal_span: self.span(),
                         eq_tm_0_span: eq_expr_0.span(),
@@ -362,7 +360,7 @@ impl Check for Spanned<ast::ExprEqual> {
                     eq_tm_0,
                 )
                 .map(ch, |_, _, eq_tm_0| {
-                    Ty::equal(eq_ty_1, eq_tm_0, eq_tm_1)
+                    Ty::obs_equal(eq_ty_1, eq_tm_0, eq_tm_1)
                 })
             })
         })
@@ -385,11 +383,11 @@ impl Check for Spanned<ast::ExprMul> {
     }
 }
 
-impl Check for Spanned<ast::ExprInj> {
+impl Check for Spanned<ast::ExprInjLhs> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
-        let ast::ExprInj { variant_name, payload } = &self.inner;
+        let ast::ExprInjLhs { variant_name, payload } = &self.inner;
         
         variant_name
         .check(ch)
@@ -453,6 +451,44 @@ impl Check for Spanned<ast::ExprInj> {
     }
 }
 
+impl Check for Spanned<ast::ExprInjRhs> {
+    type Output = (Ty, Tm);
+
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
+        let ast::ExprInjRhs { payload } = &self.inner;
+
+        payload
+        .check(ch)
+        .group(MetaTag::InjRhsRhsTmConstraint {
+            inj_span: self.span(),
+            rhs_tm_span: payload.span(),
+        })
+        .and_then(ch, |ch, _, (rhs_ty, rhs_tm)| {
+            Checked::assume(
+                MetaTag::InjRhsLhsName {
+                    inj_span: self.span(),
+                    rhs_tm_span: payload.span(),
+                },
+                Ty::name(),
+            )
+            .and_then(ch, |ch, _, lhs_name| {
+                let lhs_name = lhs_name.into_name();
+                Checked::assume_ty(
+                    MetaTag::InjRhsLhsType {
+                        inj_span: self.span(),
+                        rhs_tm_span: payload.span(),
+                    },
+                )
+                .map(ch, |_, _, lhs_ty| {
+                    let ty = Ty::sum(lhs_name, lhs_ty, rhs_ty);
+                    let tm = rhs_tm.inj_rhs();
+                    (ty, tm)
+                })
+            })
+        })
+    }
+}
+
 impl Check for Spanned<ast::ExprRefl> {
     type Output = (Ty, Tm);
 
@@ -465,8 +501,8 @@ impl Check for Spanned<ast::ExprRefl> {
             eq_tm_span: eq_expr.span(),
         })
         .map(ch, |_, _, (eq_ty, eq_tm)| {
-            let ty = Ty::equal(eq_ty, eq_tm.clone(), eq_tm.clone());
-            (ty, eq_tm.refl())
+            let ty = Ty::obs_equal(eq_ty, eq_tm.clone(), eq_tm.clone());
+            (ty, eq_tm.obs_refl())
         })
     }
 }
@@ -553,7 +589,6 @@ impl Check for Spanned<ast::ExprProj> {
                                 );
                                 Checked::cast(
                                     ch,
-                                    projections_metas[2].clone().into(),
                                     MetaTag::ProjHeadHasExpectedType {
                                         proj_span: self.span(),
                                     },
@@ -610,10 +645,6 @@ impl Check for Spanned<ast::ExprApp> {
                         let expected_elim_ty = Ty::pi(arg_name, arg_ty, res_ty.clone());
                         Checked::cast(
                             ch,
-                            MetaTag::AppElim {
-                                elim_span: func.span(),
-                                arg_tm_span: arg.span(),
-                            }.into(),
                             MetaTag::AppElimHasExpectedType {
                                 elim_span: func.span(),
                                 arg_tm_span: arg.span(),
@@ -679,8 +710,20 @@ impl Check for &ast::FuncAppArgExpr {
 impl Check for Spanned<ast::ExprMatch> {
     type Output = (Ty, Tm);
 
-    fn check(&self, _ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
-        todo!()
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
+        let ast::ExprMatch { elim, branches } = &self.inner;
+
+        elim
+        .check(ch)
+        .group(MetaTag::MatchElimConstraint {
+            elim_span: elim.span(),
+        })
+        .and_then(ch, |ch, _, (elim_ty, elim)| {
+            check_match_branches(ch, branches.span(), &branches.inner, elim_ty)
+            .and_then(ch, |_, _, scope| {
+                scope.bind(elim)
+            })
+        })
     }
 }
 
@@ -707,9 +750,6 @@ impl Check for Spanned<ast::ExprStructType> {
                             .and_then(ch, |ch, _, (tail_ty_ty, tail_ty)| {
                                 Checked::cast_to_ty(
                                     ch,
-                                    MetaTag::SigmaTailTy {
-                                        tail_ty_span: tail_ty_span.clone(),
-                                    }.into(),
                                     MetaTag::SigmaTailTyIsAType {
                                         tail_ty_span: tail_ty_span.clone(),
                                     },
@@ -751,9 +791,106 @@ impl Check for Spanned<ast::ExprStructType> {
 impl Check for Spanned<ast::ExprStructTerm> {
     type Output = (Ty, Tm);
 
-    fn check(&self, _ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
-        todo!()
-        //let ast::ExprStructTerm { fields, tail_opt } = &self.inner;
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
+        fn check_struct_term_fields(
+            ch: &mut CheckCtx,
+            fields: &[Spanned<ast::ExprStructTermField>],
+            tail_opt: Option<&ast::PrecFunc>,
+        ) -> Checked<(Ty, Tm)> {
+            match fields.split_first() {
+                None => {
+                    match tail_opt {
+                        None => Checked::pure((Ty::unit(), Tm::unit())),
+                        Some(tail) => {
+                            tail.check(ch)
+                        },
+                    }
+                },
+                Some((field, fields)) => {
+                    field
+                    .check(ch)
+                    .and_then(ch, |ch, _, (head_name, head_ty, head_tm)| {
+                        Checked::assume(
+                            MetaTag::PairTailTy {
+                                head_span: field.span(),
+                            },
+                            Ty::pi(
+                                head_name.clone(),
+                                head_ty.clone(),
+                                Scope::constant(Ty::universe()),
+                            )
+                        )
+                        .and_then(ch, |ch, _, tail_ty| {
+                            let tail_ty = Scope::make(ch.ctx_len(), |head| {
+                                tail_ty.app(head).into_ty()
+                            });
+                            check_struct_term_fields(ch, fields, tail_opt)
+                            .and_then(ch, |ch, _, (bound_tail_ty, tail_tm)| {
+                                Checked::assume(
+                                    MetaTag::PairTailTyIsExpectedTy {
+                                        head_span: field.span(),
+                                    },
+                                    Ty::obs_equal(
+                                        Ty::universe(),
+                                        bound_tail_ty.clone().into_tm(),
+                                        tail_ty.clone().bind(head_tm.clone()).into_tm(),
+                                    ),
+                                )
+                                .map(ch, |_, _, tail_tys_eq| {
+                                    let tail_tm = {
+                                        tail_tys_eq
+                                        .cast(
+                                            bound_tail_ty.clone(),
+                                            tail_ty.clone().bind(head_tm.clone()),
+                                            tail_tm,
+                                        )
+                                    };
+                                    let ty = Ty::sigma(
+                                        head_name.clone(),
+                                        head_ty.clone(),
+                                        tail_ty.clone(),
+                                    );
+                                    let tm = head_tm.pair(tail_tm);
+                                    (ty, tm)
+                                })
+                            })
+                        })
+                    })
+                },
+            }
+        }
+
+        let ast::ExprStructTerm { fields, tail_opt } = &self.inner;
+        check_struct_term_fields(ch, &fields, tail_opt.as_deref())
+    }
+}
+
+impl Check for Spanned<ast::ExprStructTermField> {
+    type Output = (Name, Ty, Tm);
+
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty, Tm)> {
+        let ast::ExprStructTermField { name, expr_opt } = &self.inner;
+        
+        name
+        .check(ch)
+        .group(MetaTag::PairHeadNameConstraint {
+            head_name_span: name.span(),
+        })
+        .and_then(ch, |ch, _, head_name| {
+            match expr_opt {
+                None => lookup_var(ch, name.span(), head_name.clone()),
+                Some(expr) => {
+                    expr
+                    .check(ch)
+                    .group(MetaTag::PairHeadTmConstraint {
+                        head_span: expr.span(),
+                    })
+                },
+            }
+            .map(ch, |_, _, (head_ty, head_tm)| {
+                (head_name, head_ty, head_tm)
+            })
+        })
     }
 }
 
@@ -775,9 +912,6 @@ impl Check for Spanned<ast::ExprEnumType> {
                 .and_then(ch, |ch, _, (rhs_ty_ty, rhs_ty)| {
                     Checked::cast_to_ty(
                         ch,
-                        MetaTag::SumRhsTy {
-                            rhs_ty_span: rhs_ty_span.clone(),
-                        }.into(),
                         MetaTag::SumRhsTyIsAType {
                             rhs_ty_span: rhs_ty_span.clone(),
                         },
@@ -826,9 +960,6 @@ impl Check for Spanned<ast::TypeField> {
             .and_then(ch, |ch, _, (ty_ty, ty)| {
                 Checked::cast_to_ty(
                     ch,
-                    MetaTag::TypeFieldTy {
-                        ty_span: ty_span.clone(),
-                    }.into(),
                     MetaTag::TypeFieldTyIsAType {
                         ty_span: ty_span,
                     },
@@ -887,7 +1018,6 @@ impl Check for ast::FuncTermArgTy {
                 .and_then(ch, |ch, _, (ty_ty, ty)| {
                     Checked::cast_to_ty(
                         ch,
-                        MetaTag::FuncResTy { res_ty_span: ty_span.clone() }.into(),
                         MetaTag::FuncResTyIsAType { res_ty_span: ty_span },
                         ty_ty,
                         ty,
@@ -1015,13 +1145,7 @@ fn check_pat_prec_atom(
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
     match pat_prec_atom {
         ast::PatPrecAtom::Var(name) => {
-            name
-            .check(ch)
-            .group(MetaTag::PatternVarNameConstraint { name_span: name.span() })
-            .map(ch, |ch, _, name| {
-                ch
-                .with_var(name, var_ty.clone(), |ch, _| func(ch))
-            })
+            check_pat_var(ch, name, var_ty, func)
         },
         ast::PatPrecAtom::Struct(pat_struct_term) => {
             check_pat_struct_term(ch, pat_struct_term, var_ty, func)
@@ -1029,12 +1153,29 @@ fn check_pat_prec_atom(
     }
 }
 
-fn check_pat_refl(
+fn check_pat_var(
     ch: &mut CheckCtx,
-    pat_refl: &Spanned<ast::PatRefl>,
+    name: &Spanned<ast::Name>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
+    name
+    .check(ch)
+    .group(MetaTag::PatternVarNameConstraint { name_span: name.span() })
+    .map(ch, |ch, _, name| {
+        ch
+        .with_var(name, var_ty.clone(), |ch, _| func(ch))
+    })
+}
+
+fn check_pat_refl(
+    _ch: &mut CheckCtx,
+    _pat_refl: &Spanned<ast::PatRefl>,
+    _var_ty: Ty,
+    _func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
+    todo!()
+    /*
     let refl_pat_span = pat_refl.span();
     let ast::PatRefl { eq_pat } = &pat_refl.inner;
 
@@ -1062,10 +1203,10 @@ fn check_pat_refl(
                     MetaTag::ReflPatVarTyIsExpectedTy {
                         refl_pat_span: refl_pat_span.clone(),
                     },
-                    Ty::equal(
+                    Ty::obs_equal(
                         Ty::universe(),
                         var_ty.clone().into_tm(),
-                        Ty::equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()).into_tm(),
+                        Ty::obs_equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()).into_tm(),
                     ),
                 )
                 .and_then(ch, |ch, _, var_tys_eq| {
@@ -1107,15 +1248,12 @@ fn check_pat_refl(
                                     motive
                                     .clone()
                                     .app(eq_tm_0.clone())
-                                    .app(eq_tm_0.clone().refl())
+                                    .app(eq_tm_0.clone().obs_refl())
                                     .into_ty()
                                 };
 
                                 Checked::cast(
                                     ch,
-                                    MetaTag::ReflPatInhab {
-                                        refl_pat_span: refl_pat_span.clone(),
-                                    }.into(),
                                     MetaTag::ReflPatInhabHasCorrectType {
                                         refl_pat_span: refl_pat_span.clone(),
                                     },
@@ -1163,15 +1301,392 @@ fn check_pat_refl(
             })
         })
     })
+    */
 }
 
 fn check_pat_struct_term(
-    _ch: &mut CheckCtx,
-    _pat_struct_term: &Spanned<ast::PatStructTerm>,
-    _var_ty: Ty,
-    _func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+    ch: &mut CheckCtx,
+    pat_struct_term: &Spanned<ast::PatStructTerm>,
+    var_ty: Ty,
+    func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
-    todo!()
+
+    fn check_pat_struct_term_fields(
+        ch: &mut CheckCtx,
+        pat_span: Span,
+        fields: &[Spanned<ast::PatStructTermField>],
+        tail_opt: Option<&ast::PatPrecInj>,
+        var_ty: Ty,
+        func: Box<dyn FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)> + '_>,
+    ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
+        match fields.split_first() {
+            None => {
+                Checked::assume(
+                    MetaTag::UnitPatVarTyIsUnit {
+                        pat_span: pat_span.clone(),
+                    },
+                    Ty::obs_equal(
+                        Ty::universe(),
+                        var_ty.clone().into_tm(),
+                        Ty::unit().into_tm(),
+                    ),
+                )
+                .map(ch, |ch, _, _| {
+                    let body = func(ch);
+                    Scope::constant(body)
+                })
+            },
+            Some((field, fields)) => {
+                let ast::PatStructTermField { name, pat_opt } = &field.inner;
+                
+                name
+                .check(ch)
+                .group(MetaTag::PairPatHeadNameConstraint {
+                    head_name_span: name.span(),
+                })
+                .and_then(ch, |ch, _, head_name| {
+                    Checked::assume_ty(
+                        MetaTag::PairPatHeadTy {
+                            field_span: field.span(),
+                        },
+                    )
+                    .and_then(ch, |ch, _, head_ty| {
+                        Checked::assume(
+                            MetaTag::PairPatTailTy {
+                                field_span: field.span(),
+                            },
+                            Ty::pi(
+                                head_name.clone(),
+                                head_ty.clone(),
+                                Scope::constant(Ty::universe()),
+                            )
+                        )
+                        .and_then(ch, |ch, _, tail_ty| {
+                            let tail_ty = Scope::make(ch.ctx_len(), |head| {
+                                tail_ty.app(head).into_ty()
+                            });
+                            let sigma_ty = Ty::sigma(
+                                head_name.clone(),
+                                head_ty.clone(),
+                                tail_ty.clone(),
+                            );
+
+                            Checked::assume(
+                                MetaTag::PairPatVarTyIsExpectedTy {
+                                    field_span: field.span(),
+                                },
+                                Ty::obs_equal(
+                                    Ty::universe(),
+                                    var_ty.clone().into_tm(),
+                                    sigma_ty.clone().into_tm(),
+                                ),
+                            )
+                            .map(ch, |ch, _, tys_eq| {
+                                ch.with_anon_var(var_ty.clone(), |ch, tm| {
+                                    let pair = tys_eq.cast(var_ty.clone(), sigma_ty.clone(), tm);
+                                    let head_tm = pair.clone().proj_head();
+                                    let tail_tm = pair.proj_tail();
+
+                                    let tail_func: Box<
+                                        dyn FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)> + '_,
+                                    > = {
+                                        let head_tm = head_tm.clone();
+                                        Box::new(move |ch: &mut CheckCtx| {
+                                            let bound_tail_ty = {
+                                                tail_ty
+                                                .clone()
+                                                .bind(head_tm.clone())
+                                            };
+                                            check_pat_struct_term_fields(
+                                                ch,
+                                                pat_span.clone(),
+                                                fields,
+                                                tail_opt,
+                                                bound_tail_ty,
+                                                func,
+                                            )
+                                            .and_then(ch, |_, _, tail_scope| {
+                                                tail_scope.bind(tail_tm)
+                                            })
+                                        })
+                                    };
+
+                                    match pat_opt {
+                                        None => {
+                                            Checked::pure(ch.with_var(
+                                                head_name.clone(),
+                                                head_ty.clone(),
+                                                move |ch, _| tail_func(ch),
+                                            ))
+                                        },
+                                        Some(pat) => {
+                                            check_pat_prec_inj(ch, pat, head_ty.clone(), tail_func)
+                                        },
+                                    }
+                                    .and_then(ch, |_, _, head_scope| {
+                                        head_scope.bind(head_tm)
+                                    })
+                                })
+                            })
+                        })
+                    })
+                })
+            },
+        }
+    }
+
+    let ast::PatStructTerm { fields, tail_opt } = &pat_struct_term.inner;
+    check_pat_struct_term_fields(
+        ch, pat_struct_term.span(), fields, tail_opt.as_deref(), var_ty, Box::new(func),
+    )
+}
+
+fn check_match_branches(
+    ch: &mut CheckCtx,
+    branches_span: Span,
+    branches: &[Spanned<ast::MatchBranch>],
+    var_ty: Ty,
+) -> Checked<Scope<Checked<(Ty, Tm)>>> {
+    match branches.split_first() {
+        None => {
+            Checked::assume(
+                MetaTag::MatchElimTypeIsNever {
+                    branches_span: branches_span.clone(),
+                },
+                Ty::obs_equal(
+                    Ty::universe(),
+                    var_ty.clone().into_tm(),
+                    Ty::never().into_tm(),
+                ),
+            )
+            .and_then(ch, |ch, _, tys_eq| {
+                Checked::assume(
+                    MetaTag::MatchRhsBranchMotive {
+                        branches_span: branches_span.clone(),
+                    },
+                    Ty::pi(
+                        Name::from("never"),
+                        Ty::never(),
+                        Scope::constant(Ty::universe()),
+                    ),
+                )
+                .map(ch, |ch, _, motive| {
+                    Scope::make(ch.ctx_len(), |tm| {
+                        let never = {
+                            tys_eq
+                            .cast(
+                                var_ty,
+                                Ty::never(),
+                                tm,
+                            )
+                        };
+                        let tm = never.clone().explode(
+                            Scope::make(ch.ctx_len() + 1, |never| {
+                                motive.clone().app(never).into_ty()
+                            }),
+                        );
+                        let ty = motive.app(never).into_ty();
+                        Checked::pure((ty, tm))
+                    })
+                })
+            })
+        },
+        Some((branch, branches)) => {
+            let ast::MatchBranch { variant_name, payload_pat, body } = &branch.inner;
+
+            variant_name
+            .check(ch)
+            .group(MetaTag::MatchLhsNameConstraint {
+                branch_span: branch.span(),
+                branches_span: branches_span.clone(),
+            })
+            .and_then(ch, |ch, _, lhs_name| {
+                Checked::assume_ty(
+                    MetaTag::MatchLhsTy {
+                        branch_span: branch.span(),
+                        branches_span: branches_span.clone(),
+                    },
+                )
+                .and_then(ch, |ch, _, lhs_ty| {
+                    Checked::assume_ty(
+                        MetaTag::MatchRhsTy {
+                            branch_span: branch.span(),
+                            branches_span: branches_span.clone(),
+                        },
+                    )
+                    .and_then(ch, |ch, _, rhs_ty| {
+                        let sum_ty = Ty::sum(lhs_name.clone(), lhs_ty.clone(), rhs_ty.clone());
+                        Checked::assume(
+                            MetaTag::MatchElimTypeIsSum {
+                                branch_span: branch.span(),
+                                branches_span: branches_span.clone(),
+                            },
+                            Ty::obs_equal(
+                                Ty::universe(),
+                                var_ty.clone().into_tm(),
+                                sum_ty.clone().into_tm(),
+                            ),
+                        )
+                        .and_then(ch, |ch, _, tys_eq| {
+                            Checked::assume(
+                                MetaTag::MatchLhsBranchMotive {
+                                    branch_span: branch.span(),
+                                    branches_span: branches_span.clone(),
+                                },
+                                Ty::pi(
+                                    Name::from("sum"),
+                                    sum_ty.clone(),
+                                    Scope::constant(Ty::universe()),
+                                ),
+                            )
+                            .and_then(ch, |ch, _, motive| {
+                                check_pat_prec_inj(
+                                    ch,
+                                    payload_pat,
+                                    lhs_ty.clone(),
+                                    |ch| body.check(ch),
+                                )
+                                .and_then(ch, |_, _, lhs_inhab| {
+                                    lhs_inhab
+                                    .group_and_lift_checked(
+                                        lhs_name.clone(),
+                                        lhs_ty.clone(),
+                                        MetaTag::MatchLhsInhabConstraint {
+                                            branch_span: branch.span(),
+                                            branches_span: branches_span.clone(),
+                                        },
+                                    )
+                                })
+                                .and_then(ch, |ch, _, lhs_inhab| {
+                                    check_match_branches(
+                                        ch,
+                                        branches_span.clone(),
+                                        branches,
+                                        rhs_ty.clone(),
+                                    )
+                                    .and_then(ch, |_, _, rhs_inhab| {
+                                        rhs_inhab
+                                        .group_and_lift_checked(
+                                            Name::from("sum"),
+                                            rhs_ty.clone(),
+                                            MetaTag::MatchRhsInhabConstraint {
+                                                branches_span: branches_span.clone(),
+                                            },
+                                        )
+                                    })
+                                    .and_then(ch, |ch, _, rhs_inhab| {
+                                        let (lhs_inhab_ty, lhs_inhab_tm) = lhs_inhab.map_multi(
+                                            ch.ctx_len(),
+                                            |_, (ty, tm)| (ty, tm)
+                                        );
+                                        let (rhs_inhab_ty, rhs_inhab_tm) = rhs_inhab.map_multi(
+                                            ch.ctx_len(),
+                                            |_, (ty, tm)| (ty, tm)
+                                        );
+
+                                        Checked::assume(
+                                            MetaTag::MatchLhsInhabTyIsExpectedTy {
+                                                branch_span: branch.span(),
+                                                branches_span: branches_span.clone(),
+                                            },
+                                            Ty::pi(
+                                                lhs_name.clone(),
+                                                lhs_ty.clone(),
+                                                Scope::make(ch.ctx_len(), |lhs| {
+                                                    Ty::obs_equal(
+                                                        Ty::universe(),
+                                                        lhs_inhab_ty
+                                                        .clone()
+                                                        .bind(lhs.clone())
+                                                        .into_tm(),
+                                                        motive.clone().app(lhs.inj_lhs()),
+                                                    )
+                                                })
+                                            )
+                                        )
+                                        .and_then(ch, |ch, _, lhs_inhab_tys_eq| {
+                                            let lhs_inhab = Scope::make(
+                                                ch.ctx_len(),
+                                                |lhs| {
+                                                    lhs_inhab_tys_eq
+                                                    .app(lhs.clone())
+                                                    .cast(
+                                                        lhs_inhab_ty.clone().bind(lhs.clone()),
+                                                        motive
+                                                        .clone()
+                                                        .app(lhs.clone().inj_lhs())
+                                                        .into_ty(),
+                                                        lhs_inhab_tm.bind(lhs),
+                                                    )
+                                                },
+                                            );
+                                            Checked::assume(
+                                                MetaTag::MatchRhsInhabTyIsExpectedTy {
+                                                    branches_span: branches_span.clone(),
+                                                },
+                                                Ty::pi(
+                                                    Name::from("sum"),
+                                                    rhs_ty.clone(),
+                                                    Scope::make(ch.ctx_len(), |rhs| {
+                                                        Ty::obs_equal(
+                                                            Ty::universe(),
+                                                            rhs_inhab_ty
+                                                            .clone()
+                                                            .bind(rhs.clone())
+                                                            .into_tm(),
+                                                            motive.clone().app(rhs.inj_rhs()),
+                                                        )
+                                                    })
+                                                )
+                                            )
+                                            .map(ch, |ch, _, rhs_inhab_tys_eq| {
+                                                let rhs_inhab = Scope::make(
+                                                    ch.ctx_len(),
+                                                    |rhs| {
+                                                        rhs_inhab_tys_eq
+                                                        .app(rhs.clone())
+                                                        .cast(
+                                                            rhs_inhab_ty.clone().bind(rhs.clone()),
+                                                            motive
+                                                            .clone()
+                                                            .app(rhs.clone().inj_rhs())
+                                                            .into_ty(),
+                                                            rhs_inhab_tm.bind(rhs),
+                                                        )
+                                                    },
+                                                );
+                                                Scope::make(ch.ctx_len(), |tm| {
+                                                    let sum = tys_eq.cast(var_ty, sum_ty, tm);
+
+                                                    let ty = {
+                                                        motive
+                                                        .clone()
+                                                        .app(sum.clone())
+                                                        .into_ty()
+                                                    };
+                                                    let tm = {
+                                                        sum
+                                                        .case(
+                                                            Scope::make(ch.ctx_len() + 1, |sum| {
+                                                                motive.app(sum).into_ty()
+                                                            }),
+                                                            lhs_inhab,
+                                                            rhs_inhab,
+                                                        )
+                                                    };
+                                                    Checked::pure((ty, tm))
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
+                            })
+                        })
+                    })
+                })
+            })
+        },
+    }
 }
 
 fn lookup_var(ch: &mut CheckCtx, span: Span, var_name: Name) -> Checked<(Ty, Tm)> {
@@ -1410,7 +1925,7 @@ fn implicit_tail_projections_ty(
                                             Scope::make(ctx_len + 6, |tail_ty| {
                                                 Ty::sigma(
                                                     base_ty_eq_meta.clone().into(),
-                                                    Ty::equal(
+                                                    Ty::obs_equal(
                                                         Ty::universe(),
                                                         base_ty.clone(),
                                                         Ty::sigma(
@@ -1431,15 +1946,23 @@ fn implicit_tail_projections_ty(
                             }),
                         ),
                         Scope::make(ctx_len + 4, |projection| {
+                            let head_name = projection.clone().proj_head();
                             let projection = projection.proj_tail();
+                            let head_ty = projection.clone().proj_head();
                             let projection = projection.proj_tail();
                             let tail_ty = projection.clone().proj_head();
                             let projection = projection.proj_tail();
                             let base_ty_eq = projection.proj_head();
-                            let pair = base_ty_eq.transport(
+                            let pair = base_ty_eq.cast(
                                 base_ty.into_ty(),
+                                Ty::sigma(
+                                    head_name.into_name(),
+                                    head_ty.into_ty(),
+                                    Scope::make(ctx_len + 5, |head| {
+                                        tail_ty.clone().app(head).into_ty()
+                                    }),
+                                ),
                                 base_tm,
-                                base_tm_meta.clone().into(),
                             );
                             let head = pair.clone().proj_head();
 
@@ -1511,16 +2034,24 @@ fn apply_implicit_tail_projections_to_ty(
                         let projection = projections.clone().proj_head();
                         let projections = projections.proj_tail();
 
+                        let head_name = projection.clone().proj_head();
                         let projection = projection.proj_tail();
+                        let head_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
                         let tail_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
                         let base_ty_eq = projection.proj_head();
 
-                        let pair = base_ty_eq.transport(
+                        let pair = base_ty_eq.cast(
                             base_ty.into_ty(),
+                            Ty::sigma(
+                                head_name.into_name(),
+                                head_ty.into_ty(),
+                                Scope::make(ctx_len + 5, |head| {
+                                    tail_ty.clone().app(head).into_ty()
+                                }),
+                            ),
                             base_tm,
-                            base_tm_meta.clone().into(),
                         );
                         let head = pair.clone().proj_head();
 
@@ -1600,16 +2131,24 @@ fn apply_implicit_tail_projections_to_tm(
                         let projection = projections.clone().proj_head();
                         let projections = projections.proj_tail();
 
+                        let head_name = projection.clone().proj_head();
                         let projection = projection.proj_tail();
+                        let head_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
                         let tail_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
                         let base_ty_eq = projection.proj_head();
 
-                        let pair = base_ty_eq.transport(
+                        let pair = base_ty_eq.cast(
                             base_ty.into_ty(),
+                            Ty::sigma(
+                                head_name.into_name(),
+                                head_ty.into_ty(),
+                                Scope::make(ctx_len + 5, |head| {
+                                    tail_ty.clone().app(head).into_ty()
+                                }),
+                            ),
                             base_tm,
-                            base_tm_meta.clone().into(),
                         );
                         let head = pair.clone().proj_head();
 

@@ -20,31 +20,12 @@ pub enum NeutralKind {
         body: TmKind,
     },
 
-    /*
-    TagsApart {
-        elim: TmKind,
-    },
-    */
-
     Fold {
         elim: Tm,
         motive: Scope<Ty>,
         zero_inhab: Tm,
         succ_inhab: Scope<Scope<Tm>>,
     },
-
-    /*
-    UniqueIdentity {
-        elim: Tm,
-        motive: Scope<Ty>,
-        inhab: Tm,
-    },
-    Cong {
-        elim: Tm,
-        motive: Scope<Scope<Ty>>,
-        inhab: Tm,
-    },
-    */
 
     Explode {
         elim: Tm,
@@ -65,6 +46,19 @@ pub enum NeutralKind {
     App {
         elim: Tm,
         arg_tm: Tm,
+    },
+
+    ObsEqual {
+        eq_ty: Ty,
+        eq_tm_0: Tm,
+        eq_tm_1: Tm,
+    },
+
+    Cast {
+        elim: Tm,
+        ty_0: Ty,
+        ty_1: Ty,
+        tm_0: Tm,
     },
 }
 
@@ -100,12 +94,6 @@ impl Contextual for NeutralKind {
                     truncated_body_usages.ctx_len(),
                 ])
             },
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                elim.ctx_len()
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 max_all([
@@ -159,6 +147,23 @@ impl Contextual for NeutralKind {
                     arg_tm.ctx_len(),
                 ])
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                max_all([
+                    eq_ty.ctx_len(),
+                    eq_tm_0.ctx_len(),
+                    eq_tm_1.ctx_len(),
+                ])
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                max_all([
+                    elim.ctx_len(),
+                    ty_0.ctx_len(),
+                    ty_1.ctx_len(),
+                    tm_0.ctx_len(),
+                ])
+            },
         }
     }
 
@@ -171,12 +176,6 @@ impl Contextual for NeutralKind {
                 var_tms.collect_usages(usages);
                 usages.or_assign(truncated_body_usages);
             },
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                elim.collect_usages(usages);
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.collect_usages(usages);
@@ -218,6 +217,18 @@ impl Contextual for NeutralKind {
                 elim.collect_usages(usages);
                 arg_tm.collect_usages(usages);
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                eq_ty.collect_usages(usages);
+                eq_tm_0.collect_usages(usages);
+                eq_tm_1.collect_usages(usages);
+            },
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                elim.collect_usages(usages);
+                ty_0.collect_usages(usages);
+                ty_1.collect_usages(usages);
+                tm_0.collect_usages(usages);
+            },
         }
     }
 
@@ -230,12 +241,6 @@ impl Contextual for NeutralKind {
                 var_tms.filter_usages(usages);
                 truncated_body_usages.filter(usages);
             },
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                elim.filter_usages(usages);
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.filter_usages(usages);
@@ -277,6 +282,18 @@ impl Contextual for NeutralKind {
                 elim.filter_usages(usages);
                 arg_tm.filter_usages(usages);
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                eq_ty.filter_usages(usages);
+                eq_tm_0.filter_usages(usages);
+                eq_tm_1.filter_usages(usages);
+            },
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                elim.filter_usages(usages);
+                ty_0.filter_usages(usages);
+                ty_1.filter_usages(usages);
+                tm_0.filter_usages(usages);
+            },
         }
     }
 
@@ -289,12 +306,6 @@ impl Contextual for NeutralKind {
                 var_tms.unfilter_usages(usages);
                 truncated_body_usages.unfilter(usages);
             },
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                elim.unfilter_usages(usages);
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 elim.unfilter_usages(usages);
@@ -335,6 +346,18 @@ impl Contextual for NeutralKind {
             NeutralKind::App { elim, arg_tm } => {
                 elim.unfilter_usages(usages);
                 arg_tm.unfilter_usages(usages);
+            },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                eq_ty.unfilter_usages(usages);
+                eq_tm_0.unfilter_usages(usages);
+                eq_tm_1.unfilter_usages(usages);
+            },
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                elim.unfilter_usages(usages);
+                ty_0.unfilter_usages(usages);
+                ty_1.unfilter_usages(usages);
+                tm_0.unfilter_usages(usages);
             },
         }
     }
@@ -421,6 +444,13 @@ impl NeutralData {
         }
     }
 
+    pub fn is_prop(&self) -> bool {
+        match self.try_reduce() {
+            Some(tm) => tm.into_ty().is_prop(),
+            None => self.kind.is_prop(),
+        }
+    }
+
     pub fn deep_nf(self) -> Tm {
         match self.try_reduce() {
             Some(tm) => tm.deep_nf(),
@@ -436,7 +466,16 @@ impl NeutralData {
     pub fn deep_nf_assuming_stuck(self) -> Neutral {
         match self.get_cached_reduction() {
             Some(tm) => {
-                tm.as_neutral().unwrap().deep_nf_assuming_stuck()
+                match tm.clone().as_neutral() {
+                    None => {
+                        panic!("tm == {:#?}", tm);
+                    },
+                    Some(neutral) => neutral.deep_nf_assuming_stuck(),
+                }
+
+
+
+                //tm.as_neutral().unwrap().deep_nf_assuming_stuck()
             },
             None => {
                 self.kind.deep_nf_assuming_stuck().map(|kind| NeutralData::new_arc(kind))
@@ -469,10 +508,6 @@ impl NeutralKind {
                 debug_assert_eq!(subst.len(), subst_len);
                 body
             },
-
-            /*
-            NeutralKind::TagsApart { .. } => return None,
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
@@ -532,20 +567,6 @@ impl NeutralKind {
                 }
             },
 
-            /*
-            NeutralKind::UniqueIdentity { elim, motive: _, inhab } => {
-                let elim = elim.clone().try_reduce_to_intro()?;
-                debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
-                inhab.clone()
-            },
-
-            NeutralKind::Cong { elim, motive: _, inhab } => {
-                let elim = elim.clone().try_reduce_to_intro()?;
-                debug_assert!(matches!(&*elim.into_inner(), IntroKind::Refl { .. }));
-                inhab.clone()
-            },
-            */
-
             NeutralKind::Explode { .. } => return None,
 
             NeutralKind::Case { elim, motive: _, lhs_inhab, rhs_inhab } => {
@@ -585,7 +606,7 @@ impl NeutralKind {
                 match elim {
                     TmKind::Intro { intro } => {
                         let IntroKind::Pair { head_tm: _, tail_tm } = &**intro else {
-                            unreachable!();
+                            return None;
                         };
                         tail_tm.clone()
                     },
@@ -593,7 +614,7 @@ impl NeutralKind {
                         let intro = neutral.try_reduce_to_intro()?;
                         let (usages, intro) = intro.into_usages_and_weak();
                         let IntroKind::Pair { head_tm: _, tail_tm } = &*intro else {
-                            unreachable!();
+                            return None;
                         };
                         tail_tm.clone().unfiltered(&usages)
                     },
@@ -603,10 +624,578 @@ impl NeutralKind {
             NeutralKind::App { elim, arg_tm } => {
                 let elim = elim.clone().try_reduce_to_intro()?;
                 let IntroKind::Func { res_tm } = &*elim.into_inner() else {
-                    unreachable!();
+                    return None;
                 };
                 let res_tm = res_tm.clone().map_without_capture(Weaken::new);
                 res_tm.bind(arg_tm.clone())
+            },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.clone().try_reduce_to_form()?.into_inner_arc();
+                let ty = match eq_ty {
+                    FormKind::Name => {
+                        let eq_tm_0 = eq_tm_0.clone().try_reduce_to_intro()?;
+                        let eq_tm_1 = eq_tm_1.clone().try_reduce_to_intro()?;
+                        let tag_0 = eq_tm_0.as_tag().unwrap();
+                        let tag_1 = eq_tm_1.as_tag().unwrap();
+                        if tag_0 == tag_1 {
+                            Ty::unit()
+                        } else {
+                            Ty::never()
+                        }
+                    },
+
+                    FormKind::Universe => {
+                        let eq_tm_0 = eq_tm_0.clone().try_reduce_to_intro()?;
+                        let eq_tm_1 = eq_tm_1.clone().try_reduce_to_intro()?;
+                        let ty_0 = eq_tm_0.into_form().into_inner_arc();
+                        let ty_1 = eq_tm_1.into_form().into_inner_arc();
+                        match (ty_0, ty_1) {
+                            | (FormKind::Name, FormKind::Name)
+                            | (FormKind::Universe, FormKind::Universe)
+                            | (FormKind::Nat, FormKind::Nat)
+                            | (FormKind::Never, FormKind::Never)
+                            | (FormKind::Unit, FormKind::Unit)
+                            => Ty::unit(),
+
+                            (
+                                FormKind::Sum {
+                                    lhs_name: lhs_name_0,
+                                    lhs_ty: lhs_ty_0,
+                                    rhs_ty: rhs_ty_0,
+                                },
+                                FormKind::Sum {
+                                    lhs_name: lhs_name_1,
+                                    lhs_ty: lhs_ty_1,
+                                    rhs_ty: rhs_ty_1,
+                                },
+                            ) => {
+                                Ty::sigma(
+                                    Name::from("lhs_name"),
+                                    Ty::obs_equal(
+                                        Ty::name(),
+                                        lhs_name_0.into_tm(),
+                                        lhs_name_1.into_tm(),
+                                    ),
+                                    Scope::constant(
+                                        Ty::sigma(
+                                            Name::from("lhs_ty"),
+                                            Ty::obs_equal(
+                                                Ty::universe(),
+                                                lhs_ty_0.into_tm(),
+                                                lhs_ty_1.into_tm(),
+                                            ),
+                                            Scope::constant(
+                                                Ty::sigma(
+                                                    Name::from("rhs_ty"),
+                                                    Ty::obs_equal(
+                                                        Ty::universe(),
+                                                        rhs_ty_0.into_tm(),
+                                                        rhs_ty_1.into_tm(),
+                                                    ),
+                                                    Scope::constant(Ty::unit()),
+                                                )
+                                            ),
+                                        )
+                                    ),
+                                )
+                            },
+
+                            (
+                                FormKind::Sigma {
+                                    head_name: head_name_0,
+                                    head_ty: head_ty_0,
+                                    tail_ty: tail_ty_0,
+                                },
+                                FormKind::Sigma {
+                                    head_name: head_name_1,
+                                    head_ty: head_ty_1,
+                                    tail_ty: tail_ty_1,
+                                },
+                            ) => {
+                                let ctx_len = max_all([
+                                    head_name_0.ctx_len(),
+                                    head_name_1.ctx_len(),
+                                    head_ty_0.ctx_len(),
+                                    head_ty_1.ctx_len(),
+                                    tail_ty_0.ctx_len(),
+                                    tail_ty_1.ctx_len(),
+                                ]);
+
+                                Ty::sigma(
+                                    Name::from("head_name"),
+                                    Ty::obs_equal(
+                                        Ty::name(),
+                                        head_name_0.clone().into_tm(),
+                                        head_name_1.clone().into_tm(),
+                                    ),
+                                    Scope::make(ctx_len, |_head_name_eq| {
+                                        Ty::sigma(
+                                            Name::from("head_ty"),
+                                            Ty::obs_equal(
+                                                Ty::universe(),
+                                                head_ty_0.clone().into_tm(),
+                                                head_ty_1.clone().into_tm(),
+                                            ),
+                                            Scope::make(ctx_len + 1, |head_ty_eq| {
+                                                Ty::sigma(
+                                                    Name::from("tail_ty"),
+                                                    Ty::pi(
+                                                        head_name_0.clone(),
+                                                        head_ty_0.clone(),
+                                                        Scope::make(ctx_len + 2, |head_tm_0| {
+                                                            Ty::obs_equal(
+                                                                Ty::universe(),
+                                                                tail_ty_0
+                                                                .bind(head_tm_0.clone())
+                                                                .into_tm(),
+                                                                tail_ty_1
+                                                                .bind(
+                                                                    head_ty_eq
+                                                                    .cast(
+                                                                        head_ty_0,
+                                                                        head_ty_1,
+                                                                        head_tm_0,
+                                                                    )
+                                                                )
+                                                                .into_tm(),
+                                                            )
+                                                        }),
+                                                    ),
+                                                    Scope::constant(Ty::unit()),
+                                                )
+                                            }),
+                                        )
+                                    }),
+                                )
+                            },
+
+                            (
+                                FormKind::Pi {
+                                    arg_name: arg_name_0,
+                                    arg_ty: arg_ty_0,
+                                    res_ty: res_ty_0,
+                                },
+                                FormKind::Pi {
+                                    arg_name: arg_name_1,
+                                    arg_ty: arg_ty_1,
+                                    res_ty: res_ty_1,
+                                },
+                            ) => {
+                                let ctx_len = max_all([
+                                    arg_name_0.ctx_len(),
+                                    arg_name_1.ctx_len(),
+                                    arg_ty_0.ctx_len(),
+                                    arg_ty_1.ctx_len(),
+                                    res_ty_0.ctx_len(),
+                                    res_ty_1.ctx_len(),
+                                ]);
+
+                                Ty::sigma(
+                                    Name::from("arg_name"),
+                                    Ty::obs_equal(
+                                        Ty::name(),
+                                        arg_name_0.clone().into_tm(),
+                                        arg_name_1.clone().into_tm(),
+                                    ),
+                                    Scope::make(ctx_len, |_arg_name_eq| {
+                                        Ty::sigma(
+                                            Name::from("arg_ty"),
+                                            Ty::obs_equal(
+                                                Ty::universe(),
+                                                arg_ty_0.clone().into_tm(),
+                                                arg_ty_1.clone().into_tm(),
+                                            ),
+                                            Scope::make(ctx_len + 1, |arg_ty_eq| {
+                                                Ty::sigma(
+                                                    Name::from("res_ty"),
+                                                    Ty::pi(
+                                                        arg_name_1.clone(),
+                                                        arg_ty_1.clone(),
+                                                        Scope::make(ctx_len + 2, |arg_tm_1| {
+                                                            Ty::obs_equal(
+                                                                Ty::universe(),
+                                                                res_ty_0
+                                                                .bind(
+                                                                    arg_ty_eq
+                                                                    .cast(
+                                                                        arg_ty_1,
+                                                                        arg_ty_0,
+                                                                        arg_tm_1.clone(),
+                                                                    )
+                                                                )
+                                                                .into_tm(),
+                                                                res_ty_1
+                                                                .bind(arg_tm_1)
+                                                                .into_tm(),
+                                                            )
+                                                        }),
+                                                    ),
+                                                    Scope::constant(Ty::unit()),
+                                                )
+                                            }),
+                                        )
+                                    }),
+                                )
+                            },
+
+                            _ => Ty::never(),
+                        }
+                    },
+
+                    FormKind::Nat => {
+                        let eq_tm_0 = eq_tm_0.clone().try_reduce_to_intro()?;
+                        let eq_tm_1 = eq_tm_1.clone().try_reduce_to_intro()?;
+                        match (eq_tm_0.into_inner_arc(), eq_tm_1.into_inner_arc()) {
+                            (
+                                IntroKind::Constant { ubig: ubig_0 },
+                                IntroKind::Constant { ubig: ubig_1 },
+                            ) => {
+                                if ubig_0 == ubig_1 {
+                                    Ty::unit()
+                                } else {
+                                    Ty::never()
+                                }
+                            },
+
+                            (
+                                IntroKind::Constant { ubig },
+                                IntroKind::Succs { succ_count_m1, pred_tm },
+                            ) => {
+                                if ubig > succ_count_m1 {
+                                    let ubig = ubig.strict_sub(&(succ_count_m1 + 1usize));
+                                    Ty::obs_equal(
+                                        Ty::nat(),
+                                        Tm::constant(ubig),
+                                        Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm,
+                                        }),
+                                    )
+                                } else {
+                                    Ty::never()
+                                }
+                            },
+
+                            (
+                                IntroKind::Succs { succ_count_m1, pred_tm },
+                                IntroKind::Constant { ubig },
+                            ) => {
+                                if ubig > succ_count_m1 {
+                                    let ubig = ubig.strict_sub(&(succ_count_m1 + 1usize));
+                                    Ty::obs_equal(
+                                        Ty::nat(),
+                                        Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm,
+                                        }),
+                                        Tm::constant(ubig),
+                                    )
+                                } else {
+                                    Ty::never()
+                                }
+                            },
+
+                            (
+                                IntroKind::Succs {
+                                    succ_count_m1: succ_count_m1_0,
+                                    pred_tm: pred_tm_0,
+                                },
+                                IntroKind::Succs {
+                                    succ_count_m1: succ_count_m1_1,
+                                    pred_tm: pred_tm_1,
+                                },
+                            ) => {
+                                let (tm_0, tm_1) = match succ_count_m1_0.cmp(&succ_count_m1_1) {
+                                    cmp::Ordering::Less => {
+                                        let tm_0 = Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm_0,
+                                        });
+                                        let tm_1 = {
+                                            Weaken::new_arc(IntroKind::Succs {
+                                                succ_count_m1: succ_count_m1_1.strict_sub(&(succ_count_m1_0 + 1usize)),
+                                                pred_tm: pred_tm_1,
+                                            })
+                                            .map(|intro| TmKind::Intro { intro })
+                                        };
+                                        (tm_0, tm_1)
+                                    },
+                                    cmp::Ordering::Equal => {
+                                        let tm_0 = Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm_0,
+                                        });
+                                        let tm_1 = Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm_1,
+                                        });
+                                        (tm_0, tm_1)
+                                    },
+                                    cmp::Ordering::Greater => {
+                                        let tm_0 = {
+                                            Weaken::new_arc(IntroKind::Succs {
+                                                succ_count_m1: succ_count_m1_0.strict_sub(&(succ_count_m1_1 + 1usize)),
+                                                pred_tm: pred_tm_0,
+                                            })
+                                            .map(|intro| TmKind::Intro { intro })
+                                        };
+                                        let tm_1 = Weaken::new(TmKind::Neutral {
+                                            neutral: pred_tm_1,
+                                        });
+                                        (tm_0, tm_1)
+                                    },
+                                };
+                                Ty::obs_equal(Ty::nat(), tm_0, tm_1)
+                            },
+
+                            _ => unreachable!(),
+                        }
+                    },
+
+                    FormKind::Never => return None,
+
+                    FormKind::Unit => Ty::unit(),
+
+                    FormKind::Sum { lhs_name: _, lhs_ty, rhs_ty } => {
+                        let eq_tm_0 = eq_tm_0.clone().try_reduce_to_intro()?;
+                        let eq_tm_1 = eq_tm_1.clone().try_reduce_to_intro()?;
+                        match (eq_tm_0.into_inner_arc(), eq_tm_1.into_inner_arc()) {
+                            (
+                                IntroKind::InjLhs { lhs_tm: lhs_tm_0 },
+                                IntroKind::InjLhs { lhs_tm: lhs_tm_1 },
+                            ) => {
+                                Ty::obs_equal(
+                                    lhs_ty,
+                                    Weaken::new(lhs_tm_0),
+                                    Weaken::new(lhs_tm_1),
+                                )
+                            },
+
+                            (
+                                IntroKind::InjRhs { rhs_tm: rhs_tm_0 },
+                                IntroKind::InjRhs { rhs_tm: rhs_tm_1 },
+                            ) => {
+                                Ty::obs_equal(
+                                    rhs_ty,
+                                    Weaken::new(rhs_tm_0),
+                                    Weaken::new(rhs_tm_1),
+                                )
+                            },
+
+                            | (IntroKind::InjLhs { .. }, IntroKind::InjRhs { .. })
+                            | (IntroKind::InjRhs { .. }, IntroKind::InjLhs { .. })
+                            => Ty::never(),
+
+                            _ => unreachable!(),
+                        }
+                    },
+
+                    FormKind::Sigma { head_name, head_ty, tail_ty } => {
+                        let head_tm_0 = eq_tm_0.clone().proj_head();
+                        let tail_tm_0 = eq_tm_0.clone().proj_tail();
+                        let head_tm_1 = eq_tm_1.clone().proj_head();
+                        let tail_tm_1 = eq_tm_1.clone().proj_tail();
+
+                        let tail_ty_0 = tail_ty.clone().bind(head_tm_0.clone());
+                        let tail_ty_1 = tail_ty.clone().bind(head_tm_1.clone());
+
+                        let ctx_len = max_all([
+                            tail_ty.ctx_len(),
+                            head_tm_0.ctx_len(),
+                            head_tm_1.ctx_len(),
+                            tail_tm_0.ctx_len(),
+                            tail_tm_1.ctx_len(),
+                        ]);
+
+                        Ty::sigma(
+                            head_name,
+                            Ty::obs_equal(
+                                head_ty,
+                                head_tm_0,
+                                head_tm_1,
+                            ),
+                            Scope::make(ctx_len, |head_tm_eq| {
+                                Ty::obs_equal(
+                                    tail_ty_1.clone(),
+                                    head_tm_eq
+                                    .obs_cong(
+                                        Scope::make(ctx_len + 1, |head_tm_1| {
+                                            Scope::constant(
+                                                Ty::obs_equal(
+                                                    Ty::universe(),
+                                                    tail_ty_0.clone().into_tm(),
+                                                    tail_ty.bind(head_tm_1).into_tm(),
+                                                )
+                                            )
+                                        }),
+                                        tail_ty_0.clone().into_tm().obs_refl(),
+                                    )
+                                    .cast(
+                                        tail_ty_0,
+                                        tail_ty_1,
+                                        tail_tm_0,
+                                    ),
+                                    tail_tm_1,
+                                )
+                            }),
+                        )
+                    },
+
+                    FormKind::Pi { arg_name, arg_ty, res_ty } => {
+                        let ctx_len = max_all([
+                            res_ty.ctx_len(),
+                            eq_tm_0.ctx_len(),
+                            eq_tm_1.ctx_len(),
+                        ]);
+
+                        Ty::pi(
+                            arg_name,
+                            arg_ty,
+                            Scope::make(ctx_len, |arg_tm| {
+                                Ty::obs_equal(
+                                    res_ty.bind(arg_tm.clone()),
+                                    eq_tm_0.clone().app(arg_tm.clone()),
+                                    eq_tm_1.clone().app(arg_tm),
+                                )
+                            }),
+                        )
+                    },
+                };
+                ty.into_tm()
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                let form_0 = ty_0.clone().try_reduce_to_form()?.into_inner_arc();
+                let form_1 = ty_1.clone().try_reduce_to_form()?.into_inner_arc();
+
+                match (form_0, form_1) {
+                    | (FormKind::Name, FormKind::Name)
+                    | (FormKind::Universe, FormKind::Universe)
+                    | (FormKind::Nat, FormKind::Nat)
+                    | (FormKind::Never, FormKind::Never)
+                    | (FormKind::Unit, FormKind::Unit)
+                    => {
+                        tm_0.clone()
+                    },
+
+                    (
+                        FormKind::Sum {
+                            lhs_name: _,
+                            lhs_ty: lhs_ty_0,
+                            rhs_ty: rhs_ty_0,
+                        },
+                        FormKind::Sum {
+                            lhs_name: _,
+                            lhs_ty: lhs_ty_1,
+                            rhs_ty: rhs_ty_1,
+                        },
+                    ) => {
+                        let ctx_len = max_all([
+                            elim.ctx_len(),
+                            lhs_ty_0.ctx_len(),
+                            rhs_ty_0.ctx_len(),
+                            lhs_ty_1.ctx_len(),
+                            rhs_ty_1.ctx_len(),
+                        ]);
+
+                        let elim = elim.clone().proj_tail();
+                        let lhs_ty_eq = elim.clone().proj_head();
+                        let rhs_ty_eq = elim.proj_tail().proj_head();
+
+                        tm_0
+                        .clone()
+                        .case(
+                            Scope::constant(ty_1.clone()),
+                            Scope::make(ctx_len, |lhs_tm| {
+                                lhs_ty_eq
+                                .cast(lhs_ty_0, lhs_ty_1, lhs_tm)
+                                .inj_lhs()
+                            }),
+                            Scope::make(ctx_len, |rhs_tm| {
+                                rhs_ty_eq
+                                .cast(rhs_ty_0, rhs_ty_1, rhs_tm)
+                                .inj_rhs()
+                            }),
+                        )
+                    },
+
+                    (
+                        FormKind::Sigma {
+                            head_name: _,
+                            head_ty: head_ty_0,
+                            tail_ty: tail_ty_0,
+                        },
+                        FormKind::Sigma {
+                            head_name: _,
+                            head_ty: head_ty_1,
+                            tail_ty: tail_ty_1,
+                        },
+                    ) => {
+                        let elim = elim.clone().proj_tail();
+                        let head_ty_eq = elim.clone().proj_head();
+                        let tail_ty_eq = elim.proj_tail().proj_head();
+
+                        let head_tm_0 = tm_0.clone().proj_head();
+                        let tail_tm_0 = tm_0.clone().proj_tail();
+
+                        let head_tm_1 = {
+                            head_ty_eq
+                            .cast(head_ty_0.clone(), head_ty_1.clone(), head_tm_0.clone())
+                        };
+                        let tail_tm_1 = {
+                            tail_ty_eq
+                            .app(head_tm_1.clone())
+                            .cast(
+                                tail_ty_0.bind(head_tm_0),
+                                tail_ty_1.bind(head_tm_1.clone()),
+                                tail_tm_0,
+                            )
+                        };
+
+                        head_tm_1.pair(tail_tm_1)
+                    },
+
+                    (
+                        FormKind::Pi {
+                            arg_name: _,
+                            arg_ty: arg_ty_0,
+                            res_ty: res_ty_0,
+                        },
+                        FormKind::Pi {
+                            arg_name: _,
+                            arg_ty: arg_ty_1,
+                            res_ty: res_ty_1,
+                        },
+                    ) => {
+                        let elim = elim.clone().proj_tail();
+                        let arg_ty_eq = elim.clone().proj_head();
+                        let res_ty_eq = elim.proj_tail().proj_head();
+
+                        let ctx_len = max_all([
+                            arg_ty_0.ctx_len(),
+                            arg_ty_1.ctx_len(),
+                            res_ty_1.ctx_len(),
+                            res_ty_1.ctx_len(),
+                            tm_0.ctx_len(),
+                            arg_ty_eq.ctx_len(),
+                            res_ty_eq.ctx_len(),
+                        ]);
+
+                        Tm::func(Scope::make(ctx_len, |arg_tm_1| {
+                            let arg_tm_0 = {
+                                arg_ty_eq
+                                .cast(arg_ty_1, arg_ty_0, arg_tm_1.clone())
+                            };
+                            let res_tm_0 = tm_0.clone().app(arg_tm_0.clone());
+
+                            res_ty_eq
+                            .app(arg_tm_1.clone())
+                            .cast(
+                                res_ty_0.bind(arg_tm_0),
+                                res_ty_1.bind(arg_tm_1),
+                                res_tm_0,
+                            )
+                        }))
+                    },
+
+                    _ => return None,
+                }
             },
         };
         Some(tm.reduced())
@@ -637,10 +1226,6 @@ impl NeutralKind {
             NeutralKind::Var { index } => Some(ctx_tys[*index].clone()),
 
             NeutralKind::Bind { .. } => None,
-
-            /*
-            NeutralKind::TagsApart { .. } => Some(Ty::never()),
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab: _, succ_inhab: _ } => {
                 Some(motive.clone().bind(elim.clone()))
@@ -687,6 +1272,14 @@ impl NeutralKind {
                 let (_arg_name, _arg_ty, res_ty) = elim_ty.as_pi().unwrap();
                 Some(res_ty.bind(arg_tm.clone()))
             },
+
+            NeutralKind::ObsEqual { .. } => {
+                Some(Ty::universe())
+            },
+
+            NeutralKind::Cast { elim: _, ty_0: _, ty_1, tm_0: _ } => {
+                Some(ty_1.clone())
+            },
         }
     }
 
@@ -698,9 +1291,6 @@ impl NeutralKind {
 
             NeutralKind::Bind { .. } => unreachable!(),
 
-            /*
-            | NeutralKind::TagsApart { elim }
-            */
             | NeutralKind::ProjHead { elim }
             | NeutralKind::ProjTail { elim }
             => {
@@ -716,8 +1306,84 @@ impl NeutralKind {
             | NeutralKind::Case { elim, .. }
             | NeutralKind::App { elim, .. }
             => {
-                elim.clone().as_neutral().unwrap().into_inner().collect_stuck_vars(usages)
+                elim.clone().as_neutral().unwrap().collect_stuck_vars(usages)
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                match eq_ty.clone().into_inner() {
+                    TyKind::Neutral { neutral } => {
+                        neutral.collect_stuck_vars(usages);
+                    },
+                    TyKind::Form { .. } => {
+                        if let Some(neutral) = eq_tm_0.clone().as_neutral() {
+                            neutral.collect_stuck_vars(usages);
+                        }
+                        if let Some(neutral) = eq_tm_1.clone().as_neutral() {
+                            neutral.collect_stuck_vars(usages);
+                        }
+                    },
+                }
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0: _ } => {
+                match (ty_0.clone().into_inner(), ty_1.clone().into_inner()) {
+                    (
+                        TyKind::Neutral { neutral: neutral_0 },
+                        TyKind::Neutral { neutral: neutral_1 },
+                    ) => {
+                        neutral_0.collect_stuck_vars(usages);
+                        neutral_1.collect_stuck_vars(usages);
+                    },
+
+                    (
+                        TyKind::Neutral { neutral: neutral_0 },
+                        TyKind::Form { .. },
+                    ) => {
+                        neutral_0.collect_stuck_vars(usages);
+                    },
+
+                    (
+                        TyKind::Form { .. },
+                        TyKind::Neutral { neutral: neutral_1 },
+                    ) => {
+                        neutral_1.collect_stuck_vars(usages);
+                    },
+
+                    (
+                        TyKind::Form { .. },
+                        TyKind::Form { .. },
+                    ) => {
+                        elim.clone().as_neutral().unwrap().collect_stuck_vars(usages)
+                    },
+                }
+            },
+        }
+    }
+
+    pub fn is_prop(&self) -> bool {
+        match self {
+            NeutralKind::Var { .. } => false,
+            NeutralKind::Bind { .. } => unreachable!(),
+
+            NeutralKind::Fold { elim: _, motive: _, zero_inhab, succ_inhab } => {
+                zero_inhab.clone().into_ty().is_prop() &&
+                succ_inhab.inner_ref().inner_ref().clone().into_ty().is_prop()
+            },
+
+            NeutralKind::Explode { elim: _, motive: _ } => true,
+
+            NeutralKind::Case { elim: _, motive: _, lhs_inhab, rhs_inhab } => {
+                lhs_inhab.inner_ref().clone().into_ty().is_prop() &&
+                rhs_inhab.inner_ref().clone().into_ty().is_prop()
+            },
+
+            NeutralKind::ProjHead { .. } => false,
+            NeutralKind::ProjTail { .. } => false,
+            NeutralKind::App { .. } => false,
+
+            NeutralKind::ObsEqual { .. } => true,
+
+            NeutralKind::Cast { .. } => false,
         }
     }
 
@@ -726,18 +1392,6 @@ impl NeutralKind {
             NeutralKind::Var { index } => Weaken::new(NeutralKind::Var { index }),
 
             NeutralKind::Bind { .. } => unreachable!(),
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
-                .deep_nf()
-                .as_neutral()
-                .unwrap()
-                .map(|neutral| NeutralKind::TagsApart {
-                    elim: TmKind::Neutral { neutral },
-                })
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
@@ -778,25 +1432,35 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
-                .deep_nf_assuming_stuck()
-                .map(|neutral| NeutralKind::ProjHead {
-                    elim: TmKind::Neutral { neutral },
-                })
+                elim
+                .deep_nf()
+                .map(|elim| NeutralKind::ProjHead { elim })
             },
 
             NeutralKind::ProjTail { elim } => {
-                Arc::unwrap_or_clone(elim.as_neutral().unwrap())
-                .deep_nf_assuming_stuck()
-                .map(|neutral| NeutralKind::ProjTail {
-                    elim: TmKind::Neutral { neutral },
-                })
+                elim
+                .deep_nf()
+                .map(|elim| NeutralKind::ProjTail { elim })
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
+                let elim = elim.deep_nf();
                 let arg_tm = arg_tm.deep_nf();
                 Weaken::new(NeutralKind::App { elim, arg_tm })
+            },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.deep_nf();
+                let eq_tm_0 = eq_tm_0.deep_nf();
+                let eq_tm_1 = eq_tm_1.deep_nf();
+                Weaken::new(NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 })
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                let ty_0 = ty_0.deep_nf();
+                let ty_1 = ty_1.deep_nf();
+                let tm_0 = tm_0.deep_nf();
+                Weaken::new(NeutralKind::Cast { elim, ty_0, ty_1, tm_0 })
             },
         }
     }
@@ -811,50 +1475,53 @@ impl Unify for NeutralKind {
         neutral_kind_0: NeutralKind,
         neutral_kind_1: NeutralKind,
     ) -> Option<NeutralKind> {
-        match (neutral_kind_0, neutral_kind_1) {
-            (NeutralKind::Bind { .. }, _) |
-            (_, NeutralKind::Bind { .. }) => unreachable!(),
-
-            (NeutralKind::Var { index: index_0 }, NeutralKind::Var { index: index_1 }) => {
+        match neutral_kind_0 {
+            NeutralKind::Bind { .. } => unreachable!(),
+            NeutralKind::Var { index: index_0 } => {
+                if ctx_tys[index_0].is_prop() {
+                    return Some(NeutralKind::Var { index: index_0 });
+                }
+                let NeutralKind::Var { index: index_1 } = neutral_kind_1 else {
+                    return None;
+                };
                 let index = as_equal(index_0, &index_1)?;
                 Some(NeutralKind::Var { index })
             },
 
-            /*
-            (NeutralKind::TagsApart { elim: elim_0 }, NeutralKind::TagsApart { elim: elim_1 }) => {
-                let neutral_0 = elim_0.as_neutral().unwrap();
-                let neutral_1 = elim_1.as_neutral().unwrap();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
-                let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
+            NeutralKind::Fold {
+                elim: elim_0,
+                motive: motive_0,
+                zero_inhab: zero_inhab_0,
+                succ_inhab: succ_inhab_0,
+            } => {
+                if motive_0.inner_ref().is_prop() {
+                    return Some(NeutralKind::Fold {
+                        elim: elim_0,
+                        motive: motive_0,
+                        zero_inhab: zero_inhab_0,
+                        succ_inhab: succ_inhab_0,
+                    });
+                }
 
-                let elim = TmKind::Neutral {
-                    neutral: NeutralData::unify_without_cached_reduction(ctx_tys, neutral_0, neutral_1)?,
-                };
-                Some(NeutralKind::TagsApart { elim })
-            },
-            */
-
-            (
-                NeutralKind::Fold {
-                    elim: elim_0,
-                    motive: motive_0,
-                    zero_inhab: zero_inhab_0,
-                    succ_inhab: succ_inhab_0,
-                },
-                NeutralKind::Fold {
+                let NeutralKind::Fold {
                     elim: elim_1,
                     motive: motive_1,
                     zero_inhab: zero_inhab_1,
                     succ_inhab: succ_inhab_1,
-                },
-            ) => {
+                } = neutral_kind_1 else {
+                    return None;
+                };
+
+                let motive = Unify::unify(
+                    ctx_tys, (Ty::nat(), Scope::constant(())), motive_0, motive_1,
+                )?;
+
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
                 let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
                 )?;
-                let motive = Unify::unify(ctx_tys, (Ty::nat(), Scope::constant(())), motive_0, motive_1)?;
+
                 let zero_inhab = Unify::unify(
                     ctx_tys,
                     motive.clone().bind(Tm::zero()),
@@ -879,78 +1546,18 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
             },
 
-            /*
-            (
-                NeutralKind::UniqueIdentity { elim: elim_0, motive: motive_0, inhab: inhab_0 },
-                NeutralKind::UniqueIdentity { elim: elim_1, motive: motive_1, inhab: inhab_1 },
-            ) => {
-                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
-                let neutral = NeutralData::unify_without_cached_reduction(
-                    ctx_tys, neutral_0, neutral_1,
-                )?;
-
-                let motive = Unify::unify(
-                    ctx_tys,
-                    (elim_ty.clone(), Scope::constant(())),
-                    motive_0,
-                    motive_1,
-                )?;
-                let (_eq_ty, eq_tm, _) = elim_ty.as_equal().unwrap();
-                let inhab = Unify::unify(ctx_tys, motive.clone().bind(eq_tm.refl()), inhab_0, inhab_1)?;
-                let elim = Weaken::new(TmKind::Neutral { neutral });
-                Some(NeutralKind::UniqueIdentity { elim, motive, inhab })
-            },
-
-            (
-                NeutralKind::Cong { elim: elim_0, motive: motive_0, inhab: inhab_0 },
-                NeutralKind::Cong { elim: elim_1, motive: motive_1, inhab: inhab_1 },
-            ) => {
-                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
-                let neutral = NeutralData::unify_without_cached_reduction(
-                    ctx_tys, neutral_0, neutral_1,
-                )?;
-
-                let (eq_ty, eq_tm_0, _eq_tm_1) = elim_ty.as_equal().unwrap();
-                let motive = Unify::unify(
-                    ctx_tys,
-                    (
-                        eq_ty.clone(),
-                        Scope::make(cmp::max(eq_ty.ctx_len(), eq_tm_0.ctx_len()), |eq_tm_1| (
-                            Ty::equal(eq_ty, eq_tm_0.clone(), eq_tm_1),
-                            Scope::constant(()),
-                        )),
-                    ),
-                    motive_0,
-                    motive_1,
-                )?;
-                let inhab = Unify::unify(
-                    ctx_tys,
-                    motive.clone().bind(eq_tm_0.clone()).bind(eq_tm_0.refl()),
-                    inhab_0,
-                    inhab_1,
-                )?;
-                let elim = Weaken::new(TmKind::Neutral { neutral });
-                Some(NeutralKind::Cong { elim, motive, inhab })
-            },
-            */
-
-            (
-                NeutralKind::Explode { elim: elim_0, motive: motive_0 },
-                NeutralKind::Explode { elim: elim_1, motive: motive_1 },
-            ) => {
-                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let neutral = NeutralData::unify_without_cached_reduction(
-                    ctx_tys, neutral_0, neutral_1,
-                )?;
+            NeutralKind::Explode { elim: elim_0, motive: motive_0 } => {
+                if motive_0.inner_ref().is_prop() {
+                    return Some(NeutralKind::Explode {
+                        elim: elim_0,
+                        motive: motive_0,
+                    });
+                }
+                let NeutralKind::Explode {
+                    elim: elim_1, motive: motive_1,
+                } = neutral_kind_1 else {
+                    return None;
+                };
 
                 let motive = Unify::unify(
                     ctx_tys,
@@ -958,39 +1565,57 @@ impl Unify for NeutralKind {
                     motive_0,
                     motive_1,
                 )?;
+
+                let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let neutral = NeutralData::unify_without_cached_reduction(
+                    ctx_tys, neutral_0, neutral_1,
+                )?;
+
                 let elim = Weaken::new(TmKind::Neutral { neutral });
                 Some(NeutralKind::Explode { elim, motive })
             },
 
-            (
-                NeutralKind::Case {
-                    elim: elim_0,
-                    motive: motive_0,
-                    lhs_inhab: lhs_inhab_0,
-                    rhs_inhab: rhs_inhab_0,
-                },
-                NeutralKind::Case {
+            NeutralKind::Case {
+                elim: elim_0,
+                motive: motive_0,
+                lhs_inhab: lhs_inhab_0,
+                rhs_inhab: rhs_inhab_0,
+            } => {
+                if motive_0.inner_ref().is_prop() {
+                    return Some(NeutralKind::Case {
+                        elim: elim_0,
+                        motive: motive_0,
+                        lhs_inhab: lhs_inhab_0,
+                        rhs_inhab: rhs_inhab_0,
+                    });
+                }
+
+                let NeutralKind::Case {
                     elim: elim_1,
                     motive: motive_1,
                     lhs_inhab: lhs_inhab_1,
                     rhs_inhab: rhs_inhab_1,
-                },
-            ) => {
+                } = neutral_kind_1 else {
+                    return None;
+                };
+
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
                 let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
                 let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
-                let neutral = NeutralData::unify_without_cached_reduction(
-                    ctx_tys, neutral_0, neutral_1,
-                )?;
-
                 let motive = Unify::unify(
                     ctx_tys,
                     (elim_ty.clone(), Scope::constant(())),
                     motive_0,
                     motive_1,
                 )?;
+
+                let neutral = NeutralData::unify_without_cached_reduction(
+                    ctx_tys, neutral_0, neutral_1,
+                )?;
+
                 let (_lhs_name, lhs_ty, rhs_ty) = elim_ty.as_sum().unwrap();
                 let lhs_inhab = Unify::unify(
                     ctx_tys,
@@ -1014,11 +1639,26 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab })
             },
 
-            (NeutralKind::ProjHead { elim: elim_0 }, NeutralKind::ProjHead { elim: elim_1 }) => {
+            NeutralKind::ProjHead { elim: elim_0 } => {
                 let neutral_0 = elim_0.as_neutral().unwrap();
+                let Some(elim_ty_0) = neutral_0.try_infer_ty(ctx_tys) else {
+                    let elim = TmKind::Neutral { neutral: neutral_0 };
+                    return Some(NeutralKind::ProjHead { elim });
+                };
+
+                let (_head_name, head_ty_0, _tail_ty_0) = elim_ty_0.clone().as_sigma().unwrap();
+                if head_ty_0.is_prop() {
+                    let elim = TmKind::Neutral { neutral: neutral_0 };
+                    return Some(NeutralKind::ProjHead { elim });
+                }
+
+                let NeutralKind::ProjHead { elim: elim_1 } = neutral_kind_1 else {
+                    return None;
+                };
+
                 let neutral_1 = elim_1.as_neutral().unwrap();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
+
                 let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
                     ctx_tys, neutral_0, neutral_1,
@@ -1028,10 +1668,24 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::ProjHead { elim })
             },
 
-            (NeutralKind::ProjTail { elim: elim_0 }, NeutralKind::ProjTail { elim: elim_1 }) => {
+            NeutralKind::ProjTail { elim: elim_0 } => {
                 let neutral_0 = elim_0.as_neutral().unwrap();
+                let Some(elim_ty_0) = neutral_0.try_infer_ty(ctx_tys) else {
+                    let elim = TmKind::Neutral { neutral: neutral_0 };
+                    return Some(NeutralKind::ProjTail { elim });
+                };
+
+                let (_head_name, _head_ty, tail_ty) = elim_ty_0.clone().as_sigma().unwrap();
+                if tail_ty.inner_ref().is_prop() {
+                    let elim = TmKind::Neutral { neutral: neutral_0 };
+                    return Some(NeutralKind::ProjTail { elim });
+                }
+
+                let NeutralKind::ProjTail { elim: elim_1 } = neutral_kind_1 else {
+                    return None;
+                };
+
                 let neutral_1 = elim_1.as_neutral().unwrap();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
                 let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
                 let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
                 let neutral = NeutralData::unify_without_cached_reduction(
@@ -1042,27 +1696,104 @@ impl Unify for NeutralKind {
                 Some(NeutralKind::ProjTail { elim })
             },
 
-            (
-                NeutralKind::App { elim: elim_0, arg_tm: arg_tm_0 },
-                NeutralKind::App { elim: elim_1, arg_tm: arg_tm_1 },
-            ) => {
+            NeutralKind::App { elim: elim_0, arg_tm: arg_tm_0 } => {
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let elim_ty_0 = neutral_0.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
-                let elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
-
-                let elim = TmKind::Neutral {
-                    neutral: NeutralData::unify_without_cached_reduction(ctx_tys, neutral_0, neutral_1)?,
+                let Some(elim_ty_0) = neutral_0.try_infer_ty(ctx_tys) else {
+                    return Some(NeutralKind::App {
+                        elim: Weaken::new(TmKind::Neutral {
+                            neutral: neutral_0,
+                        }),
+                        arg_tm: arg_tm_0,
+                    });
+                };
+                
+                let (_arg_name, arg_ty, res_ty) = elim_ty_0.clone().as_pi().unwrap();
+                if res_ty.bind(arg_tm_0.clone()).is_prop() {
+                    return Some(NeutralKind::App {
+                        elim: Weaken::new(TmKind::Neutral {
+                            neutral: neutral_0,
+                        }),
+                        arg_tm: arg_tm_0,
+                    });
+                }
+                
+                let NeutralKind::App { elim: elim_1, arg_tm: arg_tm_1 } = neutral_kind_1 else {
+                    return None;
                 };
 
-                let (_arg_name, arg_ty, _res_ty) = elim_ty.as_pi().unwrap();
+                let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
+                let elim_ty_1 = neutral_1.try_infer_ty(ctx_tys).unwrap();
+                let _elim_ty = Unify::unify(ctx_tys, (), elim_ty_0, elim_ty_1)?;
+
+                let elim = TmKind::Neutral {
+                    neutral: NeutralData::unify_without_cached_reduction(
+                        ctx_tys, neutral_0, neutral_1,
+                    )?,
+                };
+
                 let arg_tm = Unify::unify(ctx_tys, arg_ty, arg_tm_0, arg_tm_1)?;
                 let elim = Weaken::new(elim);
                 Some(NeutralKind::App { elim, arg_tm })
             },
 
-            _ => None,
+            NeutralKind::ObsEqual {
+                eq_ty: eq_ty_0,
+                eq_tm_0: eq_tm_0_0,
+                eq_tm_1: eq_tm_1_0,
+            } => {
+                let NeutralKind::ObsEqual {
+                    eq_ty: eq_ty_1,
+                    eq_tm_0: eq_tm_0_1,
+                    eq_tm_1: eq_tm_1_1,
+                } = neutral_kind_1 else {
+                    return None;
+                };
+
+                let eq_ty = Unify::unify(ctx_tys, (), eq_ty_0, eq_ty_1)?;
+
+                let (eq_tm_0, eq_tm_1) = match Unify::unify(
+                    ctx_tys, eq_ty.clone(), eq_tm_0_0.clone(), eq_tm_0_1.clone(),
+                ) {
+                    Some(eq_tm_0) => {
+                        let eq_tm_1 = Unify::unify(
+                            ctx_tys, eq_ty.clone(), eq_tm_1_0, eq_tm_1_1,
+                        )?;
+                        (eq_tm_0, eq_tm_1)
+                    },
+                    None => {
+                        let eq_tm_0 = Unify::unify(
+                            ctx_tys, eq_ty.clone(), eq_tm_0_0, eq_tm_1_1,
+                        )?;
+                        let eq_tm_1 = Unify::unify(
+                            ctx_tys, eq_ty.clone(), eq_tm_1_0, eq_tm_0_1,
+                        )?;
+                        (eq_tm_0, eq_tm_1)
+                    },
+                };
+
+                Some(NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 })
+            },
+
+            NeutralKind::Cast {
+                elim,
+                ty_0: ty_0_0,
+                ty_1: ty_1_0,
+                tm_0: tm_0_0,
+            } => {
+                let NeutralKind::Cast {
+                    elim: _,
+                    ty_0: ty_0_1,
+                    ty_1: ty_1_1,
+                    tm_0: tm_0_1,
+                } = neutral_kind_1 else {
+                    return None;
+                };
+
+                let ty_0 = Unify::unify(ctx_tys, (), ty_0_0, ty_0_1)?;
+                let ty_1 = Unify::unify(ctx_tys, (), ty_1_0, ty_1_1)?;
+                let tm_0 = Unify::unify(ctx_tys, ty_0.clone(), tm_0_0, tm_0_1)?;
+                Some(NeutralKind::Cast { elim, ty_0, ty_1, tm_0 })
+            },
         }
     }
 }
@@ -1070,6 +1801,10 @@ impl Unify for NeutralKind {
 impl Neutral {
     pub fn into_tm(self) -> Tm {
         self.map(|neutral| TmKind::Neutral { neutral })
+    }
+
+    pub fn into_ty(self) -> Ty {
+        self.map(|neutral| TyKind::Neutral { neutral })
     }
 
     pub fn var(index: usize) -> Neutral {
@@ -1082,12 +1817,6 @@ impl Neutral {
         let usages = Usages::single_var(index);
         Weaken::from_usages_and_weak(usages, VAR_0.clone())
     }
-
-    /*
-    pub fn tags_apart(elim: Tm) -> Neutral {
-        elim.map(|elim| NeutralData::new_arc(NeutralKind::TagsApart { elim }))
-    }
-    */
 
     pub fn fold(
         elim: Tm,
@@ -1154,11 +1883,31 @@ impl Neutral {
         Weaken::new_arc(NeutralData::new(NeutralKind::App { elim, arg_tm }))
     }
 
+    pub fn obs_equal(eq_ty: Ty, eq_tm_0: Tm, eq_tm_1: Tm) -> Neutral {
+        Weaken::new_arc(NeutralData::new(NeutralKind::ObsEqual {
+            eq_ty, eq_tm_0, eq_tm_1,
+        }))
+    }
+
+    pub fn cast(elim: Tm, ty_0: Ty, ty_1: Ty, tm_0: Tm) -> Neutral {
+        Weaken::new_arc(NeutralData::new(NeutralKind::Cast {
+            elim, ty_0, ty_1, tm_0,
+        }))
+    }
+
     pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
     ) -> Option<Ty> {
         self.clone().into_inner().try_infer_ty(ctx_tys)
+    }
+
+    pub fn collect_stuck_vars(&self, usages: &mut Usages) {
+        self.clone().into_inner().collect_stuck_vars(usages);
+    }
+
+    pub fn is_prop(&self) -> bool {
+        self.weak().is_prop()
     }
 
     pub fn deep_nf(self) -> Tm {
@@ -1239,13 +1988,6 @@ impl Substitutable for NeutralKind {
                 return subst.with_composed(pre_subst, |subst| body.subst(subst));
             },
 
-            /*
-            NeutralKind::TagsApart { elim } => {
-                let elim = elim.subst(subst).into_inner();
-                NeutralKind::TagsApart { elim }
-            },
-            */
-
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.subst(subst);
                 let motive = motive.capture_subst(subst.clone());
@@ -1299,6 +2041,21 @@ impl Substitutable for NeutralKind {
                 let arg_tm = arg_tm.capture_subst(subst.clone());
                 NeutralKind::App { elim, arg_tm }
             },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.subst(subst);
+                let eq_tm_0 = eq_tm_0.subst(subst);
+                let eq_tm_1 = eq_tm_1.subst(subst);
+                NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 }
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                let elim = elim.subst(subst);
+                let ty_0 = ty_0.subst(subst);
+                let ty_1 = ty_1.subst(subst);
+                let tm_0 = tm_0.capture_subst(subst.clone());
+                NeutralKind::Cast { elim, ty_0, ty_1, tm_0 }
+            },
         };
         neutral_kind.reduced()
     }
@@ -1319,13 +2076,6 @@ impl Substitutable for NeutralKind {
             },
 
             NeutralKind::Bind { .. } => unreachable!(),
-
-            /*
-            NeutralKind::TagsApart { elim } => {
-                let elim = elim.try_strengthen_index(var_index)?;
-                Some(elim.tags_apart())
-            },
-            */
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.try_strengthen_index(var_index)?;
@@ -1379,6 +2129,21 @@ impl Substitutable for NeutralKind {
                 let elim = elim.try_strengthen_index(var_index)?;
                 let arg_tm = arg_tm.try_strengthen_index(var_index)?;
                 Some(elim.app(arg_tm))
+            },
+
+            NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
+                let eq_ty = eq_ty.try_strengthen_index(var_index)?;
+                let eq_tm_0 = eq_tm_0.try_strengthen_index(var_index)?;
+                let eq_tm_1 = eq_tm_1.try_strengthen_index(var_index)?;
+                Some(Ty::obs_equal(eq_ty, eq_tm_0, eq_tm_1).into_tm())
+            },
+
+            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+                let elim = elim.try_strengthen_index(var_index)?;
+                let ty_0 = ty_0.try_strengthen_index(var_index)?;
+                let ty_1 = ty_1.try_strengthen_index(var_index)?;
+                let tm_0 = tm_0.try_strengthen_index(var_index)?;
+                Some(Neutral::cast(elim, ty_0, ty_1, tm_0).into_tm())
             },
         }
     }
