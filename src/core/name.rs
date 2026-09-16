@@ -85,8 +85,7 @@ impl Unify for NameKind {
             },
 
             (NameKind::Tag { tag: tag_0 }, NameKind::Neutral { neutral }) => {
-                let intro_1 = neutral.try_reduce_to_intro()?.into_inner();
-                let intro_1 = Arc::unwrap_or_clone(intro_1);
+                let intro_1 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let IntroKind::Tag { tag: tag_1 } = intro_1 else {
                     unreachable!();
                 };
@@ -95,8 +94,7 @@ impl Unify for NameKind {
             },
 
             (NameKind::Neutral { neutral }, NameKind::Tag { tag: tag_1 }) => {
-                let intro_0 = neutral.try_reduce_to_intro()?.into_inner();
-                let intro_0 = Arc::unwrap_or_clone(intro_0);
+                let intro_0 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let IntroKind::Tag { tag: tag_0 } = intro_0 else {
                     unreachable!();
                 };
@@ -104,7 +102,10 @@ impl Unify for NameKind {
                 Some(NameKind::Tag { tag })
             },
             
-            (NameKind::Neutral { neutral: neutral_0 }, NameKind::Neutral { neutral: neutral_1 }) => {
+            (
+                NameKind::Neutral { neutral: neutral_0 },
+                NameKind::Neutral { neutral: neutral_1 },
+            ) => {
                 if Arc::ptr_eq(&neutral_0, &neutral_1) {
                     return Some(NameKind::Neutral { neutral: neutral_0 });
                 }
@@ -127,6 +128,7 @@ impl Unify for NameKind {
                                 )?;
                                 Some(NameKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), None) => {
@@ -140,6 +142,7 @@ impl Unify for NameKind {
                                 )?;
                                 Some(NameKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {

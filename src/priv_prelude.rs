@@ -1,8 +1,8 @@
 pub(crate) use {
     std::{
         cmp, iter, fmt, mem,
-        collections::{btree_map, BTreeMap},
-        sync::{Arc, OnceLock},
+        collections::{btree_map, hash_map, BTreeMap, HashMap},
+        sync::{Arc, OnceLock, RwLock},
     },
     lazy_static::lazy_static,
     ubig::Ubig,

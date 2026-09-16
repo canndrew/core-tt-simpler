@@ -44,7 +44,7 @@ impl Check for ast::PrecStmt {
                 let_stmt.check(ch)
             },
             ast::PrecStmt::Blank(_) => {
-                Checked::pure((Ty::unit(), Tm::unit()))
+                Checked::pure((Ty::unit(), Tm::proof()))
             },
             ast::PrecStmt::Other(prec_func) => {
                 prec_func.check(ch)
@@ -502,7 +502,7 @@ impl Check for Spanned<ast::ExprRefl> {
         })
         .map(ch, |_, _, (eq_ty, eq_tm)| {
             let ty = Ty::obs_equal(eq_ty, eq_tm.clone(), eq_tm.clone());
-            (ty, eq_tm.obs_refl())
+            (ty, Tm::proof())
         })
     }
 }
@@ -800,7 +800,7 @@ impl Check for Spanned<ast::ExprStructTerm> {
             match fields.split_first() {
                 None => {
                     match tail_opt {
-                        None => Checked::pure((Ty::unit(), Tm::unit())),
+                        None => Checked::pure((Ty::unit(), Tm::proof())),
                         Some(tail) => {
                             tail.check(ch)
                         },
@@ -836,10 +836,9 @@ impl Check for Spanned<ast::ExprStructTerm> {
                                         tail_ty.clone().bind(head_tm.clone()).into_tm(),
                                     ),
                                 )
-                                .map(ch, |_, _, tail_tys_eq| {
+                                .map(ch, |_, _, _| {
                                     let tail_tm = {
-                                        tail_tys_eq
-                                        .cast(
+                                        Tm::cast(
                                             bound_tail_ty.clone(),
                                             tail_ty.clone().bind(head_tm.clone()),
                                             tail_tm,
@@ -1381,9 +1380,9 @@ fn check_pat_struct_term(
                                     sigma_ty.clone().into_tm(),
                                 ),
                             )
-                            .map(ch, |ch, _, tys_eq| {
+                            .map(ch, |ch, _, _| {
                                 ch.with_anon_var(var_ty.clone(), |ch, tm| {
-                                    let pair = tys_eq.cast(var_ty.clone(), sigma_ty.clone(), tm);
+                                    let pair = Tm::cast(var_ty.clone(), sigma_ty.clone(), tm);
                                     let head_tm = pair.clone().proj_head();
                                     let tail_tm = pair.proj_tail();
 
@@ -1459,7 +1458,7 @@ fn check_match_branches(
                     Ty::never().into_tm(),
                 ),
             )
-            .and_then(ch, |ch, _, tys_eq| {
+            .and_then(ch, |ch, _, _| {
                 Checked::assume(
                     MetaTag::MatchRhsBranchMotive {
                         branches_span: branches_span.clone(),
@@ -1472,15 +1471,12 @@ fn check_match_branches(
                 )
                 .map(ch, |ch, _, motive| {
                     Scope::make(ch.ctx_len(), |tm| {
-                        let never = {
-                            tys_eq
-                            .cast(
-                                var_ty,
-                                Ty::never(),
-                                tm,
-                            )
-                        };
-                        let tm = never.clone().explode(
+                        let never = Tm::cast(
+                            var_ty,
+                            Ty::never(),
+                            tm,
+                        );
+                        let tm = Tm::explode(
                             Scope::make(ch.ctx_len() + 1, |never| {
                                 motive.clone().app(never).into_ty()
                             }),
@@ -1527,7 +1523,7 @@ fn check_match_branches(
                                 sum_ty.clone().into_tm(),
                             ),
                         )
-                        .and_then(ch, |ch, _, tys_eq| {
+                        .and_then(ch, |ch, _, _| {
                             Checked::assume(
                                 MetaTag::MatchLhsBranchMotive {
                                     branch_span: branch.span(),
@@ -1604,13 +1600,11 @@ fn check_match_branches(
                                                 })
                                             )
                                         )
-                                        .and_then(ch, |ch, _, lhs_inhab_tys_eq| {
+                                        .and_then(ch, |ch, _, _| {
                                             let lhs_inhab = Scope::make(
                                                 ch.ctx_len(),
                                                 |lhs| {
-                                                    lhs_inhab_tys_eq
-                                                    .app(lhs.clone())
-                                                    .cast(
+                                                    Tm::cast(
                                                         lhs_inhab_ty.clone().bind(lhs.clone()),
                                                         motive
                                                         .clone()
@@ -1639,13 +1633,11 @@ fn check_match_branches(
                                                     })
                                                 )
                                             )
-                                            .map(ch, |ch, _, rhs_inhab_tys_eq| {
+                                            .map(ch, |ch, _, _| {
                                                 let rhs_inhab = Scope::make(
                                                     ch.ctx_len(),
                                                     |rhs| {
-                                                        rhs_inhab_tys_eq
-                                                        .app(rhs.clone())
-                                                        .cast(
+                                                        Tm::cast(
                                                             rhs_inhab_ty.clone().bind(rhs.clone()),
                                                             motive
                                                             .clone()
@@ -1656,7 +1648,7 @@ fn check_match_branches(
                                                     },
                                                 );
                                                 Scope::make(ch.ctx_len(), |tm| {
-                                                    let sum = tys_eq.cast(var_ty, sum_ty, tm);
+                                                    let sum = Tm::cast(var_ty, sum_ty, tm);
 
                                                     let ty = {
                                                         motive
@@ -1700,8 +1692,8 @@ fn lookup_var(ch: &mut CheckCtx, span: Span, var_name: Name) -> Checked<(Ty, Tm)
                     MetaTag::UnresolvedVariable { span: span.clone() },
                     Ty::never(),
                 )
-                .map(ch, |_, _, never| {
-                    let tm = never.explode(Scope::constant(var_ty.clone()));
+                .map(ch, |_, _, _| {
+                    let tm = Tm::explode(Scope::constant(var_ty.clone()));
                     (var_ty, tm)
                 })
             })
@@ -1950,10 +1942,8 @@ fn implicit_tail_projections_ty(
                             let projection = projection.proj_tail();
                             let head_ty = projection.clone().proj_head();
                             let projection = projection.proj_tail();
-                            let tail_ty = projection.clone().proj_head();
-                            let projection = projection.proj_tail();
-                            let base_ty_eq = projection.proj_head();
-                            let pair = base_ty_eq.cast(
+                            let tail_ty = projection.proj_head();
+                            let pair = Tm::cast(
                                 base_ty.into_ty(),
                                 Ty::sigma(
                                     head_name.into_name(),
@@ -2038,11 +2028,9 @@ fn apply_implicit_tail_projections_to_ty(
                         let projection = projection.proj_tail();
                         let head_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
-                        let tail_ty = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let base_ty_eq = projection.proj_head();
+                        let tail_ty = projection.proj_head();
 
-                        let pair = base_ty_eq.cast(
+                        let pair = Tm::cast(
                             base_ty.into_ty(),
                             Ty::sigma(
                                 head_name.into_name(),
@@ -2135,11 +2123,9 @@ fn apply_implicit_tail_projections_to_tm(
                         let projection = projection.proj_tail();
                         let head_ty = projection.clone().proj_head();
                         let projection = projection.proj_tail();
-                        let tail_ty = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let base_ty_eq = projection.proj_head();
+                        let tail_ty = projection.proj_head();
 
-                        let pair = base_ty_eq.cast(
+                        let pair = Tm::cast(
                             base_ty.into_ty(),
                             Ty::sigma(
                                 head_name.into_name(),

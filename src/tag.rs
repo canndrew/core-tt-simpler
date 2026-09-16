@@ -379,7 +379,29 @@ pub enum MetaTag {
 
 impl From<&str> for Tag {
     fn from(s: &str) -> Tag {
-        Tag::from(Arc::from(s))
+        lazy_static! {
+            static ref TAG_LITERAL_INTERNER: RwLock<HashMap<Arc<str>, ()>> = {
+                RwLock::new(HashMap::new())
+            };
+        }
+
+        let s: Arc<str> = {
+            let interner = TAG_LITERAL_INTERNER.read().unwrap();
+            match interner.get_key_value(s) {
+                Some((s, ())) => s.clone(),
+                None => {
+                    drop(interner);
+                    let mut interner = TAG_LITERAL_INTERNER.write().unwrap();
+                    let entry = match interner.entry(Arc::from(s)) {
+                        hash_map::Entry::Occupied(entry) => entry,
+                        hash_map::Entry::Vacant(entry) => entry.insert_entry(()),
+                    };
+                    entry.key().clone()
+                },
+            }
+        };
+
+        Tag::from(s)
     }
 }
 

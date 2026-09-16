@@ -96,7 +96,7 @@ impl<T> Checked<T> {
         let mut outer_parts = Vec::new();
         let mut outer = outer_constraint_ty;
         loop {
-            match Arc::unwrap_or_clone(outer.try_reduce_to_form().unwrap().into_inner()) {
+            match outer.try_reduce_to_form().unwrap().into_inner_arc() {
                 FormKind::Unit => break,
                 FormKind::Sigma { head_name, head_ty, tail_ty } => {
                     outer = tail_ty.into_inner(ctx_len + outer_parts.len());
@@ -108,7 +108,7 @@ impl<T> Checked<T> {
         let num_outer_parts = outer_parts.len();
 
         let constraint_ty = {
-            let mut outer_constraint = Tm::unit();
+            let mut outer_constraint = Tm::proof();
             for offset in (0..num_outer_parts).rev() {
                 outer_constraint = Tm::pair(Tm::var(ctx_len + offset), outer_constraint);
             }
@@ -122,7 +122,7 @@ impl<T> Checked<T> {
         };
 
         let scope = {
-            let mut outer_constraint = Tm::unit();
+            let mut outer_constraint = Tm::proof();
             for offset in (0..num_outer_parts).rev() {
                 let head_tm = {
                     let mut head_tm = Tm::var(ctx_len);
@@ -208,8 +208,8 @@ impl Checked<(Ty, Tm)> {
             meta,
             Ty::obs_equal(Ty::universe(), from_ty.clone().into_tm(), into_ty.clone().into_tm()),
         )
-        .map(ch, |_, _, tys_eq| {
-            tys_eq.cast(from_ty, into_ty, tm)
+        .map(ch, |_, _, _| {
+            Tm::cast(from_ty, into_ty, tm)
         })
     }
 

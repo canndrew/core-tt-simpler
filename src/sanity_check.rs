@@ -51,170 +51,6 @@ impl SanityCheck for IntroKind {
                 pred_tm.sanity_check(ctx, ty);
             },
 
-            IntroKind::ObsRefl { eq_tm } => {
-                match Weaken::new(eq_tm).reduced().into_inner() {
-                    TmKind::Intro { intro } => {
-                        match Arc::unwrap_or_clone(intro) {
-                            | IntroKind::Tag { .. }
-                            | IntroKind::Constant { .. }
-                            | IntroKind::ObsRefl { .. }
-                            | IntroKind::CastRefl { .. }
-                            | IntroKind::Unit { .. }
-                            => {
-                                let () = ty.as_unit().unwrap();
-                            },
-
-                            IntroKind::Succs { succ_count_m1: _, pred_tm } => {
-                                let pred_tm = Weaken::new(TmKind::Neutral {
-                                    neutral: pred_tm,
-                                });
-                                pred_tm.obs_refl().sanity_check(ctx, ty);
-                            },
-
-                            IntroKind::ObsCong { elim: _, motive: _, inhab: _ } => {
-                                // TODO
-                            },
-
-                            IntroKind::InjLhs { lhs_tm } => {
-                                Weaken::new(lhs_tm).obs_refl().sanity_check(ctx, ty);
-                            },
-
-                            IntroKind::InjRhs { rhs_tm } => {
-                                Weaken::new(rhs_tm).obs_refl().sanity_check(ctx, ty);
-                            },
-
-                            IntroKind::Pair { head_tm, tail_tm } => {
-                                let (_head_name, head_eq_ty, tail_eq_ty) = ty.as_sigma().unwrap();
-
-                                let head_tm_eq = head_tm.obs_refl();
-                                head_tm_eq.clone().sanity_check(ctx, head_eq_ty);
-                                tail_tm.obs_refl().sanity_check(ctx, tail_eq_ty.bind(head_tm_eq));
-                            },
-
-                            IntroKind::Func { res_tm } => {
-                                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
-
-                                res_tm
-                                .map_without_capture(|res_tm| Weaken::new(res_tm).obs_refl())
-                                .sanity_check(ctx, (arg_ty, res_ty));
-                            },
-
-                            IntroKind::Form { form } => {
-                                match Arc::unwrap_or_clone(form) {
-                                    | FormKind::Name
-                                    | FormKind::Universe
-                                    | FormKind::Nat
-                                    | FormKind::Never
-                                    | FormKind::Unit
-                                    => {
-                                        let () = ty.as_unit().unwrap();
-                                    },
-
-                                    FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
-                                        let (_, lhs_name_eq_ty, ty) = {
-                                            ty.as_sigma().unwrap()
-                                        };
-                                        let (_, lhs_ty_eq_ty, ty) = {
-                                            ty.try_strengthen().unwrap().as_sigma().unwrap()
-                                        };
-                                        let (_, rhs_ty_eq_ty, ty) = {
-                                            ty.try_strengthen().unwrap().as_sigma().unwrap()
-                                        };
-                                        let () = ty.try_strengthen().unwrap().as_unit().unwrap();
-
-                                        lhs_name.into_tm().obs_refl().sanity_check(
-                                            ctx, lhs_name_eq_ty,
-                                        );
-                                        lhs_ty.into_tm().obs_refl().sanity_check(
-                                            ctx, lhs_ty_eq_ty,
-                                        );
-                                        rhs_ty.into_tm().obs_refl().sanity_check(
-                                            ctx, rhs_ty_eq_ty,
-                                        );
-                                    },
-
-                                    FormKind::Sigma { head_name, head_ty, tail_ty } => {
-                                        let (_, head_name_eq_ty, ty) = {
-                                            ty.as_sigma().unwrap()
-                                        };
-                                        head_name.into_tm().obs_refl().sanity_check(
-                                            ctx, head_name_eq_ty,
-                                        );
-
-                                        let (_, head_ty_eq_ty, ty) = {
-                                            ty.try_strengthen().unwrap().as_sigma().unwrap()
-                                        };
-                                        head_ty.clone().into_tm().obs_refl().sanity_check(
-                                            ctx, head_ty_eq_ty,
-                                        );
-
-                                        let (_, tail_ty_eq_ty, ty) = {
-                                            ty.into_inner(ctx.len()).as_sigma().unwrap()
-                                        };
-                                        let head_tm = Tm::var(ctx.len());
-                                        ctx.push(head_ty);
-
-                                        tail_ty
-                                        .bind(head_tm)
-                                        .into_tm()
-                                        .obs_refl()
-                                        .sanity_check(ctx, tail_ty_eq_ty);
-
-                                        let () = ty.try_strengthen().unwrap().as_unit().unwrap();
-                                        ctx.pop();
-                                    },
-
-                                    FormKind::Pi { arg_name, arg_ty, res_ty } => {
-                                        let (_, arg_name_eq_ty, ty) = {
-                                            ty.as_sigma().unwrap()
-                                        };
-                                        arg_name.into_tm().obs_refl().sanity_check(
-                                            ctx, arg_name_eq_ty,
-                                        );
-
-                                        let (_, arg_ty_eq_ty, ty) = {
-                                            ty.try_strengthen().unwrap().as_sigma().unwrap()
-                                        };
-                                        arg_ty.clone().into_tm().obs_refl().sanity_check(
-                                            ctx, arg_ty_eq_ty,
-                                        );
-
-                                        let (_, res_ty_eq_ty, ty) = {
-                                            ty.into_inner(ctx.len()).as_sigma().unwrap()
-                                        };
-                                        let arg_tm = Tm::var(ctx.len());
-                                        ctx.push(arg_ty);
-
-                                        res_ty
-                                        .bind(arg_tm)
-                                        .into_tm()
-                                        .obs_refl()
-                                        .sanity_check(ctx, res_ty_eq_ty);
-
-                                        let () = ty.try_strengthen().unwrap().as_unit().unwrap();
-                                        ctx.pop();
-                                    },
-                                }
-                            },
-                        }
-                    },
-                    TmKind::Neutral { neutral: _ } => {
-                        // TODO
-                    },
-                }
-            },
-
-            IntroKind::ObsCong { .. } => {
-                // TODO
-            },
-
-            IntroKind::CastRefl => {
-                // TODO
-            },
-
-            IntroKind::Unit => {
-                let () = ty.as_unit().unwrap();
-            },
             IntroKind::InjLhs { lhs_tm } => {
                 let (_lhs_name, lhs_ty, _rhs_ty) = ty.as_sum().unwrap();
                 lhs_tm.sanity_check(ctx, lhs_ty);
@@ -309,50 +145,10 @@ impl SanityCheck for NeutralKind {
                 Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
             },
 
-            /*
-            NeutralKind::UniqueIdentity { elim, motive, inhab } => {
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
-                    let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.clone().as_equal().unwrap();
-                    let eq_tm = Unify::unify(ctx, eq_ty, eq_tm_0, eq_tm_1).unwrap();
-                    elim.clone().sanity_check(ctx, elim_ty.clone());
-                    motive.clone().sanity_check(ctx, (elim_ty, Scope::constant(())));
-                    inhab.sanity_check(ctx, motive.clone().bind(eq_tm.refl()));
-                }
-                Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
-            },
-
-            NeutralKind::Cong { elim, motive, inhab } => {
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
-                    let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.clone().as_equal().unwrap();
-                    elim.clone().sanity_check(ctx, elim_ty.clone());
-                    motive.clone().sanity_check(
-                        ctx,
-                        (
-                            eq_ty.clone(),
-                            Scope::make(ctx.len(), |eq_tm_1| {
-                                (
-                                    Ty::equal(eq_ty, eq_tm_0.clone(), eq_tm_1),
-                                    Scope::constant(()),
-                                )
-                            }),
-                        )
-                    );
-                    inhab.sanity_check(
-                        ctx, motive.clone().bind(eq_tm_0.clone()).bind(eq_tm_0.refl()),
-                    );
-                    Unify::unify(ctx, (), motive.bind(eq_tm_1).bind(elim), ty).unwrap();
-                }
-            },
-            */
-
-            NeutralKind::Explode { elim, motive } => {
-                elim.clone().sanity_check(ctx, Ty::never());
+            NeutralKind::Explode { motive } => {
+                let motive = Weaken::new(motive).lift_scope();
                 motive.clone().sanity_check(ctx, (Ty::never(), Scope::constant(())));
-                Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
+                Unify::unify(ctx, (), motive.bind(Tm::proof()), ty).unwrap();
             },
 
             NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
@@ -381,38 +177,86 @@ impl SanityCheck for NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
-                    let (_head_name, head_ty, _tail_ty) = elim_ty.clone().as_sigma().unwrap();
-                    elim.sanity_check(ctx, elim_ty);
-                    Unify::unify(ctx, (), head_ty, ty).unwrap();
+                match elim {
+                    TmKind::Intro { intro } => {
+                        let IntroKind::Pair {
+                            head_tm, tail_tm: _,
+                        } = Arc::unwrap_or_clone(intro) else {
+                            unreachable!();
+                        };
+                        head_tm.sanity_check(ctx, ty);
+                    },
+                    TmKind::Neutral { neutral } => {
+                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                            let (_head_name, head_ty, _tail_ty) = {
+                                elim_ty
+                                .clone()
+                                .as_sigma()
+                                .unwrap()
+                            };
+                            neutral.sanity_check(ctx, elim_ty);
+                            Unify::unify(ctx, (), head_ty, ty).unwrap();
+                        }
+                    },
+                    TmKind::Proof => {
+                        assert!(ty.is_prop());
+                    },
                 }
             },
 
             NeutralKind::ProjTail { elim } => {
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
-                    let (_head_name, _head_ty, tail_ty) = elim_ty.clone().as_sigma().unwrap();
-                    elim.clone().sanity_check(ctx, elim_ty);
-                    Unify::unify(
-                        ctx,
-                        (),
-                        tail_ty.bind(Weaken::new(elim).proj_head()),
-                        ty,
-                    ).unwrap();
+                match elim {
+                    TmKind::Intro { intro } => {
+                        let IntroKind::Pair {
+                            head_tm: _, tail_tm,
+                        } = Arc::unwrap_or_clone(intro) else {
+                            unreachable!();
+                        };
+                        tail_tm.sanity_check(ctx, ty);
+                    },
+                    TmKind::Neutral { neutral } => {
+                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                            let (_head_name, _head_ty, tail_ty) = {
+                                elim_ty
+                                .clone()
+                                .as_sigma()
+                                .unwrap()
+                            };
+                            neutral.clone().sanity_check(ctx, elim_ty);
+                            let head_tm = Weaken::new(TmKind::Neutral { neutral }).proj_head();
+                            Unify::unify(
+                                ctx,
+                                (),
+                                tail_ty.bind(head_tm),
+                                ty,
+                            ).unwrap();
+                        }
+                    },
+                    TmKind::Proof => {
+                        assert!(ty.is_prop());
+                    },
                 }
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
-                    let (_arg_name, arg_ty, res_ty) = elim_ty.clone().as_pi().unwrap();
-                    elim.sanity_check(ctx, elim_ty);
-                    arg_tm.clone().sanity_check(ctx, arg_ty);
-                    Unify::unify(ctx, (), res_ty.bind(arg_tm), ty).unwrap();
+                match elim.clone().into_inner() {
+                    TmKind::Intro { intro } => {
+                        match Arc::unwrap_or_clone(intro) {
+                            IntroKind::Func { .. } => (),
+                            _ => unreachable!(),
+                        }
+                    },
+                    TmKind::Neutral { neutral } => {
+                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                            let (_arg_name, arg_ty, res_ty) = elim_ty.clone().as_pi().unwrap();
+                            elim.sanity_check(ctx, elim_ty);
+                            arg_tm.clone().sanity_check(ctx, arg_ty);
+                            Unify::unify(ctx, (), res_ty.bind(arg_tm), ty).unwrap();
+                        }
+                    },
+                    TmKind::Proof => {
+                        assert!(ty.is_prop());
+                    },
                 }
             },
 
@@ -422,13 +266,10 @@ impl SanityCheck for NeutralKind {
                 eq_tm_1.sanity_check(ctx, eq_ty);
             },
 
-            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
+            NeutralKind::Cast { ty_0, ty_1, tm_0 } => {
                 ty_0.clone().sanity_check(ctx, ());
                 ty_1.clone().sanity_check(ctx, ());
                 tm_0.sanity_check(ctx, ty_0.clone());
-                elim.sanity_check(
-                    ctx, Ty::obs_equal(Ty::universe(), ty_0.into_tm(), ty_1.into_tm()),
-                );
             },
         }
     }
@@ -452,6 +293,9 @@ impl SanityCheck for TmKind {
         match self {
             TmKind::Intro { intro } => intro.sanity_check(ctx, ty),
             TmKind::Neutral { neutral } => neutral.sanity_check(ctx, ty),
+            TmKind::Proof => {
+                assert!(ty.is_prop());
+            },
         }
     }
 }

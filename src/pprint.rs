@@ -270,25 +270,6 @@ impl Pretty<()> for IntroKind {
                 voom!(ctx, indent, s, succs(Fmt(&succ_count_m1), pred_tm.clone()));
             },
 
-            IntroKind::ObsRefl { eq_tm } => {
-                voom!(ctx, indent, s, refl(eq_tm));
-            },
-
-            IntroKind::ObsCong { elim, motive, inhab } => {
-                voom!(ctx, indent, s, cong(
-                    elim,
-                    Scoped((((), None, None), None, None), motive.clone()),
-                    inhab,
-                ));
-            },
-
-            IntroKind::CastRefl => {
-                voom!(ctx, indent, s, cast_refl());
-            },
-
-            IntroKind::Unit => {
-                voom!(ctx, indent, s, unit());
-            },
             IntroKind::InjLhs { lhs_tm } => {
                 voom!(ctx, indent, s, inj_lhs(lhs_tm));
             },
@@ -308,8 +289,6 @@ impl Pretty<()> for IntroKind {
         match self {
             | IntroKind::Tag { .. }
             | IntroKind::Constant { .. }
-            | IntroKind::Unit
-            | IntroKind::CastRefl
             => true,
 
             IntroKind::Form { form } => {
@@ -317,8 +296,6 @@ impl Pretty<()> for IntroKind {
             },
 
             | IntroKind::Succs { .. }
-            | IntroKind::ObsRefl { .. }
-            | IntroKind::ObsCong { .. }
             | IntroKind::InjLhs { .. }
             | IntroKind::InjRhs { .. }
             | IntroKind::Pair { .. }
@@ -394,26 +371,8 @@ impl Pretty<()> for NeutralKind {
                 ));
             },
 
-            /*
-            NeutralKind::UniqueIdentity { elim, motive, inhab } => {
-                voom!(ctx, indent, s, unique_identity(
-                    elim,
-                    Scoped(((), None, None), motive.clone()),
-                    inhab,
-                ));
-            },
-            NeutralKind::Cong { elim, motive, inhab } => {
-                voom!(ctx, indent, s, cong(
-                    elim,
-                    Scoped((((), None, None), None, None), motive.clone()),
-                    inhab,
-                ));
-            },
-            */
-
-            NeutralKind::Explode { elim, motive } => {
+            NeutralKind::Explode { motive } => {
                 voom!(ctx, indent, s, explode(
-                    elim,
                     Scoped(((), None, Some(Ty::never())), motive.clone()),
                 ));
             },
@@ -438,8 +397,8 @@ impl Pretty<()> for NeutralKind {
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
                 voom!(ctx, indent, s, ObsEqual(eq_ty, eq_tm_0, eq_tm_1));
             },
-            NeutralKind::Cast { elim, ty_0, ty_1, tm_0 } => {
-                voom!(ctx, indent, s, cast(elim, ty_0, ty_1, tm_0));
+            NeutralKind::Cast { ty_0, ty_1, tm_0 } => {
+                voom!(ctx, indent, s, cast(ty_0, ty_1, tm_0));
             },
         }
     }
@@ -450,10 +409,6 @@ impl Pretty<()> for NeutralKind {
 
             | NeutralKind::Bind { .. }
             | NeutralKind::Fold { .. }
-            /*
-            | NeutralKind::UniqueIdentity { .. }
-            | NeutralKind::Cong { .. }
-            */
             | NeutralKind::Explode { .. }
             | NeutralKind::Case { .. }
             | NeutralKind::ProjHead { .. }
@@ -561,6 +516,7 @@ impl Pretty<()> for TmKind {
             TmKind::Neutral { neutral } => {
                 neutral.pretty(ctx, indent, s, ());
             },
+            TmKind::Proof => s.push('_'),
         }
     }
 
@@ -572,6 +528,7 @@ impl Pretty<()> for TmKind {
             TmKind::Neutral { neutral } => {
                 neutral.is_shallow()
             },
+            TmKind::Proof => true,
         }
     }
 }

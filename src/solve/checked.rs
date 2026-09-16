@@ -51,7 +51,7 @@ impl<T> Checked<T> {
 
         let simplification = match result {
             Ok(simplification) => simplification,
-            Err(Uninhabited { tags, proof: _ }) => {
+            Err(Uninhabited { tags }) => {
                 let ctx = ctx.into_iter().map(|(name, ty)| (Some(name), Some(ty))).collect();
                 let kind = SolveErrorKind::Uninhabited { tags };
                 return Err(SolveError { ctx, kind });
@@ -68,7 +68,7 @@ impl<T> Checked<T> {
             return Err(SolveError { ctx, kind });
         };
 
-        let body = scope.bind(iso.rev.bind(Tm::unit()));
+        let body = scope.bind(iso.rev.bind(Tm::proof()));
         Ok(body)
     }
 }

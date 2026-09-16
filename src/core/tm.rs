@@ -10,6 +10,7 @@ pub enum TmKind {
     Neutral {
         neutral: Arc<NeutralData>,
     },
+    Proof,
 }
 
 impl Bindable for Tm {
@@ -59,6 +60,7 @@ impl Substitutable for TmKind {
             TmKind::Neutral { neutral } => {
                 neutral.subst(subst)
             },
+            TmKind::Proof => Tm::proof(),
         }
     }
 
@@ -74,6 +76,7 @@ impl Substitutable for TmKind {
             TmKind::Neutral { neutral } => {
                 neutral.try_strengthen_index(var_index)
             },
+            TmKind::Proof => Some(Tm::proof()),
         }
     }
 }
@@ -88,19 +91,21 @@ impl Tm {
                     Some(new_tm) => new_tm.unfiltered(self.usages()),
                 }
             },
+            TmKind::Proof => self,
         }
     }
 
-    pub fn try_reduce_to_intro(self) -> Option<Intro> {
+    pub fn try_reduce_to_intro_assuming_relevant(self) -> Option<Intro> {
         let (usages, tm_kind) = self.into_usages_and_weak();
         match tm_kind {
             TmKind::Intro { intro } => {
                 Some(Weaken::from_usages_and_weak(usages, intro))
             },
             TmKind::Neutral { neutral } => {
-                let intro = neutral.try_reduce_to_intro()?;
+                let intro = neutral.try_reduce_to_intro_assuming_relevant()?;
                 Some(intro.unfiltered(&usages))
             },
+            TmKind::Proof => unreachable!(),
         }
     }
 
@@ -158,6 +163,7 @@ impl Tm {
             TmKind::Neutral { neutral: pred_tm } => {
                 IntroKind::Succs { succ_count_m1, pred_tm }
             },
+            TmKind::Proof => unreachable!(),
         };
         let tm_kind = TmKind::Intro { intro: Arc::new(intro_kind) };
         Weaken::from_usages_and_weak(usages, tm_kind)
@@ -191,14 +197,9 @@ impl Tm {
     */
 
     pub fn explode(
-        self,
         motive: Scope<Ty>,
     ) -> Tm {
-        Neutral::explode(self, motive).into_tm()
-    }
-
-    pub fn unit() -> Tm {
-        Intro::unit().into_tm()
+        Neutral::explode(motive).into_tm()
     }
 
     pub fn inj_lhs(self) -> Tm {
@@ -238,24 +239,12 @@ impl Tm {
         Neutral::app(self, arg_tm).into_tm()
     }
 
-    pub fn obs_refl(self) -> Tm {
-        Intro::obs_refl(self).into_tm()
+    pub fn cast(ty_0: Ty, ty_1: Ty, tm_0: Tm) -> Tm {
+        Neutral::cast(ty_0, ty_1, tm_0).into_tm()
     }
 
-    pub fn obs_cong(
-        self,
-        motive: Scope<Scope<Ty>>,
-        inhab: Tm,
-    ) -> Tm {
-        Intro::obs_cong(self, motive, inhab).into_tm()
-    }
-
-    pub fn cast_refl() -> Tm {
-        Intro::cast_refl().into_tm()
-    }
-
-    pub fn cast(self, ty_0: Ty, ty_1: Ty, tm_0: Tm) -> Tm {
-        Neutral::cast(self, ty_0, ty_1, tm_0).into_tm()
+    pub fn proof() -> Tm {
+        Weaken::new(TmKind::Proof)
     }
 
     pub fn as_var(&self) -> Option<usize> {
@@ -265,12 +254,17 @@ impl Tm {
                 let index = neutral.as_var()?;
                 Some(self.usages().unfilter_index(index))
             },
+            TmKind::Proof => None,
         }
     }
 
     pub fn as_tag(self) -> Option<Tag> {
-        let intro = self.try_reduce_to_intro()?;
-        intro.as_tag()
+        let (_usages, tm) = self.into_usages_and_weak();
+        match tm {
+            TmKind::Intro { intro } => Arc::unwrap_or_clone(intro).as_tag(),
+            TmKind::Neutral { .. } => None,
+            TmKind::Proof => None,
+        }
     }
 
     pub fn as_intro(self) -> Option<Intro> {
@@ -291,18 +285,23 @@ impl Unify for TmKind {
         tm_kind_0: TmKind,
         tm_kind_1: TmKind,
     ) -> Option<TmKind> {
+        // TODO: do I still need to do this now that I have TmKind::Proof? Or can we rely on these
+        // unifying by always succeeding if one side is Proof?
         if ty.is_prop() {
-            return Some(tm_kind_0);
+            return Some(TmKind::Proof);
         }
 
         match (tm_kind_0, tm_kind_1) {
+            (TmKind::Proof, _) |
+            (_, TmKind::Proof) => unreachable!(),
+
             (TmKind::Intro { intro: intro_0 }, TmKind::Intro { intro: intro_1 }) => {
                 let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
                 Some(TmKind::Intro { intro })
             },
 
             (TmKind::Intro { intro: intro_0 }, TmKind::Neutral { neutral }) => {
-                match neutral.try_reduce_to_intro() {
+                match neutral.try_reduce_to_intro_assuming_relevant() {
                     Some(intro_1) => {
                         let intro_1 = intro_1.into_inner();
                         let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
@@ -312,9 +311,6 @@ impl Unify for TmKind {
                         let tm_kind_1 = TmKind::Neutral { neutral };
                         let intro_0 = Arc::unwrap_or_clone(intro_0);
                         match intro_0 {
-                            IntroKind::Unit => {
-                                Some(tm_kind_1)
-                            },
                             IntroKind::Pair { head_tm: head_tm_0, tail_tm: tail_tm_0 } => {
                                 let tm_1 = Weaken::new(tm_kind_1.clone());
                                 let head_tm_1 = tm_1.clone().proj_head();
@@ -346,7 +342,7 @@ impl Unify for TmKind {
             },
 
             (TmKind::Neutral { neutral }, TmKind::Intro { intro: intro_1 }) => {
-                match neutral.try_reduce_to_intro() {
+                match neutral.try_reduce_to_intro_assuming_relevant() {
                     Some(intro_0) => {
                         let intro_0 = intro_0.into_inner();
                         let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
@@ -356,9 +352,6 @@ impl Unify for TmKind {
                         let tm_kind_0 = TmKind::Neutral { neutral };
                         let intro_1 = Arc::unwrap_or_clone(intro_1);
                         match intro_1 {
-                            IntroKind::Unit => {
-                                Some(tm_kind_0)
-                            },
                             IntroKind::Pair { head_tm: head_tm_1, tail_tm: tail_tm_1 } => {
                                 let tm_0 = Weaken::new(tm_kind_0.clone());
                                 let head_tm_0 = tm_0.clone().proj_head();
@@ -410,6 +403,7 @@ impl Unify for TmKind {
                                 )?;
                                 Some(TmKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), None) => {
@@ -423,6 +417,7 @@ impl Unify for TmKind {
                                 )?;
                                 Some(TmKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {
@@ -448,6 +443,7 @@ impl TmKind {
             TmKind::Neutral { neutral } => {
                 NameKind::Neutral { neutral }
             },
+            TmKind::Proof => unreachable!(),
         }
     }
 
@@ -463,6 +459,7 @@ impl TmKind {
             TmKind::Neutral { neutral } => {
                 TyKind::Neutral { neutral }
             },
+            TmKind::Proof => unreachable!(),
         }
     }
 
@@ -470,6 +467,7 @@ impl TmKind {
         match self {
             TmKind::Intro { intro } => Some(intro),
             TmKind::Neutral { .. } => None,
+            TmKind::Proof => None,
         }
     }
 
@@ -477,6 +475,7 @@ impl TmKind {
         match self {
             TmKind::Intro { .. } => None,
             TmKind::Neutral { neutral } => Some(neutral),
+            TmKind::Proof => None,
         }
     }
 
@@ -488,6 +487,7 @@ impl TmKind {
             TmKind::Neutral { neutral } => {
                 Arc::unwrap_or_clone(neutral).deep_nf()
             },
+            TmKind::Proof => Tm::proof(),
         }
     }
 }

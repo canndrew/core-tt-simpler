@@ -20,18 +20,6 @@ pub enum IntroKind {
         succ_count_m1: Ubig,
         pred_tm: Arc<NeutralData>,
     },
-
-    ObsRefl {
-        eq_tm: TmKind,
-    },
-    ObsCong {
-        elim: Tm,
-        motive: Scope<Scope<Ty>>,
-        inhab: Tm,
-    },
-    CastRefl,
-
-    Unit,
     InjLhs {
         lhs_tm: TmKind,
     },
@@ -56,6 +44,8 @@ impl Unify for IntroKind {
         intro_kind_0: IntroKind,
         intro_kind_1: IntroKind,
     ) -> Option<IntroKind> {
+        // TODO: do I still need to do this now that I have TmKind::Proof? Or can we avoid calling
+        // this in the first place?
         if ty.is_prop() {
             return Some(intro_kind_0);
         }
@@ -105,6 +95,7 @@ impl Unify for IntroKind {
                                 let pred_tm_0 = Arc::unwrap_or_clone(pred_tm_0);
                                 break (succ_count_m1_0, Some(pred_tm_0));
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     }
                 };
@@ -133,6 +124,7 @@ impl Unify for IntroKind {
                                 let pred_tm_1 = Arc::unwrap_or_clone(pred_tm_1);
                                 break (succ_count_m1_1, Some(pred_tm_1));
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     }
                 };
@@ -156,7 +148,7 @@ impl Unify for IntroKind {
                 IntroKind::Succs { mut succ_count_m1, mut pred_tm },
             ) => {
                 loop {
-                    let intro = pred_tm.try_reduce_to_intro()?;
+                    let intro = pred_tm.try_reduce_to_intro_assuming_relevant()?;
                     match &**intro.weak() {
                         IntroKind::Constant { ubig: additional } => {
                             let ubig_1 = succ_count_m1 + additional + 1usize;
@@ -177,7 +169,7 @@ impl Unify for IntroKind {
                 IntroKind::Constant { ubig: ubig_1 },
             ) => {
                 loop {
-                    let intro = pred_tm.try_reduce_to_intro()?;
+                    let intro = pred_tm.try_reduce_to_intro_assuming_relevant()?;
                     match &**intro.weak() {
                         IntroKind::Constant { ubig: additional } => {
                             let ubig_0 = succ_count_m1 + additional + 1usize;
@@ -191,19 +183,6 @@ impl Unify for IntroKind {
                         _ => unreachable!(),
                     }
                 }
-            },
-
-            /*
-            (
-                IntroKind::Refl { eq_tm },
-                IntroKind::Refl { .. },
-            ) => {
-                Some(IntroKind::Refl { eq_tm })
-            },
-            */
-
-            (IntroKind::Unit, IntroKind::Unit) => {
-                Some(IntroKind::Unit)
             },
 
             (IntroKind::InjLhs { lhs_tm: lhs_tm_0 }, IntroKind::InjLhs { lhs_tm: lhs_tm_1 }) => {
@@ -279,34 +258,13 @@ impl Intro {
                     _ => unreachable!(),
                 }
             },
+            TmKind::Proof => unreachable!(),
         };
         Weaken::from_usages_and_weak(usages, Arc::new(intro))
     }
 
     pub fn constant(ubig: Ubig) -> Intro {
         Weaken::new_arc(IntroKind::Constant { ubig })
-    }
-
-    pub fn obs_refl(eq_tm: Tm) -> Intro {
-        eq_tm.map(|eq_tm| Arc::new(IntroKind::ObsRefl { eq_tm }))
-    }
-
-    pub fn obs_cong(
-        elim: Tm,
-        motive: Scope<Scope<Ty>>,
-        inhab: Tm,
-    ) -> Intro {
-        Weaken::new_arc(IntroKind::ObsCong {
-            elim, motive, inhab,
-        })
-    }
-
-    pub fn cast_refl() -> Intro {
-        Weaken::new(IntroKind::cast_refl())
-    }
-
-    pub fn unit() -> Intro {
-        Weaken::new(IntroKind::unit())
     }
 
     pub fn inj_lhs(lhs_tm: Tm) -> Intro {
@@ -346,18 +304,6 @@ impl Intro {
         let (succ_count_m1, pred_tm) = Arc::unwrap_or_clone(intro_kind).as_succs_m1()?;
         let pred_tm = Weaken::from_usages_and_weak(usages, pred_tm);
         Some((succ_count_m1, pred_tm))
-    }
-
-    /*
-    pub fn as_refl(self) -> Option<Tm> {
-        self.try_map(|intro_kind| {
-            Arc::unwrap_or_clone(intro_kind).as_refl()
-        })
-    }
-    */
-
-    pub fn as_unit(&self) -> Option<()> {
-        self.weak().as_unit()
     }
 
     pub fn as_inj_lhs(self) -> Option<Tm> {
@@ -403,22 +349,6 @@ impl IntroKind {
         ZERO.clone()
     }
 
-    pub fn cast_refl() -> Arc<IntroKind> {
-        lazy_static! {
-            static ref OBS_CAST_REFL: Arc<IntroKind> = Arc::new(IntroKind::CastRefl);
-        }
-
-        OBS_CAST_REFL.clone()
-    }
-
-    pub fn unit() -> Arc<IntroKind> {
-        lazy_static! {
-            static ref UNIT: Arc<IntroKind> = Arc::new(IntroKind::Unit);
-        }
-
-        UNIT.clone()
-    }
-
     pub fn as_tag(self) -> Option<Tag> {
         let IntroKind::Tag { tag } = self else {
             return None;
@@ -447,22 +377,6 @@ impl IntroKind {
         Some((succ_count_m1, pred_tm))
     }
 
-    /*
-    pub fn as_refl(self) -> Option<TmKind> {
-        let IntroKind::Refl { eq_tm } = self else {
-            return None;
-        };
-        Some(eq_tm)
-    }
-    */
-
-    pub fn as_unit(&self) -> Option<()> {
-        let IntroKind::Unit = self else {
-            return None;
-        };
-        Some(())
-    }
-
     pub fn as_inj_lhs(self) -> Option<TmKind> {
         let IntroKind::InjLhs { lhs_tm } = self else {
             return None;
@@ -482,17 +396,6 @@ impl IntroKind {
             IntroKind::Pair { head_tm, tail_tm } => {
                 Some((head_tm, tail_tm))
             },
-
-            /*
-            | IntroKind::Refl { .. }
-            | IntroKind::ObsCong { .. }
-            => {
-                let tm = Weaken::new_arc(self).map(|intro| TmKind::Intro { intro });
-                let head_tm = tm.clone().proj_head();
-                let tail_tm = tm.proj_tail();
-                Some((head_tm, tail_tm))
-            },
-            */
 
             _ => None,
         }
@@ -542,26 +445,10 @@ impl IntroKind {
                     TmKind::Neutral { neutral: pred_tm } => {
                         IntroKind::Succs { succ_count_m1, pred_tm }
                     },
+                    TmKind::Proof => unreachable!(),
                 };
                 Weaken::from_usages_and_weak(usages, Arc::new(intro_kind))
             },
-
-            IntroKind::ObsRefl { eq_tm } => {
-                eq_tm
-                .deep_nf()
-                .map(|eq_tm| Arc::new(IntroKind::ObsRefl { eq_tm }))
-            },
-
-            IntroKind::ObsCong { elim, motive, inhab } => {
-                let elim = elim.deep_nf();
-                let motive = motive.deep_nf();
-                let inhab = inhab.deep_nf();
-                Intro::obs_cong(elim, motive, inhab)
-            },
-
-            IntroKind::CastRefl => Weaken::new_arc(IntroKind::CastRefl),
-
-            IntroKind::Unit => Weaken::new_arc(IntroKind::Unit),
 
             IntroKind::InjLhs { lhs_tm } => {
                 lhs_tm
@@ -666,23 +553,9 @@ impl Substitutable for IntroKind {
                     TmKind::Neutral { neutral: pred_tm } => {
                         Weaken::new_arc(IntroKind::Succs { succ_count_m1, pred_tm })
                     },
+                    TmKind::Proof => unreachable!(),
                 }
             },
-
-            IntroKind::ObsRefl { eq_tm } => {
-                eq_tm.subst(subst).map(|eq_tm| Arc::new(IntroKind::ObsRefl { eq_tm }))
-            },
-
-            IntroKind::ObsCong { elim, motive, inhab } => {
-                let elim = elim.subst(subst);
-                let motive = motive.subst(subst);
-                let inhab = inhab.subst(subst);
-                Intro::obs_cong(elim, motive, inhab)
-            },
-
-            IntroKind::CastRefl => Weaken::new_arc(IntroKind::CastRefl),
-
-            IntroKind::Unit => Weaken::new_arc(IntroKind::Unit),
 
             IntroKind::InjLhs { lhs_tm } => {
                 lhs_tm.subst(subst).map(|lhs_tm| Arc::new(IntroKind::InjLhs { lhs_tm }))
@@ -730,27 +603,6 @@ impl Substitutable for IntroKind {
             IntroKind::Succs { succ_count_m1, pred_tm } => {
                 let pred_tm = pred_tm.try_strengthen_index(var_index)?;
                 Intro::succs_m1(pred_tm, succ_count_m1)
-            },
-
-            IntroKind::ObsRefl { eq_tm } => {
-                eq_tm
-                .try_strengthen_index(var_index)?
-                .map(|eq_tm| Arc::new(IntroKind::ObsRefl { eq_tm }))
-            },
-
-            IntroKind::ObsCong { elim, motive, inhab } => {
-                let elim = elim.try_strengthen_index(var_index)?;
-                let motive = motive.try_strengthen_index(var_index)?;
-                let inhab = inhab.try_strengthen_index(var_index)?;
-                Intro::obs_cong(elim, motive, inhab)
-            },
-
-            IntroKind::CastRefl => {
-                Weaken::new_arc(IntroKind::CastRefl)
-            },
-
-            IntroKind::Unit => {
-                Weaken::new_arc(IntroKind::Unit)
             },
 
             IntroKind::InjLhs { lhs_tm } => {

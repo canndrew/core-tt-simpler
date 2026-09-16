@@ -36,7 +36,7 @@ impl Ty {
                 Some(Weaken::from_usages_and_weak(usages, form))
             },
             TyKind::Neutral { neutral } => {
-                let intro = neutral.try_reduce_to_intro()?;
+                let intro = neutral.try_reduce_to_intro_assuming_relevant()?;
                 Some(intro.unfiltered(&usages).into_form())
             },
         }
@@ -209,16 +209,14 @@ impl Unify for TyKind {
             },
 
             (TyKind::Form { form: form_0 }, TyKind::Neutral { neutral }) => {
-                let intro_1 = neutral.try_reduce_to_intro()?.into_inner();
-                let intro_1 = Arc::unwrap_or_clone(intro_1);
+                let intro_1 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let form_1 = intro_1.as_form().unwrap();
                 let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
                 Some(TyKind::Form { form })
             },
 
             (TyKind::Neutral { neutral }, TyKind::Form { form: form_1 }) => {
-                let intro_0 = neutral.try_reduce_to_intro()?.into_inner();
-                let intro_0 = Arc::unwrap_or_clone(intro_0);
+                let intro_0 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let form_0 = intro_0.as_form().unwrap();
                 let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
                 Some(TyKind::Form { form })
@@ -247,6 +245,7 @@ impl Unify for TyKind {
                                 )?;
                                 Some(TyKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), None) => {
@@ -260,6 +259,7 @@ impl Unify for TyKind {
                                 )?;
                                 Some(TyKind::Neutral { neutral })
                             },
+                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {
