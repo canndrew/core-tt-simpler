@@ -141,7 +141,7 @@ impl<V, T: Pretty<V> + Clone> Pretty<V> for Arc<T> {
     }
 
     fn is_shallow(&self) -> bool {
-        (&**self).is_shallow()
+        (**self).is_shallow()
     }
 }
 

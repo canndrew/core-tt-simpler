@@ -346,6 +346,7 @@ macro_rules! impl_bindable_tuple {
         {
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
+            #[allow(clippy::unused_unit)]
             fn capture_subst(self, subst: Subst) -> ($($ty,)*) {
                 let ($($ty,)*) = self;
                 $(

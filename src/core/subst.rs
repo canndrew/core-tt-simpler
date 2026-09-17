@@ -44,6 +44,7 @@ impl Subst {
         }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.var_tms.len()
     }
@@ -138,6 +139,7 @@ macro_rules! impl_substitutable_tuple {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
+            #[allow(clippy::unused_unit)]
             fn subst(self, subst: &mut Subst) -> Self::Output {
                 let ($($ty,)*) = self;
                 $(
@@ -147,6 +149,7 @@ macro_rules! impl_substitutable_tuple {
             }
 
             #[allow(non_snake_case)]
+            #[allow(clippy::unused_unit)]
             fn into_output(self) -> Self::Output {
                 let ($($ty,)*) = self;
                 $(

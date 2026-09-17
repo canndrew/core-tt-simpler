@@ -15,9 +15,13 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let Some(path) = env::args_os().skip(1).next() else {
+    let mut args = env::args_os().skip(1);
+    let Some(path) = args.next() else {
         return Err(format!("expected a filename"));
     };
+    if args.next().is_some() {
+        return Err(format!("unexpected argument"));
+    }
     let src = match fs::read_to_string(&path) {
         Ok(src) => src,
         Err(err) => return Err(format!("error reading {}: {}", path.display(), err)),

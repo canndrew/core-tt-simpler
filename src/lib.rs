@@ -9,7 +9,7 @@ pub mod check;
 //mod macros;
 
 pub mod pprint;
-mod more;
+pub mod more;
 mod solve;
 pub mod builtins;
 mod sanity_check;

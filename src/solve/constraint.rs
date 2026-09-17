@@ -43,7 +43,7 @@ impl Constraints {
     }
 
     pub fn union(
-        ctx: &mut Vec<Ty>,
+        ctx: &[Ty],
         constraints_0: Constraints,
         constraints_1: Constraints,
         eliminated: &mut Usages,

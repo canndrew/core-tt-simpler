@@ -408,6 +408,8 @@ impl TmKind {
             TmKind::Intro { intro } => {
                 let intro = Arc::unwrap_or_clone(intro);
                 let IntroKind::Form { form } = intro else {
+                    // TODO: remove debugging
+                    println!("intro == {}", crate::pprint::pprint(intro));
                     panic!("TmKind::into_ty_kind(): tm is not a type");
                 };
                 TyKind::Form { form }

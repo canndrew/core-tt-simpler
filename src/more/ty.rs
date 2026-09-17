@@ -19,9 +19,11 @@ impl Ty {
     ) -> Option<Tm> {
         match self.clone().into_inner() {
             TyKind::Form { form } => {
-                match Arc::unwrap_or_clone(form).try_find_arbitrary_tm_excluding_ctx(ctx) {
-                    Some(tm) => return Some(tm),
-                    None => (),
+                if let Some(tm) = {
+                    Arc::unwrap_or_clone(form)
+                    .try_find_arbitrary_tm_excluding_ctx(ctx)
+                } {
+                    return Some(tm);
                 }
             },
             TyKind::Neutral { neutral: _ } => {
@@ -29,9 +31,8 @@ impl Ty {
             },
         };
 
-        for var_index in self.ctx_len()..ctx.len() {
-            let var_ty = ctx[var_index].clone();
-            if let Some(_) = Unify::unify(var_ty, self.clone()) {
+        for (var_index, var_ty) in ctx.iter().enumerate().skip(self.ctx_len()) {
+            if let Some(_) = Unify::unify(var_ty.clone(), self.clone()) {
                 return Some(Tm::var(var_index));
             }
         }
@@ -46,10 +47,7 @@ impl Ty {
     ) -> Option<Tm> {
         match self.clone().into_inner() {
             TyKind::Form { form } => {
-                match Arc::unwrap_or_clone(form).try_find_alternate_tm(ctx, tm_0) {
-                    Some(tm_1) => Some(tm_1),
-                    None => None,
-                }
+                Arc::unwrap_or_clone(form).try_find_alternate_tm(ctx, tm_0)
             },
             TyKind::Neutral { neutral: _ } => {
                 // TODO
@@ -104,6 +102,7 @@ impl FormKind {
         }
     }
 
+    #[allow(clippy::manual_map)]
     pub fn try_find_arbitrary_tm_excluding_ctx(
         self,
         ctx: &mut Vec<Ty>,
@@ -201,8 +200,7 @@ impl FormKind {
                 match ty_0.clone().try_prove_uninhabited(ctx) {
                     None => {
                         let _inhabitant = ty_0.clone().try_find_arbitrary_tm(ctx)?;
-                        let tm_1 = Ty::never().into_tm();
-                        tm_1
+                        Ty::never().into_tm()
                     },
                     Some(_) => {
                         Ty::unit().into_tm()

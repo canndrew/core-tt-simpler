@@ -263,7 +263,7 @@ impl Check for Spanned<ast::LetStmt> {
                                     ch,
                                     MetaTag::LetStmtVarTmTypeMatchesAnnotatedType {
                                         var_tm_span: var_expr.span(),
-                                        var_ty_span: var_ty_span,
+                                        var_ty_span,
                                     },
                                     var_tm_ty,
                                     var_ty.clone(),
@@ -416,7 +416,7 @@ impl Check for Spanned<ast::ExprInjLhs> {
                     Checked::assume(
                         MetaTag::InjLhsImplicitRhsInjectionCount {
                             inj_span: self.span(),
-                        }.into(),
+                        },
                         Ty::nat(),
                     )
                     .and_then(ch, |ch, _, inj_count| {
@@ -784,7 +784,7 @@ impl Check for Spanned<ast::ExprStructType> {
         }
 
         let ast::ExprStructType { fields, tail_ty_opt } = &self.inner;
-        recurse(ch, &fields, tail_ty_opt.as_deref())
+        recurse(ch, fields, tail_ty_opt.as_deref())
     }
 }
 
@@ -860,7 +860,7 @@ impl Check for Spanned<ast::ExprStructTerm> {
         }
 
         let ast::ExprStructTerm { fields, tail_opt } = &self.inner;
-        check_struct_term_fields(ch, &fields, tail_opt.as_deref())
+        check_struct_term_fields(ch, fields, tail_opt.as_deref())
     }
 }
 
@@ -960,7 +960,7 @@ impl Check for Spanned<ast::TypeField> {
                 Checked::cast_to_ty(
                     ch,
                     MetaTag::TypeFieldTyIsAType {
-                        ty_span: ty_span,
+                        ty_span,
                     },
                     ty_ty,
                     ty,
@@ -1320,20 +1320,27 @@ fn check_pat_struct_term(
     ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
         match fields.split_first() {
             None => {
-                Checked::assume(
-                    MetaTag::UnitPatVarTyIsUnit {
-                        pat_span: pat_span.clone(),
+                match tail_opt {
+                    None => {
+                        Checked::assume(
+                            MetaTag::UnitPatVarTyIsUnit {
+                                pat_span: pat_span.clone(),
+                            },
+                            Ty::obs_equal(
+                                Ty::universe(),
+                                var_ty.clone().into_tm(),
+                                Ty::unit().into_tm(),
+                            ),
+                        )
+                        .map(ch, |ch, _, _| {
+                            let body = func(ch);
+                            Scope::constant(body)
+                        })
                     },
-                    Ty::obs_equal(
-                        Ty::universe(),
-                        var_ty.clone().into_tm(),
-                        Ty::unit().into_tm(),
-                    ),
-                )
-                .map(ch, |ch, _, _| {
-                    let body = func(ch);
-                    Scope::constant(body)
-                })
+                    Some(tail) => {
+                        check_pat_prec_inj(ch, tail, var_ty, func)
+                    },
+                }
             },
             Some((field, fields)) => {
                 let ast::PatStructTermField { name, pat_opt } = &field.inner;

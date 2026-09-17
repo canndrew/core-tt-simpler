@@ -43,7 +43,7 @@ impl Iso {
         Iso { fwd: scope.clone(), rev: scope }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ ty : Type
     /// ----
     /// Γ ⊢ Iso::refl() : ty ≅ ty
@@ -56,7 +56,7 @@ impl Iso {
         }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ ty_0 : Type
     /// Γ ⊢ ty_1 : Type
     /// Γ ⊢ self : ty_0 ≅ ty_1
@@ -72,14 +72,14 @@ impl Iso {
         }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ from_ty_0 : Type
     /// Γ ⊢ middle_ty : Type
     /// Γ ⊢ into_ty_1 : Type
     /// Γ ⊢ iso_0 : from_ty_0 ≅ middle_ty
     /// Γ ⊢ iso_1 : middle_ty ≅ into_ty_1
     /// ----
-    /// Γ ⊢ Iso::transitivity(iso_0, iso_1, from_ty_0, from_ty_1) : from_ty_0 ≅ into_ty_1
+    /// Γ ⊢ Iso::transitivity(iso_0, iso_1) : from_ty_0 ≅ into_ty_1
     /// ```
 
     pub fn transitivity(
@@ -105,11 +105,11 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ from_ty : Type
-    /// Γ ⊢ fwd : from_ty ⊢ Never
+    /// Γ, tm: from_ty ⊢ _ : Never
     /// ----
-    /// Γ ⊢ Iso::scope_never_to_iso_never(from_ty, fwd) : from_ty ≅ Never
+    /// Γ ⊢ Iso::scope_never_to_iso_never(from_ty) : from_ty ≅ Never
     /// ```
 
     pub fn scope_never_to_iso_never(
@@ -123,7 +123,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ lhs_name_0 : Name
     /// Γ ⊢ lhs_name_1 : Name
     /// Γ ⊢ lhs_ty_0 : Type
@@ -145,6 +145,7 @@ impl Iso {
     /// ) : Ty::sum(lhs_name_0, lhs_ty_0, rhs_ty_0) ≅ Ty::sum(lhs_name_1, lhs_ty_1, rhs_ty_1)
     /// ```
 
+    #[allow(clippy::too_many_arguments)]
     pub fn sum_congruence(
         lhs_name_0: Name,
         lhs_name_1: Name,
@@ -193,11 +194,11 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ rhs_ty : Type
     /// ----
-    /// Γ ⊢ Iso::sum_never_lhs(lhs_name, rhs_ty) : Ty::sum(lhs_name, Never, rhs_ty) ≅ rhs_ty
+    /// Γ ⊢ Iso::sum_never_lhs(rhs_ty) : Ty::sum(lhs_name, Never, rhs_ty) ≅ rhs_ty
     /// ```
 
     pub fn sum_never_lhs(
@@ -221,11 +222,11 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Type
     /// ----
-    /// Γ ⊢ Iso::sum_never_rhs(lhs_name, lhs_ty) : Ty::sum(lhs_name, lhs_ty, Never) ≅ lhs_ty
+    /// Γ ⊢ Iso::sum_never_rhs(lhs_ty) : Ty::sum(lhs_name, lhs_ty, Never) ≅ lhs_ty
     /// ```
 
     pub fn sum_never_rhs(
@@ -249,20 +250,15 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_ty_0 : Type
     /// Γ ⊢ head_ty_1 : Type
     /// Γ ⊢ tail_ty : head_ty_0 ⊢ Type
     /// Γ ⊢ head_iso : head_ty_0 ≅ head_ty_1
     /// ----
-    /// Γ ⊢ Iso::dependent_sigma_head_congruence(
-    ///     head_name,
-    ///     head_ty_0,
-    ///     head_ty_1,
-    ///     tail_ty,
-    ///     head_iso,
-    /// ) : Ty::sigma(head_name, head_ty_0, tail_ty)
+    /// Γ ⊢ Iso::dependent_sigma_head_congruence(tail_ty, head_iso)
+    ///   : Ty::sigma(head_name, head_ty_0, tail_ty)
     ///   ≅ Ty::sigma(head_name, head_ty_1, Scope::make(Γ.len(), |head|
     ///     tail_ty.bind(head_eq.rev.bind(head))
     ///   })
@@ -316,20 +312,15 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_ty : Type
     /// Γ ⊢ tail_ty_0 : head_ty ⊢ Type
     /// Γ ⊢ tail_ty_1 : head_ty ⊢ Type
     /// Γ ⊢ tail_iso : head_ty ⊢ tail_ty_0 ≅ tail_ty_1
     /// ----
-    /// Γ ⊢ Iso::dependent_sigma_tail_congruence(
-    ///     head_name,
-    ///     head_ty,
-    ///     tail_ty_0,
-    ///     tail_ty_1,
-    ///     tail_iso,
-    /// ) : Ty::sigma(head_name, head_ty, tail_ty_0)
+    /// Γ ⊢ Iso::dependent_sigma_tail_congruence(tail_iso)
+    ///   : Ty::sigma(head_name, head_ty, tail_ty_0)
     ///   ≅ Ty::sigma(head_name, head_ty, tail_ty_1)
     /// ```
 
@@ -363,167 +354,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /*
-    /// ```ignore
-    /// Γ ⊢ head_name : Name
-    /// Γ ⊢ head_ty_0 : Type
-    /// Γ ⊢ head_ty_1 : Type
-    /// Γ ⊢ tail_ty : Type
-    /// Γ ⊢ head_iso : head_ty_0 ≅ head_ty_1
-    /// ----
-    /// Γ ⊢ Iso::non_dependent_sigma_head_congruence(
-    ///     head_name,
-    ///     head_ty_0,
-    ///     head_ty_1,
-    ///     tail_ty,
-    ///     head_iso,
-    /// ) : Ty::sigma(head_name, head_ty_0, Scope::constant(tail_ty))
-    ///   ≅ Ty::sigma(head_name, head_ty_1, Scope::constant(tail_ty))
-    /// ```
-
-    pub fn non_dependent_sigma_head_congruence(
-        head_name: Name,
-        head_ty_0: Ty,
-        head_ty_1: Ty,
-        tail_ty: Ty,
-        head_iso: Iso,
-    ) -> Iso {
-        let ctx_len = max_all([
-            head_name.ctx_len(),
-            head_ty_0.ctx_len(),
-            head_ty_1.ctx_len(),
-            tail_ty.ctx_len(),
-            head_iso.ctx_len(),
-        ]);
-
-        let Iso {
-            fwd: head_fwd, rev: head_rev, fwd_rev: head_fwd_rev, rev_fwd: head_rev_fwd,
-        } = head_iso;
-
-        let fwd = Scope::make(ctx_len, |pair_0| {
-            let head_0 = pair_0.clone().proj_head();
-            let tail = pair_0.proj_tail();
-
-            let head_1 = head_fwd.clone().bind(head_0);
-            head_1.pair(tail)
-        });
-
-        let rev = Scope::make(ctx_len, |pair_1| {
-            let head_1 = pair_1.clone().proj_head();
-            let tail = pair_1.proj_tail();
-
-            let head_0 = head_rev.clone().bind(head_1);
-            head_0.pair(tail)
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |pair_0| {
-            let head_0 = pair_0.clone().proj_head();
-            let tail = pair_0.proj_tail();
-
-            head_fwd_rev.bind(head_0.clone()).map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name.clone(), head_ty_0, Scope::constant(tail_ty.clone())),
-                head_rev.clone().bind(head_fwd.clone().bind(head_0)),
-                |head| head.pair(tail),
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |pair_1| {
-            let head_1 = pair_1.clone().proj_head();
-            let tail = pair_1.proj_tail();
-
-            head_rev_fwd.bind(head_1.clone()).map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name, head_ty_1, Scope::constant(tail_ty)),
-                head_fwd.clone().bind(head_rev.clone().bind(head_1)),
-                |head| head.pair(tail),
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-
-    /// ```ignore
-    /// Γ ⊢ head_name : Name
-    /// Γ ⊢ head_ty : Type
-    /// Γ ⊢ tail_ty_0 : Type
-    /// Γ ⊢ tail_ty_1 : Type
-    /// Γ ⊢ tail_iso : tail_ty_0 ≅ tail_ty_1
-    /// ----
-    /// Γ ⊢ Iso::non_dependent_sigma_tail_congruence(
-    ///     head_name,
-    ///     head_ty,
-    ///     tail_ty_0,
-    ///     tail_ty_1,
-    ///     tail_iso,
-    /// ) : Ty::sigma(head_name, head_ty, Scope::constant(tail_ty_0))
-    ///   ≅ Ty::sigma(head_name, head_ty, Scope::constant(tail_ty_1))
-    /// ```
-
-    pub fn non_dependent_sigma_tail_congruence(
-        head_name: Name,
-        head_ty: Ty,
-        tail_ty_0: Ty,
-        tail_ty_1: Ty,
-        tail_iso: Iso,
-    ) -> Iso {
-        let ctx_len = max_all([
-            head_name.ctx_len(),
-            head_ty.ctx_len(),
-            tail_ty_0.ctx_len(),
-            tail_ty_1.ctx_len(),
-            tail_iso.ctx_len(),
-        ]);
-
-        let Iso {
-            fwd: tail_fwd, rev: tail_rev, fwd_rev: tail_fwd_rev, rev_fwd: tail_rev_fwd,
-        } = tail_iso;
-
-        let fwd = Scope::make(ctx_len, |pair_0| {
-            let head = pair_0.clone().proj_head();
-            let tail_0 = pair_0.proj_tail();
-
-            let tail_1 = tail_fwd.clone().bind(tail_0);
-            head.pair(tail_1)
-        });
-
-        let rev = Scope::make(ctx_len, |pair_1| {
-            let head = pair_1.clone().proj_head();
-            let tail_1 = pair_1.proj_tail();
-
-            let tail_0 = tail_rev.clone().bind(tail_1);
-            head.pair(tail_0)
-        });
-
-        let fwd_rev = Scope::make(ctx_len, |pair_0| {
-            let head = pair_0.clone().proj_head();
-            let tail_0 = pair_0.proj_tail();
-
-            tail_fwd_rev.bind(tail_0.clone()).map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name.clone(), head_ty.clone(), Scope::constant(tail_ty_0)),
-                tail_rev.clone().bind(tail_fwd.clone().bind(tail_0)),
-                |tail| head.pair(tail),
-            )
-        });
-
-        let rev_fwd = Scope::make(ctx_len, |pair_1| {
-            let head = pair_1.clone().proj_head();
-            let tail_1 = pair_1.proj_tail();
-
-            tail_rev_fwd.bind(tail_1.clone()).map_eq(
-                ctx_len + 1,
-                Ty::sigma(head_name, head_ty, Scope::constant(tail_ty_1)),
-                tail_fwd.clone().bind(tail_rev.clone().bind(tail_1)),
-                |tail| head.pair(tail),
-            )
-        });
-
-        Iso { fwd, rev, fwd_rev, rev_fwd }
-    }
-    */
-
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ tail_ty : Unit ⊢ Type
     /// ----
@@ -543,7 +374,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ lhs_name : Name
     /// Γ ⊢ lhs_ty : Type
@@ -649,20 +480,15 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_head_name : Name
     /// Γ ⊢ head_head_ty : Type
-    /// Γ ⊢ head_tail_ty : head_head_ty ⊢ Type
-    /// Γ ⊢ tail_ty : Ty::sigma(head_head_name, head_head_ty, head_tail_ty) ⊢ Type
+    /// Γ, head_head: head_head_ty ⊢ head_tail_ty : Type
+    /// Γ, head : Ty::sigma(head_head_name, head_head_ty, head_tail_ty) ⊢ tail_ty : Type
     /// ----
-    /// Γ ⊢ Iso::sigma_sigma_head(
-    ///     head_name,
-    ///     head_head_name,
-    ///     head_head_ty,
-    ///     head_tail_ty,
-    ///     tail_ty,
-    /// ) : Ty::sigma(
+    /// Γ ⊢ Iso::sigma_sigma_head()
+    ///   : Ty::sigma(
     ///     head_name,
     ///     Ty::sigma(
     ///         head_head_name,
@@ -707,7 +533,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_ty : Type
     /// ----
@@ -727,20 +553,16 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ head_name : Name
     /// Γ ⊢ head_ty : Type
     /// Γ ⊢ tail_ty : head_ty ⊢ Type
     /// Γ ⊢ unique_head : head_ty
-    /// Γ ⊢ constrains : (head : head_ty), tail_ty ⊢ head == unique_head
+    /// Γ, head: head_ty, tail: tail_ty ⊢ constrains : head == unique_head
     /// ----
-    /// Γ ⊢ Iso::sigma_tail_constrains_head(
-    ///     head_name,
-    ///     head_ty,
-    ///     tail_ty,
-    ///     unique_head,
-    ///     constrains,
-    /// ) : Ty::sigma(head_name, head_ty, tail_ty) ≅ tail_ty.bind(unique_head)
+    /// Γ ⊢ Iso::sigma_tail_constrains_head(tail_ty, unique_head)
+    ///   : Ty::sigma(head_name, head_ty, tail_ty)
+    ///   ≅ tail_ty.bind(unique_head)
     /// ```
 
     pub fn sigma_tail_constrains_head(
@@ -776,20 +598,15 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ arg_name : Name
     /// Γ ⊢ arg_ty_0 : Type
     /// Γ ⊢ arg_ty_1 : Type
     /// Γ ⊢ res_ty : arg_ty_0 ⊢ Type
     /// Γ ⊢ arg_iso : arg_ty_0 ≅ arg_ty_1
     /// ----
-    /// Γ ⊢ Iso::dependent_pi_arg_congruence(
-    ///     arg_name,
-    ///     arg_ty_0,
-    ///     arg_ty_1,
-    ///     res_ty,
-    ///     arg_iso,
-    /// ) : Ty::pi(arg_name, arg_ty_0, res_ty) ≅ Ty::pi(arg_name, arg_ty_1, res_ty)
+    /// Γ ⊢ Iso::dependent_pi_arg_congruence(res_ty, arg_iso)
+    ///   : Ty::pi(arg_name, arg_ty_0, res_ty) ≅ Ty::pi(arg_name, arg_ty_1, res_ty)
     /// ```
 
     pub fn dependent_pi_arg_congruence(
@@ -831,20 +648,15 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ arg_name : Name
     /// Γ ⊢ arg_ty : Type
     /// Γ ⊢ res_ty_0 : arg_ty ⊢ Type
     /// Γ ⊢ res_ty_1 : arg_ty ⊢ Type
     /// Γ ⊢ res_iso : arg_ty |- res_ty_0 ≅ res_ty_1
     /// ----
-    /// Γ ⊢ Iso::dependent_pi_res_congruence(
-    ///     arg_name,
-    ///     arg_ty,
-    ///     res_ty_0,
-    ///     res_ty_1,
-    ///     res_iso,
-    /// ) : Ty::pi(arg_name, arg_ty, res_ty_0) ≅ Ty::pi(arg_name, arg_ty, res_ty_1)
+    /// Γ ⊢ Iso::dependent_pi_res_congruence(res_iso)
+    ///   : Ty::pi(arg_name, arg_ty, res_ty_0) ≅ Ty::pi(arg_name, arg_ty, res_ty_1)
     /// ```
 
     pub fn dependent_pi_res_congruence(
@@ -879,7 +691,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ arg_name : Name
     /// Γ ⊢ res_ty : Ty::never() ⊢ Type
     /// ----
@@ -899,11 +711,11 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// Γ ⊢ arg_name : Name
     /// Γ ⊢ res_ty : Ty::unit() ⊢ Type
     /// ----
-    /// Γ ⊢ Iso::pi_unit_arg(res_ty)
+    /// Γ ⊢ Iso::pi_unit_arg()
     ///   : Ty::pi(arg_name, Ty::unit(), res_ty)
     ///   ≅ res_ty.bind(Tm::unit())
     /// ```
@@ -920,7 +732,7 @@ impl Iso {
         Iso { fwd, rev }
     }
 
-    /// ```ignore
+    /// ```text
     /// ----
     /// Γ ⊢ Iso::nat_into_sum_of_zero_and_succ()
     ///   : Ty::nat()

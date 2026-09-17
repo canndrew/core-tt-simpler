@@ -312,6 +312,32 @@ impl NeutralData {
         Arc::new(NeutralData::new(kind))
     }
 
+    pub fn unify_assuming_irreducible_to_intro(
+        neutral_0: Arc<NeutralData>,
+        neutral_1: Arc<NeutralData>,
+    ) -> Option<Arc<NeutralData>> {
+        if Arc::ptr_eq(&neutral_0, &neutral_1) {
+            return Some(neutral_0);
+        }
+
+        let neutral_0 = match neutral_0.get_cached_reduction() {
+            Some(tm) => tm.into_inner().as_neutral().unwrap(),
+            None => neutral_0,
+        };
+        let neutral_1 = match neutral_1.get_cached_reduction() {
+            Some(tm) => tm.into_inner().as_neutral().unwrap(),
+            None => neutral_1,
+        };
+        if Arc::ptr_eq(&neutral_0, &neutral_1) {
+            return Some(neutral_0);
+        }
+
+        let kind_0 = Arc::unwrap_or_clone(neutral_0).kind;
+        let kind_1 = Arc::unwrap_or_clone(neutral_1).kind;
+        let kind = Unify::unify(kind_0, kind_1)?;
+        Some(NeutralData::new_arc(kind))
+    }
+
     pub fn unify_without_cached_reduction(
         neutral_0: Arc<NeutralData>,
         neutral_1: Arc<NeutralData>,
@@ -329,8 +355,7 @@ impl NeutralData {
         self
         .reduced_opt
         .get()
-        .map(|tm_opt| tm_opt.as_ref())
-        .flatten()
+        .and_then(|tm_opt| tm_opt.as_ref())
         .map(|tm| tm.clone().unfiltered(&self.reduced_filter))
     }
 
@@ -392,7 +417,7 @@ impl NeutralData {
 
     pub fn deep_nf_assuming_stuck(self) -> Neutral {
         debug_assert!(self.get_cached_reduction().is_none());
-        self.kind.deep_nf_assuming_stuck().map(|kind| NeutralData::new_arc(kind))
+        self.kind.deep_nf_assuming_stuck().map(NeutralData::new_arc)
     }
 
     pub fn as_var(&self) -> Option<usize> {
@@ -1342,7 +1367,7 @@ impl Unify for NeutralKind {
 
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
                 let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let neutral = NeutralData::unify_without_cached_reduction(
+                let neutral = NeutralData::unify_assuming_irreducible_to_intro(
                     neutral_0, neutral_1,
                 )?;
                 let motive = Unify::unify(motive_0, motive_1)?;
@@ -1381,7 +1406,7 @@ impl Unify for NeutralKind {
 
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
                 let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let neutral = NeutralData::unify_without_cached_reduction(
+                let neutral = NeutralData::unify_assuming_irreducible_to_intro(
                     neutral_0, neutral_1,
                 )?;
 
@@ -1400,7 +1425,7 @@ impl Unify for NeutralKind {
 
                 let neutral_0 = elim_0.as_neutral().unwrap();
                 let neutral_1 = elim_1.as_neutral().unwrap();
-                let neutral = NeutralData::unify_without_cached_reduction(
+                let neutral = NeutralData::unify_assuming_irreducible_to_intro(
                     neutral_0, neutral_1,
                 )?;
 
@@ -1415,7 +1440,7 @@ impl Unify for NeutralKind {
 
                 let neutral_0 = elim_0.as_neutral().unwrap();
                 let neutral_1 = elim_1.as_neutral().unwrap();
-                let neutral = NeutralData::unify_without_cached_reduction(
+                let neutral = NeutralData::unify_assuming_irreducible_to_intro(
                     neutral_0, neutral_1,
                 )?;
 
@@ -1430,7 +1455,7 @@ impl Unify for NeutralKind {
 
                 let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
                 let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                let neutral = NeutralData::unify_without_cached_reduction(
+                let neutral = NeutralData::unify_assuming_irreducible_to_intro(
                     neutral_0, neutral_1,
                 )?;
                 let arg_tm = Unify::unify(arg_tm_0, arg_tm_1)?;

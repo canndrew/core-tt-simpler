@@ -1,5 +1,6 @@
 use crate::priv_prelude::*;
 
+#[derive(Default)]
 pub struct CheckCtx {
     var_tys: Vec<Ty>,
     var_names: Vec<(Name, usize)>,

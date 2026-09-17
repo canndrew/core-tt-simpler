@@ -25,29 +25,29 @@ pub trait Contextual {
 
 impl<T: Clone + Contextual> Contextual for Box<T> {
     fn ctx_len(&self) -> usize {
-        (&**self).ctx_len()
+        (**self).ctx_len()
     }
 
     fn collect_usages(&self, usages: &mut Usages) {
-        (&**self).collect_usages(usages)
+        (**self).collect_usages(usages)
     }
 
     fn filter_usages(&mut self, usages: &Usages) {
-        (&mut **self).filter_usages(usages)
+        (**self).filter_usages(usages)
     }
 
     fn unfilter_usages(&mut self, usages: &Usages) {
-        (&mut **self).unfilter_usages(usages)
+        (**self).unfilter_usages(usages)
     }
 }
 
 impl<T: Clone + Contextual> Contextual for Arc<T> {
     fn ctx_len(&self) -> usize {
-        (&**self).ctx_len()
+        (**self).ctx_len()
     }
 
     fn collect_usages(&self, usages: &mut Usages) {
-        (&**self).collect_usages(usages)
+        (**self).collect_usages(usages)
     }
 
     fn filter_usages(&mut self, usages: &Usages) {
@@ -172,6 +172,7 @@ macro_rules! impl_contextual_tuple {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
+            #[allow(clippy::unused_unit)]
             fn scope_each(self, ctx_len: usize) -> ($(Scope<$ty>,)*) {
                 let ($($ty,)*) = self;
                 $(

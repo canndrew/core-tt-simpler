@@ -25,7 +25,6 @@ lazy_static! {
             tm: Ty::name().into_tm(),
         });
 
-        /*
         builtins.push(Builtin {
             name: "cong",
             ty: Ty::pi(
@@ -45,7 +44,7 @@ lazy_static! {
                                     Scope::make(2, |eq_tm_1| {
                                         Ty::pi(
                                             Name::from("elim"),
-                                            Ty::equal(
+                                            Ty::obs_equal(
                                                 eq_ty.clone(),
                                                 eq_tm_0.clone(),
                                                 eq_tm_1,
@@ -60,7 +59,7 @@ lazy_static! {
                                         motive
                                         .clone()
                                         .app(eq_tm_0.clone())
-                                        .app(eq_tm_0.clone().refl())
+                                        .app(Tm::proof())
                                         .into_ty(),
                                         Scope::make(3, |_inhab| {
                                             Ty::pi(
@@ -69,15 +68,15 @@ lazy_static! {
                                                 Scope::make(4, |eq_tm_1| {
                                                     Ty::pi(
                                                         Name::from("elim"),
-                                                        Ty::equal(
+                                                        Ty::obs_equal(
                                                             eq_ty,
                                                             eq_tm_0,
                                                             eq_tm_1.clone(),
                                                         ),
-                                                        Scope::make(5, |elim| {
+                                                        Scope::make(5, |_elim| {
                                                             motive
                                                             .app(eq_tm_1)
-                                                            .app(elim)
+                                                            .app(Tm::proof())
                                                             .into_ty()
                                                         }),
                                                     )
@@ -92,21 +91,14 @@ lazy_static! {
                 }),
             ),
             tm: Tm::func(Scope::make(0, |_eq_ty| {
-                Tm::func(Scope::make(1, |_eq_tm_0| {
+                Tm::func(Scope::make(1, |eq_tm_0| {
                     Tm::func(Scope::make(2, |motive| {
                         Tm::func(Scope::make(3, |inhab| {
-                            Tm::func(Scope::make(4, |_eq_tm_1| {
+                            Tm::func(Scope::make(4, |eq_tm_1| {
                                 Tm::func(Scope::make(5, |elim| {
-                                    elim
-                                    .cong(
-                                        Scope::make(6, |eq_tm_1| {
-                                            Scope::make(7, |elim| {
-                                                motive
-                                                .app(eq_tm_1)
-                                                .app(elim)
-                                                .into_ty()
-                                            })
-                                        }),
+                                    Tm::cast(
+                                        motive.clone().app(eq_tm_0).app(Tm::proof()).into_ty(),
+                                        motive.app(eq_tm_1).app(elim).into_ty(),
                                         inhab,
                                     )
                                 }))
@@ -116,7 +108,6 @@ lazy_static! {
                 }))
             })),
         });
-        */
 
         builtins.push(Builtin {
             name: "fold",
