@@ -257,26 +257,16 @@ pub trait Bindable {
 
 impl<T> Unify for Scope<T>
 where
-    T: Contextual + Unify<Meta: Contextual>,
+    T: Contextual + Unify,
 {
-    type Meta = (Ty, Scope<T::Meta>);
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        (var_ty, body_meta): (Ty, Scope<T::Meta>),
         scope_0: Scope<T>,
         scope_1: Scope<T>,
     ) -> Option<Scope<T>> {
-        let Scope { ctx_len: ctx_len_meta, inner: inner_meta } = body_meta;
         let Scope { ctx_len: ctx_len_0, inner: inner_0 } = scope_0;
         let Scope { ctx_len: ctx_len_1, inner: inner_1 } = scope_1;
 
-        let ctx_len = ctx_tys.len();
-        let inner_meta = {
-            let mut usages = Usages::ones(ctx_len_meta);
-            usages.set_to_one(ctx_len);
-            inner_meta.unfiltered(&usages)
-        };
+        let ctx_len = max_all([ctx_len_0, ctx_len_1]);
         let inner_0 = {
             let mut usages = Usages::ones(ctx_len_0);
             usages.set_to_one(ctx_len);
@@ -288,10 +278,7 @@ where
             inner_1.unfiltered(&usages)
         };
 
-        ctx_tys.push(var_ty);
-        let inner_opt = Unify::unify(ctx_tys, inner_meta, inner_0, inner_1);
-        ctx_tys.pop();
-        let inner = inner_opt?;
+        let inner = Unify::unify(inner_0, inner_1)?;
 
         Some(Scope::new(ctx_len, inner))
     }

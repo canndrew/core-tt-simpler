@@ -194,31 +194,27 @@ impl Bindable for Ty {
 }
 
 impl Unify for TyKind {
-    type Meta = ();
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        (): (),
         ty_kind_0: TyKind,
         ty_kind_1: TyKind,
     ) -> Option<TyKind> {
         match (ty_kind_0, ty_kind_1) {
             (TyKind::Form { form: form_0 }, TyKind::Form { form: form_1 }) => {
-                let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
+                let form = Unify::unify(form_0, form_1)?;
                 Some(TyKind::Form { form })
             },
 
             (TyKind::Form { form: form_0 }, TyKind::Neutral { neutral }) => {
                 let intro_1 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let form_1 = intro_1.as_form().unwrap();
-                let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
+                let form = Unify::unify(form_0, form_1)?;
                 Some(TyKind::Form { form })
             },
 
             (TyKind::Neutral { neutral }, TyKind::Form { form: form_1 }) => {
                 let intro_0 = neutral.try_reduce_to_intro_assuming_relevant()?.into_inner_arc();
                 let form_0 = intro_0.as_form().unwrap();
-                let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
+                let form = Unify::unify(form_0, form_1)?;
                 Some(TyKind::Form { form })
             },
             
@@ -230,7 +226,7 @@ impl Unify for TyKind {
                     (None, None) => {
                         let neutral_0 = Arc::unwrap_or_clone(neutral_0);
                         let neutral_1 = Arc::unwrap_or_clone(neutral_1);
-                        let kind = Unify::unify(ctx_tys, (), neutral_0.kind, neutral_1.kind)?;
+                        let kind = Unify::unify(neutral_0.kind, neutral_1.kind)?;
                         let neutral = NeutralData::new_arc(kind);
                         Some(TyKind::Neutral { neutral })
                     },
@@ -239,7 +235,6 @@ impl Unify for TyKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_1 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -253,7 +248,6 @@ impl Unify for TyKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_0 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -265,7 +259,7 @@ impl Unify for TyKind {
                     (Some(tm_0), Some(tm_1)) => {
                         let ty_0 = tm_0.into_ty();
                         let ty_1 = tm_1.into_ty();
-                        Some(Unify::unify(ctx_tys, (), ty_0, ty_1)?.into_inner())
+                        Some(Unify::unify(ty_0, ty_1)?.into_inner())
                     },
                 }
             },

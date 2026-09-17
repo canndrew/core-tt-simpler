@@ -31,7 +31,7 @@ impl Ty {
 
         for var_index in self.ctx_len()..ctx.len() {
             let var_ty = ctx[var_index].clone();
-            if let Some(_) = Unify::unify(ctx, (), var_ty, self.clone()) {
+            if let Some(_) = Unify::unify(var_ty, self.clone()) {
                 return Some(Tm::var(var_index));
             }
         }

@@ -148,17 +148,13 @@ impl<T> Unify for Weaken<T>
 where
     T: Contextual + Unify + Sized,
 {
-    type Meta = T::Meta;
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        meta: T::Meta,
         weaken_0: Weaken<T>,
         weaken_1: Weaken<T>,
     ) -> Option<Weaken<T>> {
         let thing_0 = weaken_0.into_inner();
         let thing_1 = weaken_1.into_inner();
-        let thing = T::unify(ctx_tys, meta, thing_0, thing_1)?;
+        let thing = T::unify(thing_0, thing_1)?;
         Some(Weaken::new(thing))
 
         /*

@@ -66,11 +66,7 @@ impl CheckCtx {
                 break None;
             }
 
-            let var_tys_len = self.var_tys.len();
-            let resolved = Unify::unify(&mut self.var_tys, (), name.clone(), var_name.clone()).is_some();
-            debug_assert_eq!(self.var_tys.len(), var_tys_len);
-
-            if resolved {
+            if let Some(_name) = Unify::unify(name.clone(), var_name.clone()) {
                 break Some((self.var_tys[*index].clone(), *index));
             }
         }

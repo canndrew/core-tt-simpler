@@ -9,6 +9,7 @@ pub(crate) use {
     parser::{Span, Spanned},
     //derive_where::derive_where,
     crate::{
+        solve,
         util::{as_equal, max_all, iter::{Which, merge_enumerated}},
         tag::{Tag, TagKind, MetaTag},
         //macros::pi,
@@ -33,7 +34,7 @@ pub(crate) use {
         more::iso::Iso,
         solve::{
             simplification::{Simplification, Uninhabited},
-            constraint::{Constraint, Constraints},
+            constraint::Constraints,
         },
         builtins::Builtin,
     },

@@ -22,14 +22,6 @@ impl Ty {
                         Err(Uninhabited::new())
                     },
 
-                    /*
-                    FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
-                        simplify_equal(
-                            ctx, preserved_constraint_depth, self, eq_ty, eq_tm_0, eq_tm_1,
-                        )
-                    },
-                    */
-
                     FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
                         simplify_sum(ctx, lhs_name, lhs_ty, rhs_ty)
                     },
@@ -50,10 +42,8 @@ impl Ty {
             TyKind::Neutral { neutral } => {
                 let neutral = Arc::unwrap_or_clone(neutral);
                 match neutral.kind {
-                    NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
-                        simplify_equal(
-                            ctx, preserved_constraint_depth, self, &eq_ty, &eq_tm_0, &eq_tm_1,
-                        )
+                    NeutralKind::ObsEqual { eq_ty: _, eq_tm_0, eq_tm_1 } => {
+                        simplify_equal(self, &eq_tm_0, &eq_tm_1)
                     },
                     _ => {
                         let mut eliminated = Usages::empty();
@@ -67,31 +57,22 @@ impl Ty {
 }
 
 pub fn simplify_equal(
-    ctx: &mut Vec<Ty>,
-    _preserved_constraint_depth: usize,
     orig_ty: &Ty,
-    eq_ty: &Ty,
     eq_tm_0: &Tm,
     eq_tm_1: &Tm,
 ) -> Result<Simplification, Uninhabited> {
-    if let Some(_) = Unify::unify(ctx, eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()) {
+    if let Some(_) = Unify::unify(eq_tm_0.clone(), eq_tm_1.clone()) {
         let new_ty = Ty::unit();
         let iso = Iso::between_props();
         return Ok(Simplification::from_iso(new_ty, iso));
     }
 
     if let Some(var_index) = eq_tm_0.as_var() && eq_tm_1.ctx_len() <= var_index {
-        let constraint = Constraint {
-            unique_tm: eq_tm_1.clone(),
-        };
-        return Ok(Simplification::from_constraint(orig_ty, var_index, constraint));
+        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_1.clone()));
     }
 
     if let Some(var_index) = eq_tm_1.as_var() && eq_tm_0.ctx_len() <= var_index {
-        let constraint = Constraint {
-            unique_tm: eq_tm_0.clone(),
-        };
-        return Ok(Simplification::from_constraint(orig_ty, var_index, constraint));
+        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_0.clone()));
     }
 
     Ok(Simplification::id(orig_ty.clone()))
@@ -195,7 +176,6 @@ fn simplify_sum(
             );
 
             let constraints = Constraints::intersection(
-                ctx,
                 lhs_constraints,
                 rhs_constraints,
             );
@@ -293,7 +273,7 @@ fn simplify_sigma(
         &mut eliminated,
     )?;
 
-    if let Some(Constraint { unique_tm: unique_head }) = head_constrained_opt {
+    if let Some(unique_head) = head_constrained_opt {
         let new_ty = tail_new_ty.clone().bind(unique_head.clone());
 
         let iso = Iso::transitivity(
@@ -544,7 +524,7 @@ fn simplify_pi(
         Constraints::new()
     };
 
-    if let Some(Constraint { unique_tm: unique_arg }) = arg_constrained_opt
+    if let Some(unique_arg) = arg_constrained_opt
     && let Some(_) = arg_new_ty.try_find_alternate_tm(ctx, unique_arg)
     {
         let tags = arg_name.as_tag().cloned().into_iter().collect();

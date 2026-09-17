@@ -178,24 +178,6 @@ impl Tm {
         Neutral::fold(self, motive, zero_inhab, succ_inhab).into_tm()
     }
 
-    /*
-    pub fn unique_identity(
-        self,
-        motive: Scope<Ty>,
-        inhab: Tm,
-    ) -> Tm {
-        Neutral::unique_identity(self, motive, inhab).into_tm()
-    }
-
-    pub fn cong(
-        self,
-        motive: Scope<Scope<Ty>>,
-        inhab: Tm,
-    ) -> Tm {
-        Neutral::cong(self, motive, inhab).into_tm()
-    }
-    */
-
     pub fn explode(
         motive: Scope<Ty>,
     ) -> Tm {
@@ -277,105 +259,77 @@ impl Tm {
 }
 
 impl Unify for TmKind {
-    type Meta = Ty;
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        ty: Ty,
         tm_kind_0: TmKind,
         tm_kind_1: TmKind,
     ) -> Option<TmKind> {
-        // TODO: do I still need to do this now that I have TmKind::Proof? Or can we rely on these
-        // unifying by always succeeding if one side is Proof?
-        if ty.is_prop() {
-            return Some(TmKind::Proof);
+        fn unify_intro_and_stuck_neutral(
+            intro: Arc<IntroKind>,
+            neutral: Arc<NeutralData>,
+        ) -> Option<TmKind> {
+            let tm_kind_1 = TmKind::Neutral { neutral };
+            let intro_0 = Arc::unwrap_or_clone(intro);
+            match intro_0 {
+                IntroKind::Pair { head_tm: head_tm_0, tail_tm: tail_tm_0 } => {
+                    let tm_1 = Weaken::new(tm_kind_1.clone());
+                    let head_tm_1 = tm_1.clone().proj_head();
+                    let tail_tm_1 = tm_1.proj_tail();
+
+                    let _head_tm = Unify::unify(head_tm_0, head_tm_1)?;
+                    let _tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
+                    Some(tm_kind_1)
+                },
+                IntroKind::Func { res_tm: res_tm_0 } => {
+                    let tm_1 = Weaken::new(tm_kind_1.clone());
+                    let res_tm_1 = Scope::make(tm_1.ctx_len(), |arg_tm| {
+                        tm_1.app(arg_tm).into_inner()
+                    });
+                    let _res_tm = Unify::unify(res_tm_0, res_tm_1)?;
+                    Some(tm_kind_1)
+                },
+                _ => None,
+            }
         }
 
         match (tm_kind_0, tm_kind_1) {
             (TmKind::Proof, _) |
-            (_, TmKind::Proof) => unreachable!(),
+            (_, TmKind::Proof) => Some(TmKind::Proof),
 
             (TmKind::Intro { intro: intro_0 }, TmKind::Intro { intro: intro_1 }) => {
-                let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
+                let intro = Unify::unify(intro_0, intro_1)?;
                 Some(TmKind::Intro { intro })
             },
 
             (TmKind::Intro { intro: intro_0 }, TmKind::Neutral { neutral }) => {
-                match neutral.try_reduce_to_intro_assuming_relevant() {
-                    Some(intro_1) => {
-                        let intro_1 = intro_1.into_inner();
-                        let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
+                let tm_kind_1 = match neutral.try_reduce() {
+                    None => TmKind::Neutral { neutral },
+                    Some(tm_1) => tm_1.into_inner(),
+                };
+                match tm_kind_1 {
+                    TmKind::Proof => Some(TmKind::Proof),
+                    TmKind::Intro { intro: intro_1 } => {
+                        let intro = Unify::unify(intro_0, intro_1)?;
                         Some(TmKind::Intro { intro })
                     },
-                    None => {
-                        let tm_kind_1 = TmKind::Neutral { neutral };
-                        let intro_0 = Arc::unwrap_or_clone(intro_0);
-                        match intro_0 {
-                            IntroKind::Pair { head_tm: head_tm_0, tail_tm: tail_tm_0 } => {
-                                let tm_1 = Weaken::new(tm_kind_1.clone());
-                                let head_tm_1 = tm_1.clone().proj_head();
-                                let tail_tm_1 = tm_1.proj_tail();
-                                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
-
-                                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
-                                let _tail_tm = Unify::unify(
-                                    ctx_tys, tail_ty.bind(head_tm), tail_tm_0, tail_tm_1,
-                                )?;
-                                Some(tm_kind_1)
-                            },
-                            IntroKind::Func { res_tm: res_tm_0 } => {
-                                let tm_1 = Weaken::new(tm_kind_1.clone());
-                                let res_tm_1 = Scope::make(tm_1.ctx_len(), |arg_tm| {
-                                    tm_1.app(arg_tm).into_inner()
-                                });
-                                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
-
-                                let _res_tm = Unify::unify(
-                                    ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1,
-                                )?;
-                                Some(tm_kind_1)
-                            },
-                            _ => None,
-                        }
+                    TmKind::Neutral { neutral } => {
+                        unify_intro_and_stuck_neutral(intro_0, neutral)
                     },
                 }
             },
 
             (TmKind::Neutral { neutral }, TmKind::Intro { intro: intro_1 }) => {
-                match neutral.try_reduce_to_intro_assuming_relevant() {
-                    Some(intro_0) => {
-                        let intro_0 = intro_0.into_inner();
-                        let intro = Unify::unify(ctx_tys, ty, intro_0, intro_1)?;
+                let tm_kind_0 = match neutral.try_reduce() {
+                    None => TmKind::Neutral { neutral },
+                    Some(tm_0) => tm_0.into_inner(),
+                };
+                match tm_kind_0 {
+                    TmKind::Proof => Some(TmKind::Proof),
+                    TmKind::Intro { intro: intro_0 } => {
+                        let intro = Unify::unify(intro_0, intro_1)?;
                         Some(TmKind::Intro { intro })
                     },
-                    None => {
-                        let tm_kind_0 = TmKind::Neutral { neutral };
-                        let intro_1 = Arc::unwrap_or_clone(intro_1);
-                        match intro_1 {
-                            IntroKind::Pair { head_tm: head_tm_1, tail_tm: tail_tm_1 } => {
-                                let tm_0 = Weaken::new(tm_kind_0.clone());
-                                let head_tm_0 = tm_0.clone().proj_head();
-                                let tail_tm_0 = tm_0.proj_tail();
-                                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
-
-                                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
-                                let _tail_tm = Unify::unify(
-                                    ctx_tys, tail_ty.bind(head_tm), tail_tm_0, tail_tm_1,
-                                )?;
-                                Some(tm_kind_0)
-                            },
-                            IntroKind::Func { res_tm: res_tm_1 } => {
-                                let tm_0 = Weaken::new(tm_kind_0.clone());
-                                let res_tm_0 = Scope::make(tm_0.ctx_len(), |arg_tm| {
-                                    tm_0.app(arg_tm).into_inner()
-                                });
-                                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
-
-                                let _res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
-                                Some(tm_kind_0)
-                            },
-                            _ => None,
-                        }
+                    TmKind::Neutral { neutral } => {
+                        unify_intro_and_stuck_neutral(intro_1, neutral)
                     },
                 }
             },
@@ -388,40 +342,42 @@ impl Unify for TmKind {
                     (None, None) => {
                         let neutral_0 = Arc::unwrap_or_clone(neutral_0);
                         let neutral_1 = Arc::unwrap_or_clone(neutral_1);
-                        let kind = Unify::unify(ctx_tys, (), neutral_0.kind, neutral_1.kind)?;
+                        let kind = Unify::unify(neutral_0.kind, neutral_1.kind)?;
                         let neutral = NeutralData::new_arc(kind);
                         Some(TmKind::Neutral { neutral })
                     },
                     (None, Some(tm_1)) => {
                         match tm_1.into_inner() {
-                            TmKind::Intro { .. } => None,
+                            TmKind::Proof => Some(TmKind::Proof),
+                            TmKind::Intro { intro } => {
+                                unify_intro_and_stuck_neutral(intro, neutral_0)
+                            },
                             TmKind::Neutral { neutral: neutral_1 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
                                 Some(TmKind::Neutral { neutral })
                             },
-                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), None) => {
                         match tm_0.into_inner() {
-                            TmKind::Intro { .. } => None,
+                            TmKind::Proof => Some(TmKind::Proof),
+                            TmKind::Intro { intro } => {
+                                unify_intro_and_stuck_neutral(intro, neutral_1)
+                            },
                             TmKind::Neutral { neutral: neutral_0 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
                                 Some(TmKind::Neutral { neutral })
                             },
-                            TmKind::Proof => unreachable!(),
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {
-                        let tm = Unify::unify(ctx_tys, ty, tm_0.clone(), tm_1.clone())?;
+                        let tm = Unify::unify(tm_0, tm_1)?;
                         Some(tm.into_inner())
                     },
                 }

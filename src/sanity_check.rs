@@ -81,14 +81,6 @@ impl SanityCheck for FormKind {
             FormKind::Universe => (),
             FormKind::Nat => (),
 
-            /*
-            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
-                eq_ty.clone().sanity_check(ctx, ());
-                eq_tm_0.sanity_check(ctx, eq_ty.clone());
-                eq_tm_1.sanity_check(ctx, eq_ty);
-            },
-            */
-
             FormKind::Never => (),
             FormKind::Unit => (),
             FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
@@ -117,7 +109,7 @@ impl SanityCheck for NeutralKind {
         match self {
             NeutralKind::Var { index } => {
                 let var_ty = ctx[index].clone();
-                Unify::unify(ctx, (), var_ty, ty).unwrap();
+                Unify::unify(var_ty, ty).unwrap();
             },
             NeutralKind::Bind { var_tms, truncated_body_usages, body: _ } => {
                 assert!(truncated_body_usages.ctx_len() <= ctx.len());
@@ -142,13 +134,13 @@ impl SanityCheck for NeutralKind {
                         }),
                     )
                 );
-                Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
+                Unify::unify(motive.bind(elim), ty).unwrap();
             },
 
             NeutralKind::Explode { motive } => {
                 let motive = Weaken::new(motive).lift_scope();
                 motive.clone().sanity_check(ctx, (Ty::never(), Scope::constant(())));
-                Unify::unify(ctx, (), motive.bind(Tm::proof()), ty).unwrap();
+                Unify::unify(motive.bind(Tm::proof()), ty).unwrap();
             },
 
             NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
@@ -172,7 +164,7 @@ impl SanityCheck for NeutralKind {
                             Scope::make(ctx.len(), |rhs| motive.clone().bind(rhs.inj_rhs())),
                         ),
                     );
-                    Unify::unify(ctx, (), motive.bind(elim), ty).unwrap();
+                    Unify::unify(motive.bind(elim), ty).unwrap();
                 }
             },
 
@@ -195,7 +187,7 @@ impl SanityCheck for NeutralKind {
                                 .unwrap()
                             };
                             neutral.sanity_check(ctx, elim_ty);
-                            Unify::unify(ctx, (), head_ty, ty).unwrap();
+                            Unify::unify(head_ty, ty).unwrap();
                         }
                     },
                     TmKind::Proof => {
@@ -224,12 +216,7 @@ impl SanityCheck for NeutralKind {
                             };
                             neutral.clone().sanity_check(ctx, elim_ty);
                             let head_tm = Weaken::new(TmKind::Neutral { neutral }).proj_head();
-                            Unify::unify(
-                                ctx,
-                                (),
-                                tail_ty.bind(head_tm),
-                                ty,
-                            ).unwrap();
+                            Unify::unify(tail_ty.bind(head_tm), ty).unwrap();
                         }
                     },
                     TmKind::Proof => {
@@ -251,7 +238,7 @@ impl SanityCheck for NeutralKind {
                             let (_arg_name, arg_ty, res_ty) = elim_ty.clone().as_pi().unwrap();
                             elim.sanity_check(ctx, elim_ty);
                             arg_tm.clone().sanity_check(ctx, arg_ty);
-                            Unify::unify(ctx, (), res_ty.bind(arg_tm), ty).unwrap();
+                            Unify::unify(res_ty.bind(arg_tm), ty).unwrap();
                         }
                     },
                     TmKind::Proof => {
@@ -336,6 +323,78 @@ where
         ctx.push(var_ty);
         inner.sanity_check(ctx, meta);
         ctx.pop();
+    }
+}
+
+impl Neutral {
+    pub fn try_infer_ty(
+        &self,
+        ctx_tys: &mut Vec<Ty>,
+    ) -> Option<Ty> {
+        self.clone().into_inner().try_infer_ty(ctx_tys)
+    }
+}
+
+impl NeutralData {
+    pub fn try_infer_ty(
+        &self,
+        ctx_tys: &mut Vec<Ty>,
+    ) -> Option<Ty> {
+        self.kind.try_infer_ty(ctx_tys)
+    }
+}
+
+impl NeutralKind {
+    pub fn try_infer_ty(
+        &self,
+        ctx_tys: &mut Vec<Ty>,
+    ) -> Option<Ty> {
+        match self {
+            NeutralKind::Var { index } => Some(ctx_tys[*index].clone()),
+
+            NeutralKind::Bind { .. } => None,
+
+            NeutralKind::Fold { elim, motive, zero_inhab: _, succ_inhab: _ } => {
+                Some(motive.clone().bind(elim.clone()))
+            },
+
+            NeutralKind::Explode { motive } => {
+                Some(Weaken::new(motive.clone()).lift_scope().bind(Tm::proof()))
+            },
+
+            NeutralKind::Case { elim, motive, lhs_inhab: _, rhs_inhab: _ } => {
+                Some(motive.clone().bind(elim.clone()))
+            },
+
+            NeutralKind::ProjHead { elim } => {
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
+                let (_head_name, head_ty, _tail_ty) = elim_ty.as_sigma().unwrap();
+                Some(head_ty)
+            },
+
+            NeutralKind::ProjTail { elim } => {
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
+                let (_head_name, _head_ty, tail_ty) = elim_ty.as_sigma().unwrap();
+                Some(tail_ty.bind(Weaken::new(elim.clone()).proj_head()))
+            },
+
+            NeutralKind::App { elim, arg_tm } => {
+                let neutral = elim.clone().as_neutral()?;
+                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
+                let (_arg_name, _arg_ty, res_ty) = elim_ty.as_pi().unwrap();
+                Some(res_ty.bind(arg_tm.clone()))
+            },
+
+            NeutralKind::ObsEqual { .. } => {
+                Some(Ty::universe())
+            },
+
+            NeutralKind::Cast { ty_0: _, ty_1, tm_0: _ } => {
+                Some(ty_1.clone())
+            },
+        }
     }
 }
 

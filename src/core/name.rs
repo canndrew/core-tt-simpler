@@ -70,11 +70,7 @@ impl Bindable for Name {
 }
 
 impl Unify for NameKind {
-    type Meta = ();
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        (): (),
         name_kind_0: NameKind,
         name_kind_1: NameKind,
     ) -> Option<NameKind> {
@@ -113,7 +109,7 @@ impl Unify for NameKind {
                     (None, None) => {
                         let neutral_0 = Arc::unwrap_or_clone(neutral_0);
                         let neutral_1 = Arc::unwrap_or_clone(neutral_1);
-                        let kind = Unify::unify(ctx_tys, (), neutral_0.kind, neutral_1.kind)?;
+                        let kind = Unify::unify(neutral_0.kind, neutral_1.kind)?;
                         let neutral = NeutralData::new_arc(kind);
                         Some(NameKind::Neutral { neutral })
                     },
@@ -122,7 +118,6 @@ impl Unify for NameKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_1 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -136,7 +131,6 @@ impl Unify for NameKind {
                             TmKind::Intro { .. } => None,
                             TmKind::Neutral { neutral: neutral_0 } => {
                                 let neutral = NeutralData::unify_without_cached_reduction(
-                                    ctx_tys,
                                     neutral_0,
                                     neutral_1,
                                 )?;
@@ -146,7 +140,7 @@ impl Unify for NameKind {
                         }
                     },
                     (Some(tm_0), Some(tm_1)) => {
-                        let tm = Unify::unify(ctx_tys, Ty::name(), tm_0.clone(), tm_1.clone())?;
+                        let tm = Unify::unify(tm_0.clone(), tm_1.clone())?;
                         Some(tm.into_inner().into_name_kind())
                     },
                 }

@@ -36,11 +36,7 @@ pub enum FormKind {
 }
 
 impl Unify for FormKind {
-    type Meta = ();
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        (): (),
         form_kind_0: FormKind,
         form_kind_1: FormKind,
     ) -> Option<FormKind> {
@@ -51,18 +47,6 @@ impl Unify for FormKind {
 
             (FormKind::Nat, FormKind::Nat) => Some(FormKind::Nat),
 
-            /*
-            (
-                FormKind::Equal { eq_ty: eq_ty_0, eq_tm_0: eq_tm_0_0, eq_tm_1: eq_tm_1_0 },
-                FormKind::Equal { eq_ty: eq_ty_1, eq_tm_0: eq_tm_0_1, eq_tm_1: eq_tm_1_1 },
-            ) => {
-                let eq_ty = Unify::unify(ctx_tys, (), eq_ty_0, eq_ty_1)?;
-                let eq_tm_0 = Unify::unify(ctx_tys, eq_ty.clone(), eq_tm_0_0, eq_tm_0_1)?;
-                let eq_tm_1 = Unify::unify(ctx_tys, eq_ty.clone(), eq_tm_1_0, eq_tm_1_1)?;
-                Some(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
-            },
-            */
-
             (FormKind::Never, FormKind::Never) => Some(FormKind::Never),
 
             (FormKind::Unit, FormKind::Unit) => Some(FormKind::Unit),
@@ -71,9 +55,9 @@ impl Unify for FormKind {
                 FormKind::Sum { lhs_name: lhs_name_0, lhs_ty: lhs_ty_0, rhs_ty: rhs_ty_0 },
                 FormKind::Sum { lhs_name: lhs_name_1, lhs_ty: lhs_ty_1, rhs_ty: rhs_ty_1 },
             ) => {
-                let lhs_name = Unify::unify(ctx_tys, (), lhs_name_0, lhs_name_1)?;
-                let lhs_ty = Unify::unify(ctx_tys, (), lhs_ty_0, lhs_ty_1)?;
-                let rhs_ty = Unify::unify(ctx_tys, (), rhs_ty_0, rhs_ty_1)?;
+                let lhs_name = Unify::unify(lhs_name_0, lhs_name_1)?;
+                let lhs_ty = Unify::unify(lhs_ty_0, lhs_ty_1)?;
+                let rhs_ty = Unify::unify(rhs_ty_0, rhs_ty_1)?;
                 Some(FormKind::Sum { lhs_name, lhs_ty, rhs_ty })
             },
 
@@ -81,10 +65,10 @@ impl Unify for FormKind {
                 FormKind::Sigma { head_name: head_name_0, head_ty: head_ty_0, tail_ty: tail_ty_0 },
                 FormKind::Sigma { head_name: head_name_1, head_ty: head_ty_1, tail_ty: tail_ty_1 },
             ) => {
-                let head_name = Unify::unify(ctx_tys, (), head_name_0, head_name_1)?;
-                let head_ty = Unify::unify(ctx_tys, (), head_ty_0, head_ty_1)?;
+                let head_name = Unify::unify(head_name_0, head_name_1)?;
+                let head_ty = Unify::unify(head_ty_0, head_ty_1)?;
                 let tail_ty = Unify::unify(
-                    ctx_tys, (head_ty.clone(), Scope::constant(())), tail_ty_0, tail_ty_1,
+                    tail_ty_0, tail_ty_1,
                 )?;
                 Some(FormKind::Sigma { head_name, head_ty, tail_ty })
             },
@@ -93,10 +77,10 @@ impl Unify for FormKind {
                 FormKind::Pi { arg_name: arg_name_0, arg_ty: arg_ty_0, res_ty: res_ty_0 },
                 FormKind::Pi { arg_name: arg_name_1, arg_ty: arg_ty_1, res_ty: res_ty_1 },
             ) => {
-                let arg_name = Unify::unify(ctx_tys, (), arg_name_0, arg_name_1)?;
-                let arg_ty = Unify::unify(ctx_tys, (), arg_ty_0, arg_ty_1)?;
+                let arg_name = Unify::unify(arg_name_0, arg_name_1)?;
+                let arg_ty = Unify::unify(arg_ty_0, arg_ty_1)?;
                 let res_ty = Unify::unify(
-                    ctx_tys, (arg_ty.clone(), Scope::constant(())), res_ty_0, res_ty_1,
+                    res_ty_0, res_ty_1,
                 )?;
                 Some(FormKind::Pi { arg_name, arg_ty, res_ty })
             },

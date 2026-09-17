@@ -33,11 +33,11 @@ impl Simplification {
     pub fn from_constraint(
         orig_ty: &Ty,
         index: usize,
-        constraint: Constraint,
+        unique_tm: Tm,
     ) -> Simplification {
         let new_ty = orig_ty.clone();
         let iso = Iso::refl();
-        let constraints = Constraints::single(index, constraint);
+        let constraints = Constraints::single(index, unique_tm);
         let eliminated = Usages::empty();
         Simplification { new_ty, iso, constraints, eliminated }
     }

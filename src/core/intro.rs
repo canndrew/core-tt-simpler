@@ -36,20 +36,10 @@ pub enum IntroKind {
 }
 
 impl Unify for IntroKind {
-    type Meta = Ty;
-
     fn unify(
-        ctx_tys: &mut Vec<Ty>,
-        ty: Ty,
         intro_kind_0: IntroKind,
         intro_kind_1: IntroKind,
     ) -> Option<IntroKind> {
-        // TODO: do I still need to do this now that I have TmKind::Proof? Or can we avoid calling
-        // this in the first place?
-        if ty.is_prop() {
-            return Some(intro_kind_0);
-        }
-
         match (intro_kind_0, intro_kind_1) {
             (IntroKind::Tag { tag: tag_0 }, IntroKind::Tag { tag: tag_1 }) => {
                 let tag = as_equal(tag_0, &tag_1)?;
@@ -57,7 +47,7 @@ impl Unify for IntroKind {
             },
             
             (IntroKind::Form { form: form_0 }, IntroKind::Form { form: form_1 }) => {
-                let form = Unify::unify(ctx_tys, (), form_0, form_1)?;
+                let form = Unify::unify(form_0, form_1)?;
                 Some(IntroKind::Form { form })
             },
 
@@ -136,7 +126,7 @@ impl Unify for IntroKind {
                     },
                     (None, Some(_)) | (Some(_), None) => None,
                     (Some(pred_tm_0), Some(pred_tm_1)) => {
-                        let kind = Unify::unify(ctx_tys, (), pred_tm_0.kind, pred_tm_1.kind)?;
+                        let kind = Unify::unify(pred_tm_0.kind, pred_tm_1.kind)?;
                         let pred_tm = NeutralData::new_arc(kind);
                         Some(IntroKind::Succs { succ_count_m1, pred_tm })
                     },
@@ -186,14 +176,12 @@ impl Unify for IntroKind {
             },
 
             (IntroKind::InjLhs { lhs_tm: lhs_tm_0 }, IntroKind::InjLhs { lhs_tm: lhs_tm_1 }) => {
-                let (_lhs_name, lhs_ty, _rhs_ty) = ty.as_sum().unwrap();
-                let lhs_tm = Unify::unify(ctx_tys, lhs_ty, lhs_tm_0, lhs_tm_1)?;
+                let lhs_tm = Unify::unify(lhs_tm_0, lhs_tm_1)?;
                 Some(IntroKind::InjLhs { lhs_tm })
             },
 
             (IntroKind::InjRhs { rhs_tm: rhs_tm_0 }, IntroKind::InjRhs { rhs_tm: rhs_tm_1 }) => {
-                let (_lhs_name, _lhs_ty, rhs_ty) = ty.as_sum().unwrap();
-                let rhs_tm = Unify::unify(ctx_tys, rhs_ty, rhs_tm_0, rhs_tm_1)?;
+                let rhs_tm = Unify::unify(rhs_tm_0, rhs_tm_1)?;
                 Some(IntroKind::InjRhs { rhs_tm })
             },
 
@@ -201,15 +189,13 @@ impl Unify for IntroKind {
                 IntroKind::Pair { head_tm: head_tm_0, tail_tm: tail_tm_0 },
                 IntroKind::Pair { head_tm: head_tm_1, tail_tm: tail_tm_1 },
             ) => {
-                let (_head_name, head_ty, tail_ty) = ty.as_sigma().unwrap();
-                let head_tm = Unify::unify(ctx_tys, head_ty, head_tm_0, head_tm_1)?;
-                let tail_tm = Unify::unify(ctx_tys, tail_ty.bind(head_tm.clone()), tail_tm_0, tail_tm_1)?;
+                let head_tm = Unify::unify(head_tm_0, head_tm_1)?;
+                let tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
                 Some(IntroKind::Pair { head_tm, tail_tm })
             },
 
             (IntroKind::Func { res_tm: res_tm_0 }, IntroKind::Func { res_tm: res_tm_1 }) => {
-                let (_arg_name, arg_ty, res_ty) = ty.as_pi().unwrap();
-                let res_tm = Unify::unify(ctx_tys, (arg_ty, res_ty), res_tm_0, res_tm_1)?;
+                let res_tm = Unify::unify(res_tm_0, res_tm_1)?;
                 Some(IntroKind::Func { res_tm })
             },
 
