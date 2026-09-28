@@ -1,5 +1,8 @@
 use crate::priv_prelude::*;
-use parser::ast;
+use {
+    parser::ast,
+    crate::check::{injections, projections},
+};
 
 pub trait Check {
     type Output;
@@ -420,21 +423,21 @@ impl Check for Spanned<ast::ExprInjLhs> {
                         Ty::nat(),
                     )
                     .and_then(ch, |ch, _, inj_count| {
-                        let injections_metas = implicit_rhs_injections_metas(self.span());
+                        let injections_metas = injections::metas(self.span());
                         let injections_metas = injections_metas.each_ref();
                         Checked::assume(
                             injections_metas[0].clone(),
-                            implicit_rhs_injections_ty(ch.ctx_len(), injections_metas, inj_count.clone())
+                            injections::ty(ch.ctx_len(), injections_metas, inj_count.clone())
                         )
                         .map(ch, |ch, _, injections| {
-                            let ty = apply_implicit_rhs_injections_to_ty(
+                            let ty = injections::apply_to_ty(
                                 ch.ctx_len(),
                                 injections_metas,
                                 inj_count.clone(),
                                 injections.clone(),
                                 base_ty.clone(),
                             );
-                            let tm = apply_implicit_rhs_injections_to_tm(
+                            let tm = injections::apply_to_tm(
                                 ch.ctx_len(),
                                 injections_metas,
                                 inj_count,
@@ -534,11 +537,11 @@ impl Check for Spanned<ast::ExprProj> {
                     Ty::nat(),
                 )
                 .and_then(ch, |ch, _, proj_count| {
-                    let projections_metas = implicit_tail_projections_metas(self.span());
+                    let projections_metas = projections::metas(self.span());
                     let projections_metas = projections_metas.each_ref();
                     Checked::assume(
                         projections_metas[0].clone(),
-                        implicit_tail_projections_ty(
+                        projections::ty(
                             ch.ctx_len(),
                             projections_metas,
                             proj_count.clone(),
@@ -547,7 +550,7 @@ impl Check for Spanned<ast::ExprProj> {
                         ),
                     )
                     .and_then(ch, |ch, _, projections| {
-                        let ty = apply_implicit_tail_projections_to_ty(
+                        let ty = projections::apply_to_ty(
                             ch.ctx_len(),
                             projections_metas,
                             proj_count.clone(),
@@ -555,7 +558,7 @@ impl Check for Spanned<ast::ExprProj> {
                             base_tm.clone(),
                             projections.clone(),
                         );
-                        let tm = apply_implicit_tail_projections_to_tm(
+                        let tm = projections::apply_to_tm(
                             ch.ctx_len(),
                             projections_metas,
                             proj_count,
@@ -1168,13 +1171,11 @@ fn check_pat_var(
 }
 
 fn check_pat_refl(
-    _ch: &mut CheckCtx,
-    _pat_refl: &Spanned<ast::PatRefl>,
-    _var_ty: Ty,
-    _func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
+    ch: &mut CheckCtx,
+    pat_refl: &Spanned<ast::PatRefl>,
+    var_ty: Ty,
+    func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
-    todo!()
-    /*
     let refl_pat_span = pat_refl.span();
     let ast::PatRefl { eq_pat } = &pat_refl.inner;
 
@@ -1208,7 +1209,7 @@ fn check_pat_refl(
                         Ty::obs_equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1.clone()).into_tm(),
                     ),
                 )
-                .and_then(ch, |ch, _, var_tys_eq| {
+                .and_then(ch, |ch, _, _var_tys_eq| {
                     Checked::assume(
                         MetaTag::ReflPatMotive {
                             refl_pat_span: refl_pat_span.clone(),
@@ -1225,7 +1226,7 @@ fn check_pat_refl(
                                         refl_pat_span: refl_pat_span.clone(),
                                         eq_pat_span: eq_pat.span(),
                                     }.into(),
-                                    Ty::equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1),
+                                    Ty::obs_equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1),
                                     Scope::constant(Ty::universe()),
                                 )
                             })
@@ -1247,7 +1248,7 @@ fn check_pat_refl(
                                     motive
                                     .clone()
                                     .app(eq_tm_0.clone())
-                                    .app(eq_tm_0.clone().obs_refl())
+                                    .app(Tm::proof())
                                     .into_ty()
                                 };
 
@@ -1257,21 +1258,20 @@ fn check_pat_refl(
                                         refl_pat_span: refl_pat_span.clone(),
                                     },
                                     inhab_ty,
-                                    expected_inhab_ty,
+                                    expected_inhab_ty.clone(),
                                     inhab,
                                 )
                                 .map(ch, |ch, _, inhab| {
                                     Scope::make(ch.ctx_len(), |var_tm| {
-                                        let elim = {
-                                            var_tys_eq
-                                            .transport(
-                                                var_ty.clone(),
-                                                var_tm,
-                                                MetaTag::ReflPatVarTm {
-                                                    refl_pat_span: refl_pat_span.clone(),
-                                                }.into(),
-                                            )
-                                        };
+                                        let elim = Tm::cast(
+                                            var_ty.clone(),
+                                            Ty::obs_equal(
+                                                eq_ty.clone(),
+                                                eq_tm_0.clone(),
+                                                eq_tm_1.clone(),
+                                            ),
+                                            var_tm,
+                                        );
                                         let ty = {
                                             motive
                                             .clone()
@@ -1279,17 +1279,11 @@ fn check_pat_refl(
                                             .app(elim.clone())
                                             .into_ty()
                                         };
-                                        let tm = {
-                                            elim
-                                            .cong(
-                                                Scope::make(ch.ctx_len() + 1, |eq_tm_1| {
-                                                    Scope::make(ch.ctx_len() + 2, |elim| {
-                                                        motive.app(eq_tm_1).app(elim).into_ty()
-                                                    })
-                                                }),
-                                                inhab,
-                                            )
-                                        };
+                                        let tm = Tm::cast(
+                                            expected_inhab_ty,
+                                            ty.clone(),
+                                            inhab,
+                                        );
                                         Checked::pure((ty, tm))
                                     })
                                 })
@@ -1300,7 +1294,6 @@ fn check_pat_refl(
             })
         })
     })
-    */
 }
 
 fn check_pat_struct_term(
@@ -1709,455 +1702,5 @@ fn lookup_var(ch: &mut CheckCtx, span: Span, var_name: Name) -> Checked<(Ty, Tm)
             Checked::pure((var_ty, Tm::var(index)))
         },
     }
-}
-
-fn implicit_rhs_injections_metas(
-    inj_span: Span,
-) -> [MetaTag; 4] {
-    [
-        MetaTag::InjLhsImplicitRhsInjections {
-            inj_span: inj_span.clone(),
-        },
-        MetaTag::InjLhsImplicitRhsInjection {
-            inj_span: inj_span.clone(),
-        },
-        MetaTag::InjLhsImplicitRhsInjectionLhsName {
-            inj_span: inj_span.clone(),
-        },
-        MetaTag::InjLhsImplicitRhsInjectionLhsTy {
-            inj_span: inj_span.clone(),
-        },
-    ]
-}
-
-fn implicit_rhs_injections_ty(
-    ctx_len: usize,
-    injections_metas: [&MetaTag; 4],
-    inj_count: Tm,
-) -> Ty {
-    let [_, injection_meta, lhs_name_meta, lhs_ty_meta] = injections_metas;
-    inj_count
-    .fold(
-        Scope::constant(Ty::universe()),
-        Ty::unit().into_tm(),
-        Scope::constant(Scope::make(ctx_len + 2, |state| {
-            Ty::sigma(
-                injection_meta.clone().into(),
-                Ty::sigma(
-                    lhs_name_meta.clone().into(),
-                    Ty::name(),
-                    Scope::constant(Ty::sigma(
-                        lhs_ty_meta.clone().into(),
-                        Ty::universe(),
-                        Scope::constant(Ty::unit()),
-                    )),
-                ),
-                Scope::constant(state.into_ty()),
-            )
-            .into_tm()
-        })),
-    )
-    .into_ty()
-}
-
-fn apply_implicit_rhs_injections_to_ty(
-    ctx_len: usize,
-    injections_metas: [&MetaTag; 4],
-    inj_count: Tm,
-    injections: Tm,
-    base_ty: Ty,
-) -> Ty {
-    let [injections_meta, _, _, _] = injections_metas;
-    inj_count
-    .fold(
-        Scope::make(ctx_len, |inj_count| {
-            Ty::pi(
-                injections_meta.clone().into(),
-                implicit_rhs_injections_ty(ctx_len + 1, injections_metas, inj_count),
-                Scope::constant(Ty::universe()),
-            )
-        }),
-        Tm::func(Scope::constant(base_ty.into_tm())),
-        Scope::constant(Scope::make(ctx_len + 2, |apply_rhs_injections| {
-            Tm::func(Scope::make(ctx_len + 3, |rhs_injections| {
-                let rhs_injection = rhs_injections.clone().proj_head();
-                let rhs_injections = rhs_injections.proj_tail();
-
-                let lhs_name = rhs_injection.clone().proj_head();
-                let rhs_injection = rhs_injection.proj_tail();
-                let lhs_ty = rhs_injection.proj_head();
-
-                Ty::sum(
-                    lhs_name.into_name(),
-                    lhs_ty.into_ty(),
-                    apply_rhs_injections.app(rhs_injections).into_ty(),
-                )
-                .into_tm()
-            }))
-        })),
-    )
-    .app(injections)
-    .into_ty()
-}
-
-fn apply_implicit_rhs_injections_to_tm(
-    ctx_len: usize,
-    injections_metas: [&MetaTag; 4],
-    inj_count: Tm,
-    injections: Tm,
-    base_ty: Ty,
-    base_tm: Tm,
-) -> Tm {
-    let [injections_meta, _, _, _] = injections_metas;
-    inj_count
-    .fold(
-        Scope::make(
-            ctx_len,
-            |inj_count| {
-                Ty::pi(
-                    injections_meta.clone().into(),
-                    implicit_rhs_injections_ty(ctx_len + 1, injections_metas, inj_count.clone()),
-                    Scope::make(ctx_len + 1, |injections| {
-                        apply_implicit_rhs_injections_to_ty(
-                            ctx_len + 2,
-                            injections_metas,
-                            inj_count,
-                            injections,
-                            base_ty,
-                        )
-                    }),
-                )
-            },
-        ),
-        Tm::func(Scope::constant(base_tm)),
-        Scope::constant(Scope::make(ctx_len + 2, |apply_rhs_injections| {
-            Tm::func(Scope::make(ctx_len + 3, |rhs_injections| {
-                apply_rhs_injections.app(rhs_injections.proj_tail()).inj_rhs()
-            }))
-        })),
-    )
-    .app(injections)
-}
-
-fn implicit_tail_projections_metas(
-    proj_span: Span,
-) -> [MetaTag; 8] {
-    [
-        MetaTag::ProjHeadImplicitTailProjections {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadBaseTy {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadBaseTm {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadImplicitTailProjection {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadImplicitTailProjectionInferredHeadName {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadImplicitTailProjectionHeadTy {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadImplicitTailProjectionTailTy {
-            proj_span: proj_span.clone(),
-        },
-        MetaTag::ProjHeadImplicitTailProjectionBaseTyEqualsExpectedType {
-            proj_span: proj_span.clone(),
-        },
-    ]
-}
-
-fn implicit_tail_projections_ty(
-    ctx_len: usize,
-    projections_metas: [&MetaTag; 8],
-    proj_count: Tm,
-    base_ty: Ty,
-    base_tm: Tm,
-) -> Ty {
-    let [
-        _,
-        base_ty_meta,
-        base_tm_meta,
-        projection_meta,
-        inferred_head_name_meta,
-        head_ty_meta,
-        tail_ty_meta,
-        base_ty_eq_meta,
-    ] = projections_metas;
-    proj_count
-    .fold(
-        Scope::constant(Ty::pi(
-            base_ty_meta.clone().into(),
-            Ty::universe(),
-            Scope::make(ctx_len + 1, |base_ty| Ty::pi(
-                base_tm_meta.clone().into(),
-                base_ty.into_ty(),
-                Scope::constant(Ty::universe()),
-            )),
-        )),
-        Tm::func(Scope::constant(Tm::func(Scope::constant(Ty::unit().into_tm())))),
-        Scope::constant(Scope::make(ctx_len + 1, |projections_ty| {
-            Tm::func(Scope::make(ctx_len + 2, |base_ty| {
-                Tm::func(Scope::make(ctx_len + 3, |base_tm| {
-                    Ty::sigma(
-                        projection_meta.clone().into(),
-                        Ty::sigma(
-                            inferred_head_name_meta.clone().into(),
-                            Ty::name(),
-                            Scope::make(ctx_len + 4, |inferred_head_name| {
-                                let inferred_head_name = inferred_head_name.into_name();
-                                Ty::sigma(
-                                    head_ty_meta.clone().into(),
-                                    Ty::universe(),
-                                    Scope::make(ctx_len + 5, |head_ty| {
-                                        let head_ty = head_ty.into_ty();
-                                        Ty::sigma(
-                                            tail_ty_meta.clone().into(),
-                                            Ty::pi(
-                                                inferred_head_name.clone(),
-                                                head_ty.clone(),
-                                                Scope::constant(Ty::universe()),
-                                            ),
-                                            Scope::make(ctx_len + 6, |tail_ty| {
-                                                Ty::sigma(
-                                                    base_ty_eq_meta.clone().into(),
-                                                    Ty::obs_equal(
-                                                        Ty::universe(),
-                                                        base_ty.clone(),
-                                                        Ty::sigma(
-                                                            inferred_head_name,
-                                                            head_ty,
-                                                            Scope::make(ctx_len + 7, |head_tm| {
-                                                                tail_ty.app(head_tm).into_ty()
-                                                            }),
-                                                        )
-                                                        .into_tm(),
-                                                    ),
-                                                    Scope::constant(Ty::unit()),
-                                                )
-                                            }),
-                                        )
-                                    }),
-                                )
-                            }),
-                        ),
-                        Scope::make(ctx_len + 4, |projection| {
-                            let head_name = projection.clone().proj_head();
-                            let projection = projection.proj_tail();
-                            let head_ty = projection.clone().proj_head();
-                            let projection = projection.proj_tail();
-                            let tail_ty = projection.proj_head();
-                            let pair = Tm::cast(
-                                base_ty.into_ty(),
-                                Ty::sigma(
-                                    head_name.into_name(),
-                                    head_ty.into_ty(),
-                                    Scope::make(ctx_len + 5, |head| {
-                                        tail_ty.clone().app(head).into_ty()
-                                    }),
-                                ),
-                                base_tm,
-                            );
-                            let head = pair.clone().proj_head();
-
-                            let base_ty = tail_ty.app(head);
-                            let base_tm = pair.proj_tail();
-                            projections_ty
-                            .app(base_ty)
-                            .app(base_tm)
-                            .into_ty()
-                        }),
-                    )
-                    .into_tm()
-                }))
-            }))
-        })),
-    )
-    .app(base_ty.into_tm())
-    .app(base_tm)
-    .into_ty()
-}
-
-fn apply_implicit_tail_projections_to_ty(
-    ctx_len: usize,
-    projections_metas: [&MetaTag; 8],
-    proj_count: Tm,
-    base_ty: Ty,
-    base_tm: Tm,
-    projections: Tm,
-) -> Ty {
-    let [
-        projections_meta,
-        base_ty_meta,
-        base_tm_meta,
-        _,
-        _,
-        _,
-        _,
-        _,
-    ] = projections_metas;
-
-    proj_count
-    .fold(
-        Scope::make(ctx_len, |proj_count| Ty::pi(
-            base_ty_meta.clone().into(),
-            Ty::universe(),
-            Scope::make(ctx_len + 1, |base_ty| Ty::pi(
-                base_tm_meta.clone().into(),
-                base_ty.clone().into_ty(),
-                Scope::make(ctx_len + 2, |base_tm| Ty::pi(
-                    projections_meta.clone().into(),
-                    implicit_tail_projections_ty(
-                        ctx_len + 3,
-                        projections_metas,
-                        proj_count,
-                        base_ty.into_ty(),
-                        base_tm,
-                    ),
-                    Scope::constant(Ty::universe()),
-                )),
-            )),
-        )),
-        Tm::func(Scope::make(ctx_len, |base_ty| {
-            Tm::func(Scope::constant(Tm::func(Scope::constant(base_ty))))
-        })),
-        Scope::constant(Scope::make(ctx_len + 1, |apply_projections| {
-            Tm::func(Scope::make(ctx_len + 2, |base_ty| {
-                Tm::func(Scope::make(ctx_len + 3, |base_tm| {
-                    Tm::func(Scope::make(ctx_len + 4, |projections| {
-                        let projection = projections.clone().proj_head();
-                        let projections = projections.proj_tail();
-
-                        let head_name = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let head_ty = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let tail_ty = projection.proj_head();
-
-                        let pair = Tm::cast(
-                            base_ty.into_ty(),
-                            Ty::sigma(
-                                head_name.into_name(),
-                                head_ty.into_ty(),
-                                Scope::make(ctx_len + 5, |head| {
-                                    tail_ty.clone().app(head).into_ty()
-                                }),
-                            ),
-                            base_tm,
-                        );
-                        let head = pair.clone().proj_head();
-
-                        let base_ty = tail_ty.app(head);
-                        let base_tm = pair.proj_tail();
-                        apply_projections
-                        .app(base_ty)
-                        .app(base_tm)
-                        .app(projections)
-                    }))
-                }))
-            }))
-        })),
-    )
-    .app(base_ty.into_tm())
-    .app(base_tm)
-    .app(projections)
-    .into_ty()
-}
-
-fn apply_implicit_tail_projections_to_tm(
-    ctx_len: usize,
-    projections_metas: [&MetaTag; 8],
-    proj_count: Tm,
-    base_ty: Ty,
-    base_tm: Tm,
-    projections: Tm,
-) -> Tm {
-    let [
-        projections_meta,
-        base_ty_meta,
-        base_tm_meta,
-        _,
-        _,
-        _,
-        _,
-        _,
-    ] = projections_metas;
-
-    proj_count
-    .fold(
-        Scope::make(ctx_len, |proj_count| Ty::pi(
-            base_ty_meta.clone().into(),
-            Ty::universe(),
-            Scope::make(ctx_len + 1, |base_ty| Ty::pi(
-                base_tm_meta.clone().into(),
-                base_ty.clone().into_ty(),
-                Scope::make(ctx_len + 2, |base_tm| Ty::pi(
-                    projections_meta.clone().into(),
-                    implicit_tail_projections_ty(
-                        ctx_len + 3,
-                        projections_metas,
-                        proj_count.clone(),
-                        base_ty.clone().into_ty(),
-                        base_tm.clone(),
-                    ),
-                    Scope::make(ctx_len + 3, |projections| {
-                        apply_implicit_tail_projections_to_ty(
-                            ctx_len + 4,
-                            projections_metas,
-                            proj_count,
-                            base_ty.into_ty(),
-                            base_tm,
-                            projections,
-                        )
-                    }),
-                )),
-            )),
-        )),
-        Tm::func(Scope::constant(Tm::func(Scope::make(ctx_len + 1, |base_tm| {
-            Tm::func(Scope::constant(base_tm))
-        })))),
-        Scope::constant(Scope::make(ctx_len + 1, |apply_projections| {
-            Tm::func(Scope::make(ctx_len + 2, |base_ty| {
-                Tm::func(Scope::make(ctx_len + 3, |base_tm| {
-                    Tm::func(Scope::make(ctx_len + 4, |projections| {
-                        let projection = projections.clone().proj_head();
-                        let projections = projections.proj_tail();
-
-                        let head_name = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let head_ty = projection.clone().proj_head();
-                        let projection = projection.proj_tail();
-                        let tail_ty = projection.proj_head();
-
-                        let pair = Tm::cast(
-                            base_ty.into_ty(),
-                            Ty::sigma(
-                                head_name.into_name(),
-                                head_ty.into_ty(),
-                                Scope::make(ctx_len + 5, |head| {
-                                    tail_ty.clone().app(head).into_ty()
-                                }),
-                            ),
-                            base_tm,
-                        );
-                        let head = pair.clone().proj_head();
-
-                        let base_ty = tail_ty.app(head);
-                        let base_tm = pair.proj_tail();
-                        apply_projections
-                        .app(base_ty)
-                        .app(base_tm)
-                        .app(projections)
-                    }))
-                }))
-            }))
-        })),
-    )
-    .app(base_ty.into_tm())
-    .app(base_tm)
-    .app(projections)
 }
 

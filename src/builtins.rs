@@ -110,6 +110,48 @@ lazy_static! {
         });
 
         builtins.push(Builtin {
+            name: "cast",
+            ty: Ty::pi(
+                Name::from("From"),
+                Ty::universe(),
+                Scope::make(0, |from_ty| {
+                    let from_ty = from_ty.into_ty();
+                    Ty::pi(
+                        Name::from("Into"),
+                        Ty::universe(),
+                        Scope::make(1, |into_ty| {
+                            let into_ty = into_ty.into_ty();
+                            Ty::pi(
+                                Name::from("elim"),
+                                Ty::obs_equal(
+                                    Ty::universe(),
+                                    from_ty.clone().into_tm(),
+                                    into_ty.clone().into_tm(),
+                                ),
+                                Scope::constant(
+                                    Ty::pi(
+                                        Name::from("val"),
+                                        from_ty,
+                                        Scope::constant(into_ty),
+                                    )
+                                ),
+                            )
+                        }),
+                    )
+                }),
+            ),
+            tm: Tm::func(Scope::make(0, |from_ty| {
+                Tm::func(Scope::make(1, |into_ty| {
+                    Tm::func(Scope::constant(
+                        Tm::func(Scope::make(3, |tm| {
+                            Tm::cast(from_ty.into_ty(), into_ty.into_ty(), tm)
+                        }))
+                    ))
+                }))
+            }))
+        });
+
+        builtins.push(Builtin {
             name: "fold",
             ty: Ty::pi(
                 Name::from("Motive"),
@@ -305,5 +347,15 @@ lazy_static! {
 
         builtins
     };
+}
+
+// TODO: use an IndexMap
+pub fn get_index(name: &'static str) -> usize {
+    for (index, builtin) in BUILTINS.iter().enumerate() {
+        if name == builtin.name {
+            return index;
+        }
+    }
+    panic!("no such builtin")
 }
 

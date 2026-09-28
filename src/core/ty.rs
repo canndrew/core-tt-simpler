@@ -99,13 +99,6 @@ impl Ty {
         form.as_nat()
     }
 
-    /*
-    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
-        let form = self.try_reduce_to_form()?;
-        form.as_equal()
-    }
-    */
-
     pub fn as_never(self) -> Option<()> {
         let form = self.try_reduce_to_form()?;
         form.as_never()
@@ -135,14 +128,12 @@ impl Ty {
         self.try_map(|ty_kind| ty_kind.as_neutral())
     }
 
-    pub fn is_prop(&self) -> bool {
-        self.weak().is_prop()
+    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
+        self.into_inner().as_equal()
     }
 
-    pub fn deep_nf(self) -> Ty {
-        self.map_out_unfiltered(|ty_kind| {
-            ty_kind.deep_nf()
-        })
+    pub fn is_prop(&self) -> bool {
+        self.weak().is_prop()
     }
 }
 
@@ -173,13 +164,24 @@ impl TyKind {
         }
     }
 
-    pub fn deep_nf(self) -> Ty {
+    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
+        match self {
+            TyKind::Form { form } => Arc::unwrap_or_clone(form).as_equal(),
+            TyKind::Neutral { neutral } => Arc::unwrap_or_clone(neutral).as_equal(),
+        }
+    }
+}
+
+impl DeepNf for TyKind {
+    type Output = Ty;
+
+    fn deep_nf(self) -> Ty {
         match self {
             TyKind::Form { form } => {
-                Arc::unwrap_or_clone(form).deep_nf().into_ty()
+                form.deep_nf().into_ty()
             },
             TyKind::Neutral { neutral } => {
-                Arc::unwrap_or_clone(neutral).deep_nf().into_ty()
+                neutral.deep_nf().into_ty()
             },
         }
     }

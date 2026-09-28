@@ -1,5 +1,17 @@
 use crate::priv_prelude::*;
 
+fn print<T: crate::pprint::Pretty<()> + Clone>(
+    ctx: &[Ty],
+    val: &T,
+) -> impl fmt::Display {
+    fmt::from_fn(|f| {
+        let mut ctx = ctx.iter().map(|ty| (None, Some(ty.clone()))).collect();
+        let mut s = String::new();
+        crate::pprint::Pretty::pretty(val.clone(), &mut ctx, 0, &mut s, ());
+        f.write_str(&s)
+    })
+}
+
 impl Ty {
     pub fn simplify(
         &self,
@@ -9,14 +21,46 @@ impl Ty {
         // otherwise we are solving under a sum and the constraint might get dropped, so keep going.
         preserved_constraint_depth: usize,
     ) -> Result<Simplification, Uninhabited> {
-        match self.clone().reduced().into_inner() {
+        debug!("simplify: {}", print(ctx, self));
+        let ret = {
+            debug_indent!();
+            self.simplify_inner(ctx, preserved_constraint_depth)
+        };
+        match &ret {
+            Err(_) => debug!("uninhabited."),
+            Ok(simplification) => {
+                debug!("got: {}", print(ctx, &simplification.new_ty));
+                if !simplification.constraints.is_empty() {
+                    debug!("with:");
+                    debug_indent!();
+                    for (var_index, tm) in simplification.constraints.clone() {
+                        debug!("#{} = {}", var_index, print(ctx, &tm))
+                    }
+                }
+            },
+        }
+        ret
+    }
+
+    fn simplify_inner(
+        &self,
+        ctx: &mut Vec<Ty>,
+        preserved_constraint_depth: usize,
+    ) -> Result<Simplification, Uninhabited> {
+        let this = self.clone().reduced();
+        if let Some((eq_ty, eq_tm_0, eq_tm_1)) = this.clone().as_equal() {
+            debug!("as_equal({}) == ObsEqual({}, {}, {})", print(ctx, &this), print(ctx, &eq_ty), print(ctx, &eq_tm_0), print(ctx, &eq_tm_1));
+            return simplify_equal(ctx, &this, &eq_tm_0, &eq_tm_1);
+        }
+
+        match this.clone().into_inner() {
             TyKind::Form { form } => {
                 match &*form {
                     | FormKind::Name
                     | FormKind::Universe
                     | FormKind::Nat
                     | FormKind::Unit
-                    => Ok(Simplification::id(self.clone())),
+                    => Ok(Simplification::id(this)),
 
                     FormKind::Never => {
                         Err(Uninhabited::new())
@@ -40,23 +84,16 @@ impl Ty {
                 }
             },
             TyKind::Neutral { neutral } => {
-                let neutral = Arc::unwrap_or_clone(neutral);
-                match neutral.kind {
-                    NeutralKind::ObsEqual { eq_ty: _, eq_tm_0, eq_tm_1 } => {
-                        simplify_equal(self, &eq_tm_0, &eq_tm_1)
-                    },
-                    _ => {
-                        let mut eliminated = Usages::empty();
-                        neutral.collect_stuck_vars(&mut eliminated);
-                        Ok(Simplification::from_eliminated(self, eliminated))
-                    },
-                }
+                let mut eliminated = Usages::empty();
+                neutral.collect_stuck_vars(&mut eliminated);
+                Ok(Simplification::from_eliminated(&this, eliminated))
             },
         }
     }
 }
 
 pub fn simplify_equal(
+    ctx: &mut Vec<Ty>,
     orig_ty: &Ty,
     eq_tm_0: &Tm,
     eq_tm_1: &Tm,
@@ -67,13 +104,24 @@ pub fn simplify_equal(
         return Ok(Simplification::from_iso(new_ty, iso));
     }
 
-    if let Some(var_index) = eq_tm_0.as_var() && eq_tm_1.ctx_len() <= var_index {
+    let eq_tm_0 = eq_tm_0.clone().deep_nf();
+    let eq_tm_1 = eq_tm_1.clone().deep_nf();
+
+    if let Some(var_index) = eq_tm_0.usages().as_single_var()
+    && eq_tm_1.ctx_len() <= var_index
+    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_0.clone())
+    {
         return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_1.clone()));
     }
 
-    if let Some(var_index) = eq_tm_1.as_var() && eq_tm_0.ctx_len() <= var_index {
+    if let Some(var_index) = eq_tm_1.usages().as_single_var()
+    && eq_tm_0.ctx_len() <= var_index
+    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_1.clone())
+    {
         return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_0.clone()));
     }
+
+    debug!("failed to do anything with {}", print(ctx, orig_ty));
 
     Ok(Simplification::id(orig_ty.clone()))
 }
@@ -284,7 +332,8 @@ fn simplify_sigma(
             ),
         );
 
-        return Ok(Simplification { new_ty, iso, constraints, eliminated });
+        let simplification = Simplification { new_ty, iso, constraints, eliminated };
+        return simplification.simplify_more(ctx, preserved_constraint_depth);
     }
 
     // TODO: split over Nat head
@@ -308,12 +357,17 @@ fn simplify_sigma(
                 Ty::never(),
             ),
         );
+        
+        let nat_into_sum = Iso::nat_into_sum_of_zero_and_succ();
 
         let next_iso = Iso::transitivity(
             Iso::dependent_sigma_head_congruence(
-                head_name.clone(),
-                head_new_ty.clone(),
-                Ty::sum(
+                tail_new_ty.clone(),
+                nat_into_sum.clone(),
+            ),
+            Iso::transitivity(
+                Iso::sigma_sum_head(
+                    head_name.clone(),
                     Name::from("zero"),
                     Ty::unit(),
                     Ty::sum(
@@ -321,11 +375,12 @@ fn simplify_sigma(
                         Ty::nat(),
                         Ty::never(),
                     ),
+                    Scope::make(ctx.len(), |sum| {
+                        tail_ty.clone().bind(nat_into_sum.rev.bind(sum))
+                    }),
                 ),
-                tail_new_ty.clone(),
-                Iso::never_into_sum_zero_succ(),
+
             ),
-            Iso::
         );
 
         let iso = 
@@ -379,7 +434,7 @@ fn simplify_sigma(
                     head_name.clone(),
                     head_tail_ty.clone().bind(head_head.clone()),
                     Scope::make(ctx.len() + 1, |head_tail| {
-                        tail_ty.clone().bind(head_head.pair(head_tail))
+                        tail_new_ty.clone().bind(head_head.pair(head_tail))
                     }),
                 )
             }),
@@ -410,6 +465,13 @@ fn simplify_pi(
     arg_ty: &Ty,
     res_ty: &Scope<Ty>,
 ) -> Result<Simplification, Uninhabited> {
+    if let Some((new_ty, iso)) = try_distribute_pi_over_sigmas(
+        ctx.len(), arg_name.clone(), arg_ty.clone(), res_ty.clone(),
+    ) {
+        let simplification = Simplification::from_iso(new_ty, iso);
+        return simplification.simplify_more(ctx, preserved_constraint_depth);
+    }
+
     let arg_simplification = match arg_ty.simplify(ctx, ctx.len()) {
         Err(Uninhabited { tags: _ }) => {
             let arg_iso = Iso::scope_never_to_iso_never(arg_ty.clone());
@@ -535,42 +597,114 @@ fn simplify_pi(
         // TODO: split arg
     }
 
-    if let Some(res_new_ty) = res_new_ty.clone().try_strengthen().ok()
-    && let Some(()) = res_new_ty.clone().as_unit()
-    {
-        let new_ty = Ty::unit();
-        let iso = Iso::transitivity(
-            iso,
-            Iso::between_props(),
-        );
-        return Ok(Simplification::from_iso(new_ty, iso));
-    }
-
-    let res_new_ty_inner = res_new_ty.clone().into_inner(ctx.len());
-    if let Some((head_name, head_ty, tail_ty)) = res_new_ty_inner.clone().as_sigma()
-    && let Some(tail_ty) = tail_ty.try_strengthen().ok()
-    && let Some(()) = tail_ty.as_unit()
-    && let Some(head_tag) = head_name.as_tag()
-    && matches!(head_tag.kind, TagKind::Meta { .. })
-    && let Some((_, _, _)) = head_ty.clone().as_pi()
-    {
-        let sub_pi_ty = Scope::new(ctx.len(), head_ty);
-
-        let new_ty = Ty::pi(
-            arg_name.clone(),
-            arg_new_ty.clone(),
-            sub_pi_ty.clone(),
-        );
-        let iso = Iso::transitivity(
-            iso,
-            Iso::dependent_pi_res_congruence(
-                Scope::constant(Iso::sigma_unit_tail()),
-            ),
-        );
-
+    if !constraints.is_empty() {
         return Ok(Simplification { new_ty, iso, constraints, eliminated });
     }
 
+    if let Some((new_ty, next_iso)) = try_distribute_pi_over_sigmas(
+        ctx.len(), arg_name.clone(), arg_new_ty.clone(), res_new_ty.clone(),
+    ) {
+        let iso = Iso::transitivity(
+            iso,
+            next_iso,
+        );
+        let simplification = Simplification { new_ty, iso, constraints, eliminated };
+        return simplification.simplify_more(ctx, preserved_constraint_depth);
+    }
+
     Ok(Simplification { new_ty, iso, constraints, eliminated })
+}
+
+fn try_distribute_pi_over_sigmas(
+    ctx_len: usize,
+    arg_name: Name,
+    arg_ty: Ty,
+    res_ty: Scope<Ty>,
+) -> Option<(Ty, Iso)> {
+    let res_ty_inner = res_ty.clone().into_inner(ctx_len);
+    if let Some(()) = res_ty_inner.clone().as_unit() {
+        let new_ty = Ty::unit();
+        let iso = Iso::between_props();
+        return Some((new_ty, iso));
+    }
+
+    if let Some((head_name, head_ty, tail_ty)) = res_ty_inner.as_sigma()
+    && let Some(head_name) = Scope::new(ctx_len, head_name).try_strengthen().ok()
+    {
+        let head_ty = Scope::new(ctx_len, head_ty);
+        let tail_ty = Scope::new(ctx_len, tail_ty);
+
+        let next_tail_ty = Scope::make(ctx_len, |head| {
+            Ty::pi(
+                arg_name.clone(),
+                arg_ty.clone(),
+                Scope::make(ctx_len + 1, |arg| {
+                    tail_ty.clone().bind(arg.clone()).bind(head.app(arg))
+                }),
+            )
+        });
+
+        let (distributed_head_ty, head_iso) = distribute_pi_over_sigmas(
+            ctx_len,
+            arg_name.clone(),
+            arg_ty.clone(),
+            head_ty,
+        );
+        let (distributed_tail_ty, tail_iso) = distribute_pi_over_sigmas(
+            ctx_len + 1,
+            arg_name,
+            arg_ty,
+            Scope::make(ctx_len + 1, |arg| {
+                tail_ty.clone().bind(arg.clone()).bind(Tm::var(ctx_len).app(arg))
+            }),
+        );
+        let distributed_tail_ty = Scope::new(ctx_len, distributed_tail_ty);
+        let tail_iso = Scope::new(ctx_len, tail_iso);
+
+        let new_ty = Ty::sigma(
+            head_name,
+            distributed_head_ty,
+            Scope::make(ctx_len, |distributed_head| {
+                distributed_tail_ty.bind(head_iso.rev.clone().bind(distributed_head))
+            }),
+        );
+
+        let iso = Iso::transitivity(
+            Iso::pi_sigma_res(),
+            Iso::transitivity(
+                Iso::dependent_sigma_head_congruence(
+                    next_tail_ty,
+                    head_iso.clone(),
+                ),
+                Iso::dependent_sigma_tail_congruence(
+                    Scope::make(ctx_len, |distributed_head| {
+                        tail_iso.bind(head_iso.rev.bind(distributed_head))
+                    }),
+                ),
+            ),
+        );
+
+        return Some((new_ty, iso));
+    }
+
+    None
+}
+
+fn distribute_pi_over_sigmas(
+    ctx_len: usize,
+    arg_name: Name,
+    arg_ty: Ty,
+    res_ty: Scope<Ty>,
+) -> (Ty, Iso) {
+    match try_distribute_pi_over_sigmas(
+        ctx_len, arg_name.clone(), arg_ty.clone(), res_ty.clone(),
+    ) {
+        Some((new_ty, iso)) => (new_ty, iso),
+        None => {
+            let new_ty = Ty::pi(arg_name, arg_ty, res_ty);
+            let iso = Iso::refl();
+            (new_ty, iso)
+        },
+    }
 }
 

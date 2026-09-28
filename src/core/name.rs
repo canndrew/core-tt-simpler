@@ -28,12 +28,6 @@ impl Name {
             NameKind::Neutral { .. } => None,
         }
     }
-
-    pub fn deep_nf(self) -> Name {
-        self.map_out_unfiltered(|name_kind| {
-            name_kind.deep_nf()
-        })
-    }
 }
 
 impl NameKind {
@@ -48,14 +42,18 @@ impl NameKind {
             },
         }
     }
+}
 
-    pub fn deep_nf(self) -> Name {
+impl DeepNf for NameKind {
+    type Output = Name;
+
+    fn deep_nf(self) -> Name {
         match self {
             NameKind::Tag { tag } => {
                 Weaken::new(NameKind::Tag { tag })
             },
             NameKind::Neutral { neutral } => {
-                Arc::unwrap_or_clone(neutral).deep_nf().into_name()
+                neutral.deep_nf().into_name()
             },
         }
     }

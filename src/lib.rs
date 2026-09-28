@@ -4,9 +4,7 @@ mod priv_prelude;
 mod util;
 mod tag;
 mod core;
-//mod check;
 pub mod check;
-//mod macros;
 
 pub mod pprint;
 pub mod more;
@@ -23,7 +21,7 @@ pub use {
         core::{
             usages::Usages,
             weaken::Weaken,
-            contextual::{Contextual, TupleOfContextual},
+            contextual::{Contextual, TupleOfContextual, DeepNf},
             form::{Form, FormKind},
             intro::{Intro, IntroKind},
             neutral::{Neutral, NeutralData, NeutralKind},

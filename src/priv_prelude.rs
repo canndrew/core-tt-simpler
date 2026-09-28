@@ -7,16 +7,14 @@ pub(crate) use {
     lazy_static::lazy_static,
     ubig::Ubig,
     parser::{Span, Spanned},
-    //derive_where::derive_where,
     crate::{
         solve,
         util::{as_equal, max_all, iter::{Which, merge_enumerated}},
         tag::{Tag, TagKind, MetaTag},
-        //macros::pi,
         core::{
             usages::Usages,
             weaken::Weaken,
-            contextual::{Contextual, TupleOfContextual},
+            contextual::{Contextual, TupleOfContextual, DeepNf},
             form::{Form, FormKind},
             intro::{Intro, IntroKind},
             neutral::{Neutral, NeutralData, NeutralKind},

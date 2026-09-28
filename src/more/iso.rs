@@ -733,6 +733,56 @@ impl Iso {
     }
 
     /// ```text
+    /// Γ ⊢ arg_name : Name
+    /// Γ ⊢ head_name : Name
+    /// Γ ⊢ arg_ty : Type
+    /// Γ, arg : arg_ty ⊢ head_ty : Type
+    /// Γ, arg : arg_ty, head : head_ty ⊢ tail_ty : Type
+    /// ----
+    /// Γ ⊢ Iso::pi_sigma_res()
+    ///   : Ty::pi(
+    ///     arg_name,
+    ///     arg_ty,
+    ///     Scope::make(Γ.len(), |arg| Ty::sigma(head_name, head_ty.bind(arg), tail_ty)),
+    ///   )
+    ///   ≅ Ty::sigma(
+    ///     head_name,
+    ///     Ty::pi(arg_name, arg_ty, head_ty),
+    ///     Scope::make(Γ.len(), |head| Ty::pi(
+    ///         arg_name,
+    ///         arg_ty,
+    ///         Scope::make(Γ.len(), |arg| res_ty.bind(arg).bind(head.app(arg))),
+    ///     )),
+    ///   )
+    /// ```
+
+    pub fn pi_sigma_res() -> Iso {
+        let ctx_len = 0;
+
+        let fwd = Scope::make(ctx_len, |func| {
+            let head = Tm::func(Scope::make(ctx_len + 1, |arg| {
+                func.clone().app(arg).proj_head()
+            }));
+            let tail = Tm::func(Scope::make(ctx_len + 1, |arg| {
+                func.clone().app(arg).proj_tail()
+            }));
+            head.pair(tail)
+        });
+
+        let rev = Scope::make(ctx_len, |sigma| {
+            let head = sigma.clone().proj_head();
+            let tail = sigma.proj_tail();
+
+            Tm::func(Scope::make(ctx_len + 1, |arg| {
+                head.app(arg.clone()).pair(tail.app(arg))
+            }))
+        });
+
+        Iso { fwd, rev }
+    }
+
+
+    /// ```text
     /// ----
     /// Γ ⊢ Iso::nat_into_sum_of_zero_and_succ()
     ///   : Ty::nat()

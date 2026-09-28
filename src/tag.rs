@@ -15,7 +15,7 @@ pub enum TagKind {
     },
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Hash)]
 pub enum MetaTag {
     QuotedNameConstraint {
         span: Span,

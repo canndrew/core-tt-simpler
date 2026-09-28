@@ -3,7 +3,7 @@ use {
         env, fs,
         sync::Arc,
     },
-    core_tt_simpler::{CheckCtx, Check},
+    core_tt_simpler::{CheckCtx, Check, DeepNf},
 };
 
 fn main() {

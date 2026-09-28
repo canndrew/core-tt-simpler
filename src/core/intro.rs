@@ -314,12 +314,6 @@ impl Intro {
         })?;
         Some(res_tm.lift_scope())
     }
-
-    pub fn deep_nf(self) -> Intro {
-        self.map_out_unfiltered(|intro_kind| {
-            Arc::unwrap_or_clone(intro_kind).deep_nf()
-        })
-    }
 }
 
 impl IntroKind {
@@ -393,8 +387,12 @@ impl IntroKind {
         };
         Some(res_tm)
     }
+}
 
-    pub fn deep_nf(self) -> Intro {
+impl DeepNf for IntroKind {
+    type Output = Intro;
+
+    fn deep_nf(self) -> Intro {
         match self {
             IntroKind::Tag { tag } => {
                 Weaken::new_arc(IntroKind::Tag { tag })

@@ -301,7 +301,7 @@ impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Sco
             Some(Scope { ctx_len, inner })
         } else {
             let inner = inner.try_strengthen_index(var_index)?;
-            Some(Scope::new(ctx_len, inner))
+            Some(Scope::new(ctx_len - 1, inner))
         }
     }
 }
@@ -314,27 +314,18 @@ impl Scope<Tm> {
     pub fn id() -> Scope<Tm> {
         Scope::new(0, Tm::var(0))
     }
-
-    pub fn deep_nf(self) -> Scope<Tm> {
-        self.map_without_capture(|tm| tm.deep_nf())
-    }
 }
 
-impl Scope<Ty> {
-    pub fn deep_nf(self) -> Scope<Ty> {
-        self.map_without_capture(|ty| ty.deep_nf())
-    }
-}
+impl<T> DeepNf for Scope<T>
+where
+    T: DeepNf<Output: Contextual>,
+{
+    type Output = Scope<T::Output>;
 
-impl Scope<Scope<Tm>> {
-    pub fn deep_nf(self) -> Scope<Scope<Tm>> {
-        self.map_without_capture(|scope| scope.deep_nf())
-    }
-}
-
-impl Scope<Scope<Ty>> {
-    pub fn deep_nf(self) -> Scope<Scope<Ty>> {
-        self.map_without_capture(|scope| scope.deep_nf())
+    fn deep_nf(self) -> Scope<T::Output> {
+        let Scope { ctx_len, inner } = self;
+        let inner = inner.deep_nf();
+        Scope::new(ctx_len, inner)
     }
 }
 

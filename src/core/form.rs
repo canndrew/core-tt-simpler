@@ -8,14 +8,6 @@ pub enum FormKind {
     Universe,
     Nat,
 
-    /*
-    Equal {
-        eq_ty: Ty,
-        eq_tm_0: Tm,
-        eq_tm_1: Tm,
-    },
-    */
-
     Never,
     Unit,
     Sum {
@@ -285,12 +277,6 @@ impl Form {
         self.weak().as_nat()
     }
 
-    /*
-    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
-        self.map_out_unfiltered(|form| Arc::unwrap_or_clone(form).as_equal())
-    }
-    */
-
     pub fn as_never(self) -> Option<()> {
         self.weak().as_never()
     }
@@ -309,12 +295,6 @@ impl Form {
 
     pub fn as_pi(self) -> Option<(Name, Ty, Scope<Ty>)> {
         self.map_out_unfiltered(|form| Arc::unwrap_or_clone(form).as_pi())
-    }
-
-    pub fn deep_nf(self) -> Form {
-        self.map_out_unfiltered(|form_kind| {
-            Arc::unwrap_or_clone(form_kind).deep_nf()
-        })
     }
 }
 
@@ -380,15 +360,6 @@ impl FormKind {
         Some(())
     }
 
-    /*
-    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
-        let FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } = self else {
-            return None;
-        };
-        Some((eq_ty, eq_tm_0, eq_tm_1))
-    }
-    */
-
     pub fn as_never(&self) -> Option<()> {
         let FormKind::Never = self else {
             return None;
@@ -424,6 +395,19 @@ impl FormKind {
         Some((arg_name, arg_ty, res_ty))
     }
 
+    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
+        let FormKind::Pi { arg_name, arg_ty, res_ty } = self else {
+            return None;
+        };
+        let ctx_len = max_all([arg_name.ctx_len(), arg_ty.ctx_len(), res_ty.ctx_len()]);
+        let res_ty_inner = res_ty.into_inner(ctx_len);
+        let (eq_ty, eq_tm_0, eq_tm_1) = res_ty_inner.as_equal()?;
+        let eq_ty = Ty::pi(arg_name, arg_ty, Scope::new(ctx_len, eq_ty));
+        let eq_tm_0 = Tm::func(Scope::new(ctx_len, eq_tm_0));
+        let eq_tm_1 = Tm::func(Scope::new(ctx_len, eq_tm_1));
+        Some((eq_ty, eq_tm_0, eq_tm_1))
+    }
+
     pub fn is_prop(&self) -> bool {
         match self {
             | FormKind::Name
@@ -445,23 +429,18 @@ impl FormKind {
             },
         }
     }
+}
 
-    pub fn deep_nf(self) -> Form {
+impl DeepNf for FormKind {
+    type Output = Form;
+
+    fn deep_nf(self) -> Form {
         match self {
             FormKind::Name => Weaken::new_arc(FormKind::Name),
 
             FormKind::Universe => Weaken::new_arc(FormKind::Universe),
 
             FormKind::Nat => Weaken::new_arc(FormKind::Nat),
-
-            /*
-            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
-                let eq_ty = eq_ty.deep_nf();
-                let eq_tm_0 = eq_tm_0.deep_nf();
-                let eq_tm_1 = eq_tm_1.deep_nf();
-                Weaken::new_arc(FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 })
-            },
-            */
 
             FormKind::Never => Weaken::new_arc(FormKind::Never),
 

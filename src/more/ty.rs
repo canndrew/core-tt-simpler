@@ -55,6 +55,20 @@ impl Ty {
             },
         }
     }
+
+    /*
+    pub fn constrains_var(&self, var_index: usize) -> Option<Tm> {
+        match self.clone().into_inner() {
+            TyKind::Form { form } => {
+                Arc::unwrap_or_clone(form).constrains_var(var_index)
+            },
+            TyKind::Neutral { neutral: _ } => {
+                // TODO
+                None
+            },
+        }
+    }
+    */
 }
 
 impl FormKind {
@@ -311,5 +325,24 @@ impl FormKind {
         };
         Some(tm_1)
     }
+
+    /*
+    pub fn constrains_var(&self, var_index: usize) -> Option<Vec<Tm>> {
+        match self {
+            | FormKind::Name
+            | FormKind::Universe
+            | FormKind::Nat
+            | FormKind::Unit
+            => None,
+
+            FormKind::Never => Some(Vec::new()),
+
+            FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
+                let lhs_constraints = lhs_ty.constrains_var(var_index)?;
+                let rhs_constraints = rhs_ty.constrains_var(var_index)?;
+            },
+        }
+    }
+    */
 }
 

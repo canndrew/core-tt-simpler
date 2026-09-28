@@ -13,4 +13,11 @@ core-tt-simpler-macros = { path = "core-tt-simpler-macros" }
 [profile.release-with-debug]
 inherits = "release"
 debug = true
+debug-assertions = true
+
+[lints.clippy]
+empty_line_after_doc_comments = "allow"
+redundant_pattern_matching = "allow"
+blocks_in_conditions = "allow"
+useless_format = "allow"
 

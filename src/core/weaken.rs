@@ -171,3 +171,16 @@ where
     }
 }
 
+impl<T> DeepNf for Weaken<T>
+where
+    T: DeepNf<Output: Contextual>,
+{
+    type Output = T::Output;
+
+    fn deep_nf(self) -> T::Output {
+        self.map_out_unfiltered(|inner| {
+            inner.deep_nf()
+        })
+    }
+}
+

@@ -58,6 +58,8 @@ impl<T> Checked<T> {
             },
         };
         let Simplification { new_ty, iso, constraints, eliminated } = simplification;
+        // TODO: these asserts can fail now that we're solving with a non-empty ctx.
+        // instead leftover constraints and eliminated need to be handled.
         debug_assert!(constraints.is_empty());
         debug_assert!(eliminated.is_empty());
 

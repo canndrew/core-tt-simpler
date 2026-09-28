@@ -1,5 +1,6 @@
 use crate::priv_prelude::*;
 
+#[derive(Clone)]
 pub struct Constraints {
     unique_tms: BTreeMap<usize, Tm>,
 }
@@ -43,7 +44,7 @@ impl Constraints {
     }
 
     pub fn union(
-        ctx: &[Ty],
+        ctx: &mut Vec<Ty>,
         constraints_0: Constraints,
         constraints_1: Constraints,
         eliminated: &mut Usages,
@@ -80,7 +81,7 @@ impl Constraints {
                 iso: _,
                 constraints: equals_constraints,
                 eliminated: equals_eliminated,
-            } = solve::simplify::simplify_equal(&equal_ty, &unique_tm_0, &unique_tm_1)?;
+            } = solve::simplify::simplify_equal(ctx, &equal_ty, &unique_tm_0, &unique_tm_1)?;
 
             unprocessed.extend(equals_constraints);
             eliminated.or_assign(&equals_eliminated);

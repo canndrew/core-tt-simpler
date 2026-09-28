@@ -109,12 +109,6 @@ impl Tm {
         }
     }
 
-    pub fn deep_nf(self) -> Tm {
-        self.map_out_unfiltered(|tm_kind| {
-            tm_kind.deep_nf()
-        })
-    }
-
     pub fn into_name(self) -> Name {
         self.map(TmKind::into_name_kind)
     }
@@ -230,14 +224,8 @@ impl Tm {
     }
 
     pub fn as_var(&self) -> Option<usize> {
-        match self.weak() {
-            TmKind::Intro { .. } => None,
-            TmKind::Neutral { neutral } => {
-                let index = neutral.as_var()?;
-                Some(self.usages().unfilter_index(index))
-            },
-            TmKind::Proof => None,
-        }
+        let index = self.weak().clone().as_var()?;
+        Some(self.usages().unfilter_index(index))
     }
 
     pub fn as_tag(self) -> Option<Tag> {
@@ -256,6 +244,12 @@ impl Tm {
     pub fn as_neutral(self) -> Option<Neutral> {
         self.try_map(|tm_kind| tm_kind.as_neutral())
     }
+
+    /*
+    pub fn as_repeated_app(self) -> (Tm, Vec<Tm>) {
+        self.into_inner().as_repeated_app()
+    }
+    */
 }
 
 impl Unify for TmKind {
@@ -408,8 +402,6 @@ impl TmKind {
             TmKind::Intro { intro } => {
                 let intro = Arc::unwrap_or_clone(intro);
                 let IntroKind::Form { form } = intro else {
-                    // TODO: remove debugging
-                    println!("intro == {}", crate::pprint::pprint(intro));
                     panic!("TmKind::into_ty_kind(): tm is not a type");
                 };
                 TyKind::Form { form }
@@ -437,13 +429,46 @@ impl TmKind {
         }
     }
 
-    pub fn deep_nf(self) -> Tm {
+    /*
+    pub fn as_repeated_app(self) -> (Tm, Vec<Tm>) {
+        let base = match self {
+            TmKind::Intro { intro } => TmKind::Intro { intro },
+            TmKind::Neutral { neutral } => {
+                if let NeutralKind::App { elim, arg_tm } = neutral.kind.clone() {
+                    let (base, mut args) = elim.as_repeated_app();
+                    args.push(arg_tm);
+                    return (base, args);
+                } else {
+                    TmKind::Neutral { neutral }
+                }
+            },
+            TmKind::Proof => TmKind::Proof,
+        };
+        let base = Weaken::new(base);
+        let args = Vec::new();
+        (base, args)
+    }
+    */
+
+    pub fn as_var(self) -> Option<usize> {
+        match self {
+            TmKind::Intro { .. } => None,
+            TmKind::Neutral { neutral } => neutral.as_var(),
+            TmKind::Proof => None,
+        }
+    }
+}
+
+impl DeepNf for TmKind {
+    type Output = Tm;
+
+    fn deep_nf(self) -> Tm {
         match self {
             TmKind::Intro { intro } => {
-                Arc::unwrap_or_clone(intro).deep_nf().into_tm()
+                intro.deep_nf().into_tm()
             },
             TmKind::Neutral { neutral } => {
-                Arc::unwrap_or_clone(neutral).deep_nf()
+                neutral.deep_nf()
             },
             TmKind::Proof => Tm::proof(),
         }
