@@ -167,8 +167,8 @@ impl Iso {
             rhs_iso.ctx_len(),
         ]);
 
-        let sum_ty_0 = Ty::sum(lhs_name_0, lhs_ty_0, rhs_ty_0);
-        let sum_ty_1 = Ty::sum(lhs_name_1, lhs_ty_1, rhs_ty_1);
+        let sum_ty_0 = Ty::sum(lhs_name_0.clone(), lhs_ty_0, rhs_ty_0);
+        let sum_ty_1 = Ty::sum(lhs_name_1.clone(), lhs_ty_1, rhs_ty_1);
 
         let Iso { fwd: lhs_fwd, rev: lhs_rev } = lhs_iso;
         let Iso { fwd: rhs_fwd, rev: rhs_rev } = rhs_iso;
@@ -176,6 +176,7 @@ impl Iso {
         let fwd = Scope::make(ctx_len, |sum_0| {
             sum_0
             .case(
+                lhs_name_0,
                 Scope::constant(sum_ty_1.clone()),
                 Scope::make(ctx_len + 1, |lhs_0| lhs_fwd.clone().bind(lhs_0).inj_lhs()),
                 Scope::make(ctx_len + 1, |rhs_0| rhs_fwd.clone().bind(rhs_0).inj_rhs()),
@@ -185,6 +186,7 @@ impl Iso {
         let rev = Scope::make(ctx_len, |sum_1| {
             sum_1
             .case(
+                lhs_name_1,
                 Scope::constant(sum_ty_0.clone()),
                 Scope::make(ctx_len + 1, |lhs_1| lhs_rev.clone().bind(lhs_1).inj_lhs()),
                 Scope::make(ctx_len + 1, |rhs_1| rhs_rev.clone().bind(rhs_1).inj_rhs()),
@@ -202,6 +204,7 @@ impl Iso {
     /// ```
 
     pub fn sum_never_lhs(
+        lhs_name: Name,
         rhs_ty: Ty,
     ) -> Iso {
         let ctx_len = rhs_ty.ctx_len();
@@ -209,6 +212,7 @@ impl Iso {
         let fwd = Scope::make(ctx_len, |sum| {
             sum
             .case(
+                lhs_name,
                 Scope::constant(rhs_ty.clone()),
                 Scope::constant(
                     Tm::explode(Scope::constant(rhs_ty.clone()))
@@ -230,6 +234,7 @@ impl Iso {
     /// ```
 
     pub fn sum_never_rhs(
+        lhs_name: Name,
         lhs_ty: Ty,
     ) -> Iso {
         let ctx_len = lhs_ty.ctx_len();
@@ -237,6 +242,7 @@ impl Iso {
         let fwd = Scope::make(ctx_len, |sum| {
             sum
             .case(
+                lhs_name,
                 Scope::constant(lhs_ty.clone()),
                 Scope::make(ctx_len + 1, |lhs| lhs),
                 Scope::constant(
@@ -439,6 +445,7 @@ impl Iso {
 
             sum
             .case(
+                lhs_name.clone(),
                 Scope::make(ctx_len + 1, |sum| {
                     Ty::pi(
                         Name::from("tail"),
@@ -463,6 +470,7 @@ impl Iso {
         let rev = Scope::make(ctx_len, |sum| {
             sum
             .case(
+                lhs_name,
                 Scope::constant(sigma_ty.clone()),
                 Scope::make(ctx_len + 1, |sigma| {
                     let lhs = sigma.clone().proj_head();
@@ -798,11 +806,14 @@ impl Iso {
     /// ```
 
     pub fn nat_into_sum_of_zero_and_succ() -> Iso {
+        let zero_name = Name::from("zero");
+        let succ_name = Name::from("succ");
+
         let output_ty = Ty::sum(
-            Name::from("zero"),
+            zero_name.clone(),
             Ty::unit(),
             Ty::sum(
-                Name::from("succ"),
+                succ_name.clone(),
                 Ty::nat(),
                 Ty::never(),
             ),
@@ -824,15 +835,95 @@ impl Iso {
         let rev = Scope::make(0, |sum| {
             sum
             .case(
+                zero_name,
                 Scope::constant(Ty::nat()),
                 Scope::constant(Tm::zero()),
                 Scope::make(1, |sum| {
                     sum
                     .case(
+                        succ_name,
                         Scope::constant(Ty::nat()),
                         Scope::make(2, |n| n.succs(Ubig::ONE)),
                         Scope::constant(
                             Tm::explode(Scope::constant(Ty::nat()))
+                        ),
+                    )
+                }),
+            )
+        });
+
+        Iso { fwd, rev }
+    }
+
+    pub fn sigma_head_nat_split(
+        head_name: Name,
+        tail_ty: Scope<Ty>,
+    ) -> Iso {
+        let ctx_len = max_all([
+            head_name.ctx_len(),
+            tail_ty.ctx_len(),
+        ]);
+
+        let zero_name = Name::from("zero");
+        let succ_name = Name::from("succ");
+
+        let tail_ty_zero = tail_ty.clone().bind(Tm::zero());
+        let tail_ty_succ = Scope::make(tail_ty.ctx_len(), |n| {
+            tail_ty.clone().bind(n.succs(Ubig::ONE))
+        });
+
+        let input_ty = Ty::sigma(
+            head_name.clone(),
+            Ty::nat(),
+            tail_ty.clone(),
+        );
+
+        let output_ty = Ty::sum(
+            zero_name.clone(),
+            tail_ty_zero,
+            Ty::sum(
+                succ_name.clone(),
+                Ty::sigma(
+                    head_name.clone(),
+                    Ty::nat(),
+                    tail_ty_succ.clone(),
+                ),
+                Ty::never(),
+            ),
+        );
+
+        let fwd = Scope::make(ctx_len, |sigma| {
+            let head = sigma.clone().proj_head();
+            let tail = sigma.proj_tail();
+
+            head
+            .fold(
+                Scope::constant(output_ty.clone()),
+                tail.clone().inj_lhs(),
+                Scope::make(ctx_len + 1, |head| {
+                    Scope::constant(head.pair(tail).inj_lhs().inj_rhs())
+                }),
+            )
+        });
+
+        let rev = Scope::make(ctx_len, |sum| {
+            sum
+            .case(
+                zero_name,
+                Scope::constant(input_ty.clone()),
+                Scope::make(ctx_len + 1, |tail| Tm::zero().pair(tail)),
+                Scope::make(ctx_len + 1, |sum| {
+                    sum
+                    .case(
+                        succ_name,
+                        Scope::constant(input_ty.clone()),
+                        Scope::make(ctx_len + 2, |sigma| {
+                            let n = sigma.clone().proj_head();
+                            let tail = sigma.proj_tail();
+                            n.succs(Ubig::ONE).pair(tail)
+                        }),
+                        Scope::constant(
+                            Tm::explode(Scope::constant(input_ty))
                         ),
                     )
                 }),

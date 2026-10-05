@@ -317,7 +317,7 @@ lazy_static! {
                     )
                 }),
             ),
-            tm: Tm::func(Scope::make(0, |_lhs_name| {
+            tm: Tm::func(Scope::make(0, |lhs_name| {
                 Tm::func(Scope::make(1, |_lhs_ty| {
                     Tm::func(Scope::make(2, |_rhs_ty| {
                         Tm::func(Scope::make(3, |motive| {
@@ -326,6 +326,7 @@ lazy_static! {
                                     Tm::func(Scope::make(6, |elim| {
                                         elim
                                         .case(
+                                            lhs_name.into_name(),
                                             Scope::make(7, |elim| {
                                                 motive.app(elim).into_ty()
                                             }),

@@ -1659,6 +1659,7 @@ fn check_match_branches(
                                                     let tm = {
                                                         sum
                                                         .case(
+                                                            lhs_name,
                                                             Scope::make(ch.ctx_len() + 1, |sum| {
                                                                 motive.app(sum).into_ty()
                                                             }),

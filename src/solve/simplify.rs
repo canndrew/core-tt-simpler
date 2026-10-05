@@ -1,17 +1,5 @@
 use crate::priv_prelude::*;
 
-fn print<T: crate::pprint::Pretty<()> + Clone>(
-    ctx: &[Ty],
-    val: &T,
-) -> impl fmt::Display {
-    fmt::from_fn(|f| {
-        let mut ctx = ctx.iter().map(|ty| (None, Some(ty.clone()))).collect();
-        let mut s = String::new();
-        crate::pprint::Pretty::pretty(val.clone(), &mut ctx, 0, &mut s, ());
-        f.write_str(&s)
-    })
-}
-
 impl Ty {
     pub fn simplify(
         &self,
@@ -21,24 +9,28 @@ impl Ty {
         // otherwise we are solving under a sum and the constraint might get dropped, so keep going.
         preserved_constraint_depth: usize,
     ) -> Result<Simplification, Uninhabited> {
-        debug!("simplify: {}", print(ctx, self));
+        //debug!("simplify: {}", debug_print(ctx, self));
         let ret = {
-            debug_indent!();
+            //debug_indent!();
             self.simplify_inner(ctx, preserved_constraint_depth)
         };
+        /*
         match &ret {
-            Err(_) => debug!("uninhabited."),
+            Err(_) => {
+                debug!("uninhabited.")
+            },
             Ok(simplification) => {
-                debug!("got: {}", print(ctx, &simplification.new_ty));
+                debug!("got: {}", debug_print(ctx, &simplification.new_ty));
                 if !simplification.constraints.is_empty() {
                     debug!("with:");
                     debug_indent!();
                     for (var_index, tm) in simplification.constraints.clone() {
-                        debug!("#{} = {}", var_index, print(ctx, &tm))
+                        debug!("#{} = {}", var_index, debug_print(ctx, &tm))
                     }
                 }
             },
         }
+        */
         ret
     }
 
@@ -48,8 +40,8 @@ impl Ty {
         preserved_constraint_depth: usize,
     ) -> Result<Simplification, Uninhabited> {
         let this = self.clone().reduced();
-        if let Some((eq_ty, eq_tm_0, eq_tm_1)) = this.clone().as_equal() {
-            debug!("as_equal({}) == ObsEqual({}, {}, {})", print(ctx, &this), print(ctx, &eq_ty), print(ctx, &eq_tm_0), print(ctx, &eq_tm_1));
+        if let Some((_eq_ty, eq_tm_0, eq_tm_1)) = this.clone().as_equal() {
+            //debug!("as_equal({}) == ObsEqual({}, {}, {})", debug_print(ctx, &this), debug_print(ctx, &eq_ty), debug_print(ctx, &eq_tm_0), debug_print(ctx, &eq_tm_1));
             return simplify_equal(ctx, &this, &eq_tm_0, &eq_tm_1);
         }
 
@@ -93,7 +85,7 @@ impl Ty {
 }
 
 pub fn simplify_equal(
-    ctx: &mut Vec<Ty>,
+    _ctx: &mut Vec<Ty>,
     orig_ty: &Ty,
     eq_tm_0: &Tm,
     eq_tm_1: &Tm,
@@ -121,7 +113,7 @@ pub fn simplify_equal(
         return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_0.clone()));
     }
 
-    debug!("failed to do anything with {}", print(ctx, orig_ty));
+    //debug!("failed to do anything with {}", debug_print(ctx, orig_ty));
 
     Ok(Simplification::id(orig_ty.clone()))
 }
@@ -166,6 +158,7 @@ fn simplify_sum(
                     rhs_iso,
                 ),
                 Iso::sum_never_lhs(
+                    lhs_name.clone(),
                     new_ty.clone(),
                 ),
             );
@@ -190,6 +183,7 @@ fn simplify_sum(
                     rhs_iso,
                 ),
                 Iso::sum_never_rhs(
+                    lhs_name.clone(),
                     new_ty.clone(),
                 ),
             );
@@ -336,60 +330,46 @@ fn simplify_sigma(
         return simplification.simplify_more(ctx, preserved_constraint_depth);
     }
 
-    // TODO: split over Nat head
+    if constraints.has_preserved_constraints(preserved_constraint_depth) {
+        return Ok(Simplification { new_ty, iso, constraints, eliminated });
+    }
 
-    /*
     if head_is_eliminated
     && let Some(()) = head_new_ty.clone().as_nat()
     {
-        let next_new_ty = Ty::sum(
+        //debug!("spliting sigma nat head");
+        let tail_ty_zero = tail_new_ty.clone().bind(Tm::zero());
+        let tail_ty_succ = Scope::make(ctx.len(), |n| {
+            tail_new_ty.clone().bind(n.succs(Ubig::ONE))
+        });
+
+        let new_ty = Ty::sum(
             Name::from("zero"),
-            tail_new_ty.clone().bind(Tm::zero()),
+            tail_ty_zero,
             Ty::sum(
                 Name::from("succ"),
                 Ty::sigma(
                     head_name.clone(),
                     Ty::nat(),
-                    Scope::make(ctx.len(), |n| {
-                        tail_new_ty.clone().bind(n.succs(Ubig::ONE))
-                    }),
+                    tail_ty_succ.clone(),
                 ),
                 Ty::never(),
             ),
         );
-        
-        let nat_into_sum = Iso::nat_into_sum_of_zero_and_succ();
 
-        let next_iso = Iso::transitivity(
-            Iso::dependent_sigma_head_congruence(
-                tail_new_ty.clone(),
-                nat_into_sum.clone(),
-            ),
-            Iso::transitivity(
-                Iso::sigma_sum_head(
-                    head_name.clone(),
-                    Name::from("zero"),
-                    Ty::unit(),
-                    Ty::sum(
-                        Name::from("succ"),
-                        Ty::nat(),
-                        Ty::never(),
-                    ),
-                    Scope::make(ctx.len(), |sum| {
-                        tail_ty.clone().bind(nat_into_sum.rev.bind(sum))
-                    }),
-                ),
-
-            ),
+        let iso = Iso::transitivity(
+            iso,
+            Iso::sigma_head_nat_split(head_name.clone(), tail_new_ty.clone()),
         );
 
-        let iso = 
+        let simplification = Simplification { new_ty, iso, constraints, eliminated };
+        return simplification.simplify_more(ctx, preserved_constraint_depth);
     }
-    */
 
     if head_is_eliminated
     && let Some((lhs_name, lhs_ty, rhs_ty)) = head_new_ty.clone().as_sum()
     {
+        //debug!("spliting sigma sum head");
         let new_ty = Ty::sum(
             lhs_name.clone(),
             Ty::sigma(
@@ -418,7 +398,7 @@ fn simplify_sigma(
             iso,
             next_iso.clone(),
         );
-        
+
         let simplification = Simplification { new_ty, iso, constraints, eliminated };
         return simplification.simplify_more(ctx, preserved_constraint_depth);
     }
@@ -426,6 +406,7 @@ fn simplify_sigma(
     if head_is_eliminated
     && let Some((head_head_name, head_head_ty, head_tail_ty)) = head_new_ty.clone().as_sigma()
     {
+        //debug!("reassociating sigma");
         let new_ty = Ty::sigma(
             head_head_name.clone(),
             head_head_ty.clone(),
@@ -707,4 +688,112 @@ fn distribute_pi_over_sigmas(
         },
     }
 }
+
+
+
+#[allow(unused)]
+fn debug_print<T: crate::pprint::Pretty<()> + Clone>(
+    ctx: &[Ty],
+    val: &T,
+) -> impl fmt::Display {
+    fmt::from_fn(|f| {
+        let mut ctx = ctx.iter().map(|ty| (None, Some(ty.clone()))).collect();
+        let mut s = String::new();
+        crate::pprint::Pretty::pretty(val.clone(), &mut ctx, 0, &mut s, ());
+        f.write_str(&s)
+    })
+}
+
+#[allow(unused)]
+fn debug_print_short(ty: Ty, output: &mut String) {
+    if let Some(_) = ty.clone().as_equal() {
+        output.push('=');
+        return;
+    }
+    match ty.reduced().into_inner() {
+        TyKind::Form { form } => {
+            match &*form {
+                FormKind::Name => {
+                    output.push('S');
+                },
+                FormKind::Universe => {
+                    output.push('U');
+                },
+                FormKind::Nat => {
+                    output.push('N');
+                },
+                FormKind::Never => {
+                    output.push('0');
+                },
+                FormKind::Unit => {
+                    output.push('1');
+                },
+                FormKind::Sum { lhs_name: _, lhs_ty, rhs_ty } => {
+                    let mut lhs_ty = lhs_ty.clone();
+                    let mut rhs_ty = rhs_ty.clone();
+                    output.push('(');
+                    loop {
+                        debug_print_short(lhs_ty, output);
+                        output.push('+');
+                        if let Some((_, next_lhs_ty, next_rhs_ty)) = rhs_ty.clone().as_sum() {
+                            lhs_ty = next_lhs_ty;
+                            rhs_ty = next_rhs_ty;
+                            continue;
+                        }
+                        break;
+                    }
+                    debug_print_short(rhs_ty, output);
+                    output.push(')');
+                },
+                FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
+                    let mut head_ty = head_ty.clone();
+                    let mut tail_ty = tail_ty.clone().into_inner(tail_ty.ctx_len());
+                    output.push('(');
+                    loop {
+                        debug_print_short(head_ty, output);
+                        output.push('*');
+                        if let Some((_, next_head_ty, next_tail_ty)) = tail_ty.clone().as_sigma() {
+                            head_ty = next_head_ty;
+                            let ctx_len = next_tail_ty.ctx_len();
+                            tail_ty = next_tail_ty.into_inner(ctx_len);
+                            continue;
+                        }
+                        break;
+                    }
+                    debug_print_short(tail_ty, output);
+                    output.push(')');
+                },
+                FormKind::Pi { arg_name: _, arg_ty, res_ty } => {
+                    let mut arg_ty = arg_ty.clone();
+                    let mut res_ty = res_ty.clone().into_inner(res_ty.ctx_len());
+                    output.push('(');
+                    loop {
+                        debug_print_short(arg_ty, output);
+                        output.push_str("->");
+                        if let Some((_, next_arg_ty, next_res_ty)) = res_ty.clone().as_pi() {
+                            arg_ty = next_arg_ty;
+                            let ctx_len = next_res_ty.ctx_len();
+                            res_ty = next_res_ty.into_inner(ctx_len);
+                            continue;
+                        }
+                        break;
+                    }
+                    debug_print_short(res_ty, output);
+                    output.push(')');
+                },
+            }
+        },
+        TyKind::Neutral { neutral } => {
+            if let Some(index) = neutral.as_var() {
+                let c = (('a' as u8) + ((index % 26) as u8)) as char;
+                for _ in 0..(1 + (index / 26)) {
+                    output.push(c);
+                }
+            } else {
+                output.push('?');
+            }
+        },
+    }
+}
+
 

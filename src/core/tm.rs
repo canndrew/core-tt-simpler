@@ -188,11 +188,12 @@ impl Tm {
 
     pub fn case(
         self,
+        lhs_name: Name,
         motive: Scope<Ty>,
         lhs_inhab: Scope<Tm>,
         rhs_inhab: Scope<Tm>,
     ) -> Tm {
-        Neutral::case(self, motive, lhs_inhab, rhs_inhab).into_tm()
+        Neutral::case(self, lhs_name, motive, lhs_inhab, rhs_inhab).into_tm()
     }
 
     pub fn pair(self, tail_tm: Tm) -> Tm {

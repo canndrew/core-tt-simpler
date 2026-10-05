@@ -376,8 +376,9 @@ impl Pretty<()> for NeutralKind {
                     Scoped(((), None, Some(Ty::never())), motive.clone()),
                 ));
             },
-            NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
+            NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
                 voom!(ctx, indent, s, case(
+                    lhs_name,
                     elim,
                     Scoped(((), None, None), motive.clone()),
                     Scoped(((), None, None), lhs_inhab.clone()),

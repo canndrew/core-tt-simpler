@@ -143,11 +143,14 @@ impl SanityCheck for NeutralKind {
                 Unify::unify(motive.bind(Tm::proof()), ty).unwrap();
             },
 
-            NeutralKind::Case { elim, motive, lhs_inhab, rhs_inhab } => {
+            NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
+                lhs_name.clone().sanity_check(ctx, ());
+
                 if let Some(neutral) = elim.clone().as_neutral()
                 && let Some(elim_ty) = neutral.try_infer_ty(ctx)
                 {
-                    let (_lhs_name, lhs_ty, rhs_ty) = elim_ty.clone().as_sum().unwrap();
+                    let (actual_lhs_name, lhs_ty, rhs_ty) = elim_ty.clone().as_sum().unwrap();
+                    Unify::unify(lhs_name, actual_lhs_name).unwrap();
                     elim.clone().sanity_check(ctx, elim_ty.clone());
                     motive.clone().sanity_check(ctx, (elim_ty, Scope::constant(())));
                     lhs_inhab.sanity_check(
@@ -362,7 +365,7 @@ impl NeutralKind {
                 Some(Weaken::new(motive.clone()).lift_scope().bind(Tm::proof()))
             },
 
-            NeutralKind::Case { elim, motive, lhs_inhab: _, rhs_inhab: _ } => {
+            NeutralKind::Case { lhs_name: _, elim, motive, lhs_inhab: _, rhs_inhab: _ } => {
                 Some(motive.clone().bind(elim.clone()))
             },
 
