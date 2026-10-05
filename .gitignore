@@ -1,6 +1,5 @@
-/target
-core-tt-simpler-macros/target
-fuzz/artifacts
-fuzz/corpus
-fuzz/target
-agda/*.agdai
+**/fuzz/artifacts
+**/fuzz/corpus
+**/target
+**.agdai
+

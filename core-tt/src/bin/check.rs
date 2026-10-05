@@ -3,7 +3,7 @@ use {
         env, fs,
         sync::Arc,
     },
-    core_tt_simpler::{CheckCtx, Check, DeepNf},
+    core_tt::{CheckCtx, Check, DeepNf},
 };
 
 fn main() {
@@ -41,8 +41,8 @@ fn run() -> Result<(), String> {
     let ty = ty.deep_nf();
     let tm = tm.deep_nf();
 
-    println!("{}", core_tt_simpler::pprint::pprint(ty));
-    println!("{}", core_tt_simpler::pprint::pprint(tm));
+    println!("{}", core_tt::pprint::pprint(ty));
+    println!("{}", core_tt::pprint::pprint(tm));
 
     Ok(())
 }

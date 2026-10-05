@@ -1,5 +1,5 @@
 [package]
-name = "core-tt-simpler-macros"
+name = "core-tt-macros"
 version = "0.1.0"
 edition = "2024"
 

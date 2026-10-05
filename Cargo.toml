@@ -1,21 +1,25 @@
-[package]
-name = "core-tt-simpler"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
+members = [
+    "core-tt",
+    "core-tt/core-tt-macros",
+    "core-tt/fuzz",
+    #"more-tt",
+    #"parser",
+    #"small-bit-vec",
+    #"small-bit-vec/fuzz",
+    #"vast-vec",
+    #"vast-vec/fuzz",
+    #"debug",
+    #"elaborate", "core-tt-nbe",
+]
 
-[dependencies]
-ubig = { path = "/home/shum/src/rust/ubig" }
-lazy_static = "*"
-parser = { path = "/home/shum/work/src/simplicity-hl-again/parser" }
-core-tt-simpler-macros = { path = "core-tt-simpler-macros" }
-#derive-where = "*"
-
-[profile.release-with-debug]
+[profile.optimized-debug]
 inherits = "release"
 debug = true
 debug-assertions = true
 
-[lints.clippy]
+[workspace.lints.clippy]
 empty_line_after_doc_comments = "allow"
 redundant_pattern_matching = "allow"
 blocks_in_conditions = "allow"

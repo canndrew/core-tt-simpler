@@ -1,4 +1,0 @@
-   Compiling core-tt-simpler v0.1.0 (/home/shum/src/rust/core-tt-simpler)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
-     Running `/home/shum/src/rust/core-tt-simpler/target/debug/check test.simng`
-error reading test.simng: No such file or directory (os error 2)

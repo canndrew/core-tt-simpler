@@ -1,5 +1,5 @@
 [package]
-name = "core-tt-simpler-fuzz"
+name = "core-tt-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -12,12 +12,12 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 num = "0.4.3"
 
-[dependencies.core-tt-simpler]
+[dependencies.core-tt]
 path = ".."
 
 [[bin]]
-name = "core_tt_simpler_fuzz"
-path = "fuzz_targets/core_tt_simpler_fuzz.rs"
+name = "core_tt_fuzz"
+path = "fuzz_targets/core_tt_fuzz.rs"
 test = false
 doc = false
 bench = false
