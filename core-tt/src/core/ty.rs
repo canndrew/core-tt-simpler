@@ -292,19 +292,6 @@ impl Substitutable for TyKind {
     type Output = Ty;
 
     fn subst(self, subst: &mut Subst) -> Ty {
-        /*
-        print_on_panic!("ty == {}", crate::pprint::pprint(self.clone()));
-        let mut blah = String::new();
-        for (index, var_tm) in subst.iter_tms().enumerate() {
-            use std::fmt::Write;
-            write!(
-                &mut blah,
-                "#{} = {}\n",
-                index + subst.subst_index(), crate::pprint::pprint(var_tm.clone()),
-            ).unwrap();
-        }
-        print_on_panic!("{}", blah);
-        */
         match self {
             TyKind::Form { form } => {
                 let form = form.subst(subst);

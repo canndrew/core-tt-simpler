@@ -1,4 +1,4 @@
-extern crate self as core_tt_simpler;
+extern crate self as core_tt;
 
 mod priv_prelude;
 mod util;

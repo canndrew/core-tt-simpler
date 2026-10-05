@@ -74,7 +74,7 @@ fn make_generic_where_clauses(
     for type_param in generics.type_params() {
         let ident = &type_param.ident;
         generic_where_clauses.push(parse_quote! {
-            #ident: ::core_tt_simpler::Contextual
+            #ident: ::core_tt::Contextual
         });
     }
     if !generic_where_clauses.is_empty() {
@@ -106,7 +106,7 @@ fn derive_contextual_struct_named(
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::core_tt_simpler::Contextual for #ident #type_generics
+        impl #impl_generics ::core_tt::Contextual for #ident #type_generics
         #where_clause
         {
             fn ctx_len(&self) -> usize {
@@ -114,27 +114,27 @@ fn derive_contextual_struct_named(
                 #(
                     ret = ::core::cmp::max(
                         ret,
-                        ::core_tt_simpler::Contextual::ctx_len(&self.#field_names),
+                        ::core_tt::Contextual::ctx_len(&self.#field_names),
                     );
                 )*
                 ret
             }
 
-            fn collect_usages(&self, usages: &mut ::core_tt_simpler::Usages) {
+            fn collect_usages(&self, usages: &mut ::core_tt::Usages) {
                 #(
-                    ::core_tt_simpler::Contextual::collect_usages(&self.#field_names, usages);
+                    ::core_tt::Contextual::collect_usages(&self.#field_names, usages);
                 )*
             }
 
-            fn filter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn filter_usages(&mut self, usages: &::core_tt::Usages) {
                 #(
-                    ::core_tt_simpler::Contextual::filter_usages(&mut self.#field_names, usages);
+                    ::core_tt::Contextual::filter_usages(&mut self.#field_names, usages);
                 )*
             }
 
-            fn unfilter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn unfilter_usages(&mut self, usages: &::core_tt::Usages) {
                 #(
-                    ::core_tt_simpler::Contextual::unfilter_usages(&mut self.#field_names, usages);
+                    ::core_tt::Contextual::unfilter_usages(&mut self.#field_names, usages);
                 )*
             }
         }
@@ -180,7 +180,7 @@ fn derive_contextual_struct_unnamed(
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::core_tt_simpler::Contextual for #ident #type_generics
+        impl #impl_generics ::core_tt::Contextual for #ident #type_generics
         #where_clause
         {
             fn ctx_len(&self) -> usize {
@@ -189,30 +189,30 @@ fn derive_contextual_struct_unnamed(
                 #(
                     let ret = ::core::cmp::max(
                         ret,
-                        ::core_tt_simpler::Contextual::ctx_len(#field_names),
+                        ::core_tt::Contextual::ctx_len(#field_names),
                     );
                 )*
                 ret
             }
 
-            fn collect_usages(&self, usages: &mut ::core_tt_simpler::Usages) {
+            fn collect_usages(&self, usages: &mut ::core_tt::Usages) {
                 let #ident(#(#pattern_field_names,)*) = self;
                 #(
-                    ::core_tt_simpler::Contextual::collect_usages(#field_names, usages);
+                    ::core_tt::Contextual::collect_usages(#field_names, usages);
                 )*
             }
 
-            fn filter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn filter_usages(&mut self, usages: &::core_tt::Usages) {
                 let #ident(#(#pattern_field_names,)*) = self;
                 #(
-                    ::core_tt_simpler::Contextual::filter_usages(#field_names, usages);
+                    ::core_tt::Contextual::filter_usages(#field_names, usages);
                 )*
             }
 
-            fn unfilter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn unfilter_usages(&mut self, usages: &::core_tt::Usages) {
                 let #ident(#(#pattern_field_names,)*) = self;
                 #(
-                    ::core_tt_simpler::Contextual::unfilter_usages(#field_names, usages);
+                    ::core_tt::Contextual::unfilter_usages(#field_names, usages);
                 )*
             }
         }
@@ -252,7 +252,7 @@ fn derive_contextual_enum(
                             #(
                                 let ret = ::core::cmp::max(
                                     ret,
-                                    ::core_tt_simpler::Contextual::ctx_len(#field_names),
+                                    ::core_tt::Contextual::ctx_len(#field_names),
                                 );
                             )*
                             ret
@@ -294,7 +294,7 @@ fn derive_contextual_enum(
                             #(
                                 let ret = ::core::cmp::max(
                                     ret,
-                                    ::core_tt_simpler::Contextual::ctx_len(#field_names),
+                                    ::core_tt::Contextual::ctx_len(#field_names),
                                 );
                             )*
                             ret
@@ -333,7 +333,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident { #(#field_names,)* .. } => {
                             #(
-                                ::core_tt_simpler::Contextual::collect_usages(#field_names, usages);
+                                ::core_tt::Contextual::collect_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -370,7 +370,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident(#(#pattern_field_names,)*) => {
                             #(
-                                ::core_tt_simpler::Contextual::collect_usages(#field_names, usages);
+                                ::core_tt::Contextual::collect_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -409,7 +409,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident { #(#field_names,)* .. } => {
                             #(
-                                ::core_tt_simpler::Contextual::filter_usages(#field_names, usages);
+                                ::core_tt::Contextual::filter_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -446,7 +446,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident(#(#pattern_field_names,)*) => {
                             #(
-                                ::core_tt_simpler::Contextual::filter_usages(#field_names, usages);
+                                ::core_tt::Contextual::filter_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -485,7 +485,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident { #(#field_names,)* .. } => {
                             #(
-                                ::core_tt_simpler::Contextual::unfilter_usages(#field_names, usages);
+                                ::core_tt::Contextual::unfilter_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -522,7 +522,7 @@ fn derive_contextual_enum(
                     quote! {
                         #ident::#variant_ident(#(#pattern_field_names,)*) => {
                             #(
-                                ::core_tt_simpler::Contextual::unfilter_usages(#field_names, usages);
+                                ::core_tt::Contextual::unfilter_usages(#field_names, usages);
                             )*
                         },
                     }
@@ -542,7 +542,7 @@ fn derive_contextual_enum(
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::core_tt_simpler::Contextual for #ident #type_generics
+        impl #impl_generics ::core_tt::Contextual for #ident #type_generics
         #where_clause
         {
             fn ctx_len(&self) -> usize {
@@ -551,19 +551,19 @@ fn derive_contextual_enum(
                 }
             }
 
-            fn collect_usages(&self, usages: &mut core_tt_simpler::Usages) {
+            fn collect_usages(&self, usages: &mut core_tt::Usages) {
                 match self {
                     #(#collect_usages_branches)*
                 }
             }
 
-            fn filter_usages(&mut self, usages: &core_tt_simpler::Usages) {
+            fn filter_usages(&mut self, usages: &core_tt::Usages) {
                 match self {
                     #(#filter_usages_branches)*
                 }
             }
 
-            fn unfilter_usages(&mut self, usages: &core_tt_simpler::Usages) {
+            fn unfilter_usages(&mut self, usages: &core_tt::Usages) {
                 match self {
                     #(#unfilter_usages_branches)*
                 }
@@ -580,22 +580,22 @@ fn derive_contextual_unit_struct(
     let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::core_tt_simpler::Contextual for #ident #type_generics
+        impl #impl_generics ::core_tt::Contextual for #ident #type_generics
         #where_clause
         {
             fn ctx_len(&self) -> usize {
                 0
             }
             
-            fn collect_usages(&self, usages: &mut ::core_tt_simpler::Usages) {
+            fn collect_usages(&self, usages: &mut ::core_tt::Usages) {
                 let _ = usages;
             }
             
-            fn filter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn filter_usages(&mut self, usages: &::core_tt::Usages) {
                 let _ = usages;
             }
             
-            fn unfilter_usages(&mut self, usages: &::core_tt_simpler::Usages) {
+            fn unfilter_usages(&mut self, usages: &::core_tt::Usages) {
                 let _ = usages;
             }
         }
