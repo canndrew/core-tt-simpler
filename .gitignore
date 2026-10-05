@@ -1,5 +1,6 @@
 **/fuzz/artifacts
 **/fuzz/corpus
+**/fuzz/crash-*
 **/target
 **.agdai
 
