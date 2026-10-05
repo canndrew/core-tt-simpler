@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 ubig = { path = "../ubig" }
 lazy_static = "*"
-parser = { path = "/home/shum/work/src/simplicity-hl-again/parser" }
+parser = { path = "../parser" }
 core-tt-macros = { path = "core-tt-macros" }
 
