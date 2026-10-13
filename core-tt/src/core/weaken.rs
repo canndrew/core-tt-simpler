@@ -52,27 +52,16 @@ impl<T> Weaken<T> {
         Some(Weaken { usages, weak })
     }
 
-    pub fn do_try_strengthen_index(self, var_index: usize) -> Option<Weaken<T::Output>>
-    where
-        T: Substitutable,
-    {
-        let Weaken { usages, weak } = self;
-        let (usages, bit) = usages.shift_remove(var_index);
-        let weak = if bit {
-            let sub_index = usages.filter_index(var_index);
-            weak.try_strengthen_index(sub_index)?
-        } else {
-            weak.into_output()
-        };
-        Some(Weaken { usages, weak })
-    }
-
     pub fn into_usages_and_weak(self) -> (Usages, T) {
         let Weaken { usages, weak } = self;
         (usages, weak)
     }
 
-    pub fn from_usages_and_weak(usages: Usages, weak: T) -> Weaken<T> {
+    pub fn from_usages_and_weak(usages: Usages, weak: T) -> Weaken<T>
+    where
+        T: Contextual,
+    {
+        debug_assert_eq!(usages.count_ones(), weak.ctx_len());
         Weaken { usages, weak }
     }
 
@@ -141,6 +130,37 @@ impl<T> Contextual for Weaken<T> {
 
     fn unfilter_usages(&mut self, usages: &Usages) {
         self.usages.unfilter(usages);
+    }
+}
+
+impl<T> Substitutable for Weaken<T>
+where
+    T: Contextual + Substitutable<Output: Contextual>,
+{
+    type Output = T::Output;
+
+    fn subst(self, subst: &mut Subst) -> T::Output {
+        if self.ctx_len() <= subst.subst_index() {
+            return self.into_output();
+        }
+        self.into_inner().subst(subst)
+    }
+
+    fn into_output(self) -> T::Output {
+        let (usages, weak) = self.into_usages_and_weak();
+        weak.into_output().unfiltered(&usages)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Weaken<T>> {
+        let Weaken { usages, weak } = self;
+        let (usages, bit) = usages.shift_remove(var_index);
+        let weak = if bit {
+            let sub_index = usages.filter_index(var_index);
+            weak.try_strengthen_index(sub_index)?
+        } else {
+            weak
+        };
+        Some(Weaken { usages, weak })
     }
 }
 

@@ -5,19 +5,22 @@ impl Ty {
         self,
         ctx: &mut Vec<Ty>,
     ) -> Option<()> {
-        match self.into_inner() {
+        match self.into_inner().reduced() {
             TyKind::Form { form } => {
-                Arc::unwrap_or_clone(form).try_prove_uninhabited(ctx)
+                Arc::unwrap_or_clone(form).try_prove_uninhabited(ctx)?;
             },
-            TyKind::Neutral { .. } => None,
+            TyKind::Stuck { stuck } => {
+                stuck.try_prove_uninhabited(ctx)?;
+            },
         }
+        Some(())
     }
 
     pub fn try_find_arbitrary_tm(
         self,
         ctx: &mut Vec<Ty>,
     ) -> Option<Tm> {
-        match self.clone().into_inner() {
+        match self.clone().into_inner().reduced() {
             TyKind::Form { form } => {
                 if let Some(tm) = {
                     Arc::unwrap_or_clone(form)
@@ -26,8 +29,12 @@ impl Ty {
                     return Some(tm);
                 }
             },
-            TyKind::Neutral { neutral: _ } => {
-                // TODO
+            TyKind::Stuck { stuck } => {
+                if let Some(tm) = {
+                    stuck.try_find_arbitrary_tm_excluding_ctx(ctx)
+                } {
+                    return Some(tm)
+                }
             },
         };
 
@@ -45,30 +52,177 @@ impl Ty {
         ctx: &mut Vec<Ty>,
         tm_0: Tm,
     ) -> Option<Tm> {
-        match self.clone().into_inner() {
+        match self.clone().into_inner().reduced() {
             TyKind::Form { form } => {
                 Arc::unwrap_or_clone(form).try_find_alternate_tm(ctx, tm_0)
             },
-            TyKind::Neutral { neutral: _ } => {
+            TyKind::Stuck { stuck: _ } => {
                 // TODO
                 None
             },
         }
+    }
+}
+
+impl StuckKind {
+    fn try_prove_uninhabited(self, ctx: &mut Vec<Ty>) -> Option<()> {
+        let ctx_len = ctx.len();
+        match Arc::unwrap_or_clone(self.into_neutral()) {
+            NeutralKind::Bind { .. } => unreachable!(),
+            NeutralKind::Fold { motive, zero_inhab, succ_inhab, .. } => {
+                zero_inhab.try_prove_uninhabited(ctx)?;
+                succ_inhab.try_prove_uninhabited(
+                    ctx,
+                    Ty::nat(),
+                    motive.into_inner(ctx_len),
+                )?;
+            },
+            NeutralKind::Explode { .. } => (),
+            NeutralKind::Case { elim, lhs_inhab, rhs_inhab, .. } => {
+                let (_, lhs_ty, rhs_ty) = {
+                    elim
+                    .as_stuck()
+                    .unwrap()
+                    .infer_ty(ctx)
+                    .as_sum()
+                    .unwrap()
+                };
+                lhs_inhab.try_prove_uninhabited(ctx, lhs_ty)?;
+                rhs_inhab.try_prove_uninhabited(ctx, rhs_ty)?;
+            },
+
+            | NeutralKind::Var { .. }
+            | NeutralKind::ProjHead { .. }
+            | NeutralKind::ProjTail { .. }
+            | NeutralKind::App { .. }
+            | NeutralKind::ObsEqual { .. }
+            | NeutralKind::Cast { .. }
+            => return None,
+        }
+        Some(())
     }
 
-    /*
-    pub fn constrains_var(&self, var_index: usize) -> Option<Tm> {
-        match self.clone().into_inner() {
-            TyKind::Form { form } => {
-                Arc::unwrap_or_clone(form).constrains_var(var_index)
-            },
-            TyKind::Neutral { neutral: _ } => {
+    fn try_find_arbitrary_tm_excluding_ctx(self, ctx: &mut Vec<Ty>) -> Option<Tm> {
+        let ctx_len = ctx.len();
+        match Arc::unwrap_or_clone(self.into_neutral()) {
+            NeutralKind::Bind { .. } => unreachable!(),
+
+            NeutralKind::Fold { .. } => {
                 // TODO
                 None
             },
+
+            NeutralKind::Explode { .. } => {
+                Some(Tm::explode(
+                    Scope::make(ctx_len, |_| {
+                        Tm::explode(Scope::constant(Ty::universe()))
+                        .into_ty()
+                    }),
+                ))
+            },
+
+            NeutralKind::Case { lhs_name, elim, lhs_inhab, rhs_inhab, .. } => {
+                let (_, lhs_ty, rhs_ty) = {
+                    elim
+                    .clone()
+                    .as_stuck()
+                    .unwrap()
+                    .infer_ty(ctx)
+                    .as_sum()
+                    .unwrap()
+                };
+                let lhs_inhab_tm = lhs_inhab.clone().try_find_arbitrary_tm(ctx, lhs_ty)?;
+                let rhs_inhab_tm = rhs_inhab.clone().try_find_arbitrary_tm(ctx, rhs_ty)?;
+                let tm = elim.case(
+                    lhs_name.clone(),
+                    Scope::make(ctx_len, |elim| {
+                        elim
+                        .case(
+                            lhs_name,
+                            Scope::constant(Ty::universe()),
+                            lhs_inhab,
+                            rhs_inhab,
+                        )
+                        .into_ty()
+                    }),
+                    lhs_inhab_tm,
+                    rhs_inhab_tm,
+                );
+                Some(tm)
+            },
+
+            | NeutralKind::Var { .. }
+            | NeutralKind::ProjHead { .. }
+            | NeutralKind::ProjTail { .. }
+            | NeutralKind::App { .. }
+            | NeutralKind::ObsEqual { .. }
+            | NeutralKind::Cast { .. }
+            => None,
         }
     }
-    */
+}
+
+impl Tm {
+    fn try_prove_uninhabited(
+        self,
+        ctx: &mut Vec<Ty>,
+    ) -> Option<()> {
+        self.into_ty().try_prove_uninhabited(ctx)
+    }
+
+    fn try_find_arbitrary_tm(
+        self,
+        ctx: &mut Vec<Ty>,
+    ) -> Option<Tm> {
+        self.into_ty().try_find_arbitrary_tm(ctx)
+    }
+}
+
+impl Scope<Tm> {
+    fn try_prove_uninhabited(
+        self,
+        ctx: &mut Vec<Ty>,
+        var_ty: Ty,
+    ) -> Option<()> {
+        let ctx_len = ctx.len();
+        let inner = self.into_inner(ctx_len);
+        ctx.push(var_ty);
+        let ret = inner.try_prove_uninhabited(ctx);
+        ctx.truncate(ctx_len);
+        ret
+    }
+
+    fn try_find_arbitrary_tm(
+        self,
+        ctx: &mut Vec<Ty>,
+        var_ty: Ty,
+    ) -> Option<Scope<Tm>> {
+        let ctx_len = ctx.ctx_len();
+        let inner = self.into_inner(ctx_len);
+        ctx.push(var_ty);
+        let ret = inner.try_find_arbitrary_tm(ctx);
+        ctx.truncate(ctx_len);
+        let tm = ret?;
+        Some(Scope::new(ctx_len, tm))
+    }
+}
+
+impl Scope<Scope<Tm>> {
+    fn try_prove_uninhabited(
+        self,
+        ctx: &mut Vec<Ty>,
+        var_ty_0: Ty,
+        var_ty_1: Ty,
+    ) -> Option<()> {
+        let ctx_len = ctx.len();
+        let inner = self.into_inner(ctx_len);
+        ctx.push(var_ty_0);
+        let inner = inner.into_inner(ctx_len + 1);
+        ctx.push(var_ty_1);
+        let ret = inner.try_prove_uninhabited(ctx);
+        ctx.truncate(ctx_len);
+        ret
+    }
 }
 
 impl FormKind {
@@ -325,24 +479,5 @@ impl FormKind {
         };
         Some(tm_1)
     }
-
-    /*
-    pub fn constrains_var(&self, var_index: usize) -> Option<Vec<Tm>> {
-        match self {
-            | FormKind::Name
-            | FormKind::Universe
-            | FormKind::Nat
-            | FormKind::Unit
-            => None,
-
-            FormKind::Never => Some(Vec::new()),
-
-            FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
-                let lhs_constraints = lhs_ty.constrains_var(var_index)?;
-                let rhs_constraints = rhs_ty.constrains_var(var_index)?;
-            },
-        }
-    }
-    */
 }
 

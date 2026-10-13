@@ -82,94 +82,46 @@ impl Unify for FormKind {
     }
 }
 
-impl Substitutable for Form {
-    type Output = Form;
-
-    fn subst(self, subst: &mut Subst) -> Form {
-        if self.ctx_len() <= subst.subst_index() {
-            return self;
-        }
-        Weaken::new(self.into_inner().subst(subst))
-    }
-
-    fn into_output(self) -> Form {
-        self
-    }
-
-    fn try_strengthen_index(self, var_index: usize) -> Option<Form> {
-        self.do_try_strengthen_index(var_index)
-    }
-}
-
-impl Substitutable for Arc<FormKind> {
-    type Output = Arc<FormKind>;
-
-    fn subst(self, subst: &mut Subst) -> Arc<FormKind> {
-        let form_kind = Arc::unwrap_or_clone(self);
-        let form_kind = form_kind.subst(subst);
-        Arc::new(form_kind)
-    }
-
-    fn into_output(self) -> Arc<FormKind> {
-        self
-    }
-
-    fn try_strengthen_index(self, var_index: usize) -> Option<Arc<FormKind>> {
-        let form_kind = Arc::unwrap_or_clone(self);
-        let form_kind = form_kind.try_strengthen_index(var_index)?;
-        Some(Arc::new(form_kind))
-    }
-}
-
 impl Substitutable for FormKind {
-    type Output = FormKind;
+    type Output = Weaken<FormKind>;
 
-    fn subst(self, subst: &mut Subst) -> FormKind {
+    fn subst(self, subst: &mut Subst) -> Weaken<FormKind> {
         match self {
-            FormKind::Name => FormKind::Name,
+            FormKind::Name => Weaken::new(FormKind::Name),
             
-            FormKind::Universe => FormKind::Universe,
+            FormKind::Universe => Weaken::new(FormKind::Universe),
 
-            FormKind::Nat => FormKind::Nat,
+            FormKind::Nat => Weaken::new(FormKind::Nat),
 
-            /*
-            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
-                let eq_ty = eq_ty.subst(subst);
-                let eq_tm_0 = eq_tm_0.subst(subst);
-                let eq_tm_1 = eq_tm_1.subst(subst);
-                FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 }
-            },
-            */
+            FormKind::Never => Weaken::new(FormKind::Never),
 
-            FormKind::Never => FormKind::Never,
-
-            FormKind::Unit => FormKind::Unit,
+            FormKind::Unit => Weaken::new(FormKind::Unit),
 
             FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
-                let lhs_name = lhs_name.subst(subst);
-                let lhs_ty = lhs_ty.subst(subst);
-                let rhs_ty = rhs_ty.subst(subst);
-                FormKind::Sum { lhs_name, lhs_ty, rhs_ty }
+                let lhs_name = lhs_name.capture_subst(subst.clone());
+                let lhs_ty = lhs_ty.capture_subst(subst.clone());
+                let rhs_ty = rhs_ty.capture_subst(subst.clone());
+                Weaken::new(FormKind::Sum { lhs_name, lhs_ty, rhs_ty })
             },
 
             FormKind::Sigma { head_name, head_ty, tail_ty } => {
-                let head_name = head_name.subst(subst);
-                let head_ty = head_ty.subst(subst);
-                let tail_ty = tail_ty.subst(subst);
-                FormKind::Sigma { head_name, head_ty, tail_ty }
+                let head_name = head_name.capture_subst(subst.clone());
+                let head_ty = head_ty.capture_subst(subst.clone());
+                let tail_ty = tail_ty.capture_subst(subst.clone());
+                Weaken::new(FormKind::Sigma { head_name, head_ty, tail_ty })
             },
 
             FormKind::Pi { arg_name, arg_ty, res_ty } => {
-                let arg_name = arg_name.subst(subst);
-                let arg_ty = arg_ty.subst(subst);
-                let res_ty = res_ty.subst(subst);
-                FormKind::Pi { arg_name, arg_ty, res_ty }
+                let arg_name = arg_name.capture_subst(subst.clone());
+                let arg_ty = arg_ty.capture_subst(subst.clone());
+                let res_ty = res_ty.capture_subst(subst.clone());
+                Weaken::new(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
         }
     }
 
-    fn into_output(self) -> FormKind {
-        self
+    fn into_output(self) -> Weaken<FormKind> {
+        Weaken::new(self)
     }
 
     fn try_strengthen_index(self, var_index: usize) -> Option<FormKind> {
@@ -179,15 +131,6 @@ impl Substitutable for FormKind {
             FormKind::Universe => FormKind::Universe,
 
             FormKind::Nat => FormKind::Nat,
-
-            /*
-            FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 } => {
-                let eq_ty = eq_ty.try_strengthen_index(var_index)?;
-                let eq_tm_0 = eq_tm_0.try_strengthen_index(var_index)?;
-                let eq_tm_1 = eq_tm_1.try_strengthen_index(var_index)?;
-                FormKind::Equal { eq_ty, eq_tm_0, eq_tm_1 }
-            },
-            */
 
             FormKind::Never => FormKind::Never,
 
@@ -220,7 +163,7 @@ impl Substitutable for FormKind {
 
 impl Form {
     pub fn into_ty(self) -> Ty {
-        self.map(|form| TyKind::Form { form })
+        self.map(|form| OrLazy::Reduced(TyKind::Form { form }))
     }
 
     pub fn into_intro(self) -> Intro {
@@ -408,7 +351,7 @@ impl FormKind {
         Some((eq_ty, eq_tm_0, eq_tm_1))
     }
 
-    pub fn is_prop(&self) -> bool {
+    pub fn is_prop(self) -> bool {
         match self {
             | FormKind::Name
             | FormKind::Universe
@@ -421,11 +364,11 @@ impl FormKind {
             => true,
 
             FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
-                head_ty.is_prop() && tail_ty.inner_ref().is_prop()
+                head_ty.is_prop() && tail_ty.inner.is_prop()
             },
 
             FormKind::Pi { arg_name: _, arg_ty: _, res_ty } => {
-                res_ty.inner_ref().is_prop()
+                res_ty.inner.is_prop()
             },
         }
     }
@@ -447,23 +390,23 @@ impl DeepNf for FormKind {
             FormKind::Unit => Weaken::new_arc(FormKind::Unit),
 
             FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
-                let lhs_name = lhs_name.deep_nf();
-                let lhs_ty = lhs_ty.deep_nf();
-                let rhs_ty = rhs_ty.deep_nf();
+                let lhs_name = lhs_name.deep_nf().into_name();
+                let lhs_ty = lhs_ty.deep_nf().into_ty();
+                let rhs_ty = rhs_ty.deep_nf().into_ty();
                 Weaken::new_arc(FormKind::Sum { lhs_name, lhs_ty, rhs_ty })
             },
 
             FormKind::Sigma { head_name, head_ty, tail_ty } => {
-                let head_name = head_name.deep_nf();
-                let head_ty = head_ty.deep_nf();
-                let tail_ty = tail_ty.deep_nf();
+                let head_name = head_name.deep_nf().into_name();
+                let head_ty = head_ty.deep_nf().into_ty();
+                let tail_ty = tail_ty.deep_nf().map_without_capture(ValTy::into_ty);
                 Weaken::new_arc(FormKind::Sigma { head_name, head_ty, tail_ty })
             },
 
             FormKind::Pi { arg_name, arg_ty, res_ty } => {
-                let arg_name = arg_name.deep_nf();
-                let arg_ty = arg_ty.deep_nf();
-                let res_ty = res_ty.deep_nf();
+                let arg_name = arg_name.deep_nf().into_name();
+                let arg_ty = arg_ty.deep_nf().into_ty();
+                let res_ty = res_ty.deep_nf().map_without_capture(ValTy::into_ty);
                 Weaken::new_arc(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
         }

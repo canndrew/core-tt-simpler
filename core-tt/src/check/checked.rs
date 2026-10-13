@@ -18,12 +18,13 @@ impl<T: Contextual + Bindable> Bindable for Checked<T> {
     }
 }
 
-impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Checked<T> {
+//impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Checked<T> {
+impl<T: Contextual + Bindable + Substitutable> Substitutable for Checked<T> {
     type Output = Checked<T>;
 
     fn subst(self, subst: &mut Subst) -> Checked<T> {
         let Checked { constraint_ty, scope } = self;
-        let constraint_ty = constraint_ty.subst(subst);
+        let constraint_ty = constraint_ty.subst(subst).into_ty();
         let scope = scope.subst(subst);
         Checked { constraint_ty, scope }
     }

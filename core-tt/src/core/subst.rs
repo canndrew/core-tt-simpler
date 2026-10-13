@@ -120,14 +120,33 @@ impl Subst {
     }
 }
 
-pub trait Substitutable {
+pub trait Substitutable: Sized {
     type Output;
 
     fn subst(self, subst: &mut Subst) -> Self::Output;
     fn into_output(self) -> Self::Output;
-    fn try_strengthen_index(self, var_index: usize) -> Option<Self::Output>;
+    fn try_strengthen_index(self, var_index: usize) -> Option<Self>;
 }
 
+impl<T, U> Substitutable for Arc<T>
+where
+    T: Clone + Substitutable<Output = Weaken<U>>,
+    U: Clone + Contextual,
+{
+    type Output = Weaken<Arc<U>>;
+
+    fn subst(self, subst: &mut Subst) -> Weaken<Arc<U>> {
+        Arc::unwrap_or_clone(self).subst(subst).map(Arc::new)
+    }
+
+    fn into_output(self) -> Weaken<Arc<U>> {
+        Arc::unwrap_or_clone(self).into_output().map(Arc::new)
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Arc<T>> {
+        Some(Arc::new(Arc::unwrap_or_clone(self).try_strengthen_index(var_index)?))
+    }
+}
 
 macro_rules! impl_substitutable_tuple {
     ($($ty:ident,)*) => {
@@ -160,7 +179,7 @@ macro_rules! impl_substitutable_tuple {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn try_strengthen_index(self, var_index: usize) -> Option<Self::Output> {
+            fn try_strengthen_index(self, var_index: usize) -> Option<Self> {
                 let ($($ty,)*) = self;
                 $(
                     let $ty = $ty.try_strengthen_index(var_index)?;

@@ -1,6 +1,6 @@
 use crate::priv_prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Constraints {
     unique_tms: BTreeMap<usize, Tm>,
 }

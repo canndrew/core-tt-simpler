@@ -31,6 +31,8 @@ fn run() -> Result<(), String> {
         Ok(prec_stmt) => prec_stmt,
         Err(err) => return Err(format!("parse error: {}", err)),
     };
+
+
     let (ctx, checked) = CheckCtx::with_builtins(|ch| {
         prec_stmt.check(ch)
     });
@@ -46,3 +48,4 @@ fn run() -> Result<(), String> {
 
     Ok(())
 }
+

@@ -4,6 +4,8 @@ mod priv_prelude;
 mod util;
 mod tag;
 mod core;
+
+
 pub mod check;
 
 pub mod pprint;
@@ -24,7 +26,9 @@ pub use {
             contextual::{Contextual, TupleOfContextual, DeepNf},
             form::{Form, FormKind},
             intro::{Intro, IntroKind},
-            neutral::{Neutral, NeutralData, NeutralKind},
+            neutral::NeutralKind,
+            stuck::{Stuck, StuckKind},
+            lazy::{Lazy, OrLazy, LazyData},
             name::{Name, NameKind},
             ty::{Ty, TyKind},
             tm::{Tm, TmKind},

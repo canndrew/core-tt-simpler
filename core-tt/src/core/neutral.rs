@@ -1,14 +1,5 @@
 use crate::priv_prelude::*;
 
-pub type Neutral = Weaken<Arc<NeutralData>>;
-
-#[derive(Clone, Debug)]
-pub struct NeutralData {
-    pub reduced_filter: Usages,
-    pub reduced_opt: Arc<OnceLock<Option<Tm>>>,
-    pub kind: NeutralKind,
-}
-
 #[derive(Clone, Debug)]
 pub enum NeutralKind {
     Var {
@@ -17,7 +8,7 @@ pub enum NeutralKind {
     Bind {
         var_tms: Vec<Tm>,
         truncated_body_usages: Usages,
-        body: TmKind,
+        body: OrLazy<TmKind>,
     },
 
     Fold {
@@ -28,7 +19,7 @@ pub enum NeutralKind {
     },
 
     Explode {
-        motive: Scope<TyKind>,
+        motive: Scope<OrLazy<TyKind>>,
     },
     Case {
         lhs_name: Name,
@@ -38,10 +29,10 @@ pub enum NeutralKind {
         rhs_inhab: Scope<Tm>,
     },
     ProjHead {
-        elim: TmKind,
+        elim: OrLazy<TmKind>,
     },
     ProjTail {
-        elim: TmKind,
+        elim: OrLazy<TmKind>,
     },
     App {
         elim: Tm,
@@ -59,26 +50,6 @@ pub enum NeutralKind {
         ty_1: Ty,
         tm_0: Tm,
     },
-}
-
-impl Contextual for NeutralData {
-    fn ctx_len(&self) -> usize {
-        self.kind.ctx_len()
-    }
-
-    fn collect_usages(&self, usages: &mut Usages) {
-        usages.or_assign(&self.reduced_filter);
-    }
-
-    fn filter_usages(&mut self, usages: &Usages) {
-        self.reduced_filter.filter(usages);
-        self.kind.filter_usages(usages);
-    }
-
-    fn unfilter_usages(&mut self, usages: &Usages) {
-        self.reduced_filter.unfilter(usages);
-        self.kind.unfilter_usages(usages);
-    }
 }
 
 impl Contextual for NeutralKind {
@@ -302,152 +273,15 @@ impl Contextual for NeutralKind {
     }
 }
 
-impl NeutralData {
-    pub fn new(kind: NeutralKind) -> NeutralData {
-        let mut reduced_filter = Usages::empty();
-        kind.collect_usages(&mut reduced_filter);
-        NeutralData {
-            reduced_filter,
-            reduced_opt: Arc::new(OnceLock::new()),
-            kind,
-        }
-    }
-
-    pub fn new_arc(kind: NeutralKind) -> Arc<NeutralData> {
-        Arc::new(NeutralData::new(kind))
-    }
-
-    pub fn unify_assuming_irreducible_to_intro(
-        neutral_0: Arc<NeutralData>,
-        neutral_1: Arc<NeutralData>,
-    ) -> Option<Arc<NeutralData>> {
-        if Arc::ptr_eq(&neutral_0, &neutral_1) {
-            return Some(neutral_0);
-        }
-
-        let neutral_0 = match neutral_0.get_cached_reduction() {
-            Some(tm) => tm.into_inner().as_neutral().unwrap(),
-            None => neutral_0,
-        };
-        let neutral_1 = match neutral_1.get_cached_reduction() {
-            Some(tm) => tm.into_inner().as_neutral().unwrap(),
-            None => neutral_1,
-        };
-        if Arc::ptr_eq(&neutral_0, &neutral_1) {
-            return Some(neutral_0);
-        }
-
-        let kind_0 = Arc::unwrap_or_clone(neutral_0).kind;
-        let kind_1 = Arc::unwrap_or_clone(neutral_1).kind;
-        let kind = Unify::unify(kind_0, kind_1)?;
-        Some(NeutralData::new_arc(kind))
-    }
-
-    pub fn unify_without_cached_reduction(
-        neutral_0: Arc<NeutralData>,
-        neutral_1: Arc<NeutralData>,
-    ) -> Option<Arc<NeutralData>> {
-        if Arc::ptr_eq(&neutral_0, &neutral_1) {
-            return Some(neutral_0);
-        }
-        let neutral_0 = Arc::unwrap_or_clone(neutral_0);
-        let neutral_1 = Arc::unwrap_or_clone(neutral_1);
-        let kind = Unify::unify(neutral_0.kind, neutral_1.kind)?;
-        Some(NeutralData::new_arc(kind))
-    }
-
-    pub fn get_cached_reduction(&self) -> Option<Tm> {
-        self
-        .reduced_opt
-        .get()
-        .and_then(|tm_opt| tm_opt.as_ref())
-        .map(|tm| tm.clone().unfiltered(&self.reduced_filter))
-    }
-
-    pub fn reduced_assuming_stuck(self) -> NeutralKind {
-        match self.try_reduce() {
-            Some(tm) => {
-                tm.as_neutral().unwrap().into_inner_arc().kind
-            },
-            None => self.kind,
-        }
-    }
-
-    pub fn try_reduce(&self) -> Option<Tm> {
-        self
-        .reduced_opt
-        .get_or_init(|| {
-            self
-            .kind
-            .try_reduce()
-            .map(|tm| {
-                tm.filtered(&self.reduced_filter)
-            })
-        })
-        .as_ref()
-        .map(|tm| tm.clone().unfiltered(&self.reduced_filter))
-    }
-
-    pub fn try_reduce_to_intro_assuming_relevant(&self) -> Option<Intro> {
-        let tm = self.try_reduce()?;
-        tm.try_map(|tm_kind| {
-            match tm_kind {
-                TmKind::Intro { intro } => Some(intro),
-                TmKind::Neutral { .. } => None,
-                TmKind::Proof => unreachable!(),
-            }
-        })
-    }
-
-    pub fn collect_stuck_vars(&self, usages: &mut Usages) {
-        match self.get_cached_reduction() {
-            Some(tm) => {
-                tm.as_neutral().unwrap().into_inner().collect_stuck_vars(usages);
-            },
-            None => {
-                self.kind.collect_stuck_vars(usages)
-            },
-        }
-    }
-
-    pub fn is_prop(&self) -> bool {
-        match self.try_reduce() {
-            Some(tm) => tm.into_ty().is_prop(),
-            None => self.kind.is_prop(),
-        }
-    }
-
-    pub fn deep_nf_assuming_stuck(self) -> Neutral {
-        match self.get_cached_reduction() {
-            Some(tm) => tm.as_neutral().unwrap().deep_nf_assuming_stuck(),
-            None => self.kind.deep_nf_assuming_stuck().map(NeutralData::new_arc),
-        }
-    }
-
-    pub fn infer_ty_assuming_stuck(self, ctx: &mut Vec<Ty>) -> Ty {
-        match self.get_cached_reduction() {
-            Some(tm) => tm.as_neutral().unwrap().infer_ty_assuming_stuck(ctx),
-            None => self.kind.infer_ty_assuming_stuck(ctx),
-        }
-    }
-
-    pub fn as_var(&self) -> Option<usize> {
-        match self.try_reduce() {
-            Some(tm) => tm.as_var(),
-            None => self.kind.as_var(),
-        }
-    }
-
-    pub fn as_equal(self) -> Option<(Ty, Tm, Tm)> {
-        match self.try_reduce() {
-            Some(tm) => tm.into_ty().as_equal(),
-            None => self.kind.as_equal(),
-        }
-    }
-}
-
 impl NeutralKind {
-    pub fn try_reduce(&self) -> Option<Tm> {
+    pub fn var_0() -> Arc<NeutralKind> {
+        lazy_static! {
+            static ref VAR_0: Arc<NeutralKind> = Arc::new(NeutralKind::Var { index: 0 });
+        }
+        VAR_0.clone()
+    }
+
+    pub fn try_reduce(&self) -> Option<ValTm> {
         let tm = match self {
             NeutralKind::Var { .. } => return None,
             NeutralKind::Bind { var_tms, truncated_body_usages, body } => {
@@ -461,12 +295,12 @@ impl NeutralKind {
                 let mut subst = Subst::from_var_tms(subst_index, var_tms);
                 let body = body.subst(&mut subst);
                 debug_assert_eq!(subst.len(), subst_len);
-                body
+                return Some(body);
             },
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
-                if motive.inner_ref().is_prop() {
-                    return Some(Tm::proof());
+                if motive.inner.clone().is_prop() {
+                    return Some(Weaken::new(TmKind::Proof));
                 }
                 let elim = elim.clone().try_reduce_to_intro_assuming_relevant()?;
                 let (elim_usages, elim) = elim.into_usages_and_weak();
@@ -491,19 +325,17 @@ impl NeutralKind {
                         let elim = if succ_count_m1.decrement() {
                             Weaken::from_usages_and_weak(
                                 elim_usages,
-                                TmKind::Intro {
+                                OrLazy::Reduced(TmKind::Intro {
                                     intro: Arc::new(IntroKind::Succs {
                                         succ_count_m1,
                                         pred_tm: pred_tm.clone(),
                                     }),
-                                },
+                                }),
                             )
                         } else {
                             Weaken::from_usages_and_weak(
                                 elim_usages,
-                                TmKind::Neutral {
-                                    neutral: pred_tm.clone(),
-                                },
+                                pred_tm.clone(),
                             )
                         };
                         let state = Tm::fold(
@@ -519,16 +351,16 @@ impl NeutralKind {
             },
 
             NeutralKind::Explode { motive } => {
-                if motive.inner_ref().is_prop() {
-                    return Some(Tm::proof());
+                if motive.inner.clone().is_prop() {
+                    return Some(Weaken::new(TmKind::Proof));
                 } else {
                     return None;
                 }
             },
 
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
-                if motive.inner_ref().is_prop() {
-                    return Some(Tm::proof());
+                if motive.inner.clone().is_prop() {
+                    return Some(Weaken::new(TmKind::Proof));
                 }
 
                 if let Some(elim) = {
@@ -568,56 +400,28 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                match elim {
+                match elim.clone().reduced() {
                     TmKind::Intro { intro } => {
-                        let IntroKind::Pair { head_tm, tail_tm: _ } = &**intro else {
+                        let IntroKind::Pair { head_tm, tail_tm: _ } = &*intro else {
                             unreachable!();
                         };
                         head_tm.clone()
                     },
-                    TmKind::Neutral { neutral } => {
-                        let (usages, elim) = neutral.try_reduce()?.into_usages_and_weak();
-                        match elim {
-                            TmKind::Intro { intro } => {
-                                let IntroKind::Pair { head_tm, tail_tm: _ } = &*intro else {
-                                    unreachable!();
-                                };
-                                head_tm.clone().unfiltered(&usages)
-                            },
-                            TmKind::Neutral { .. } => return None,
-                            TmKind::Proof => {
-                                Tm::proof()
-                            },
-                        }
-                    },
                     TmKind::Proof => Tm::proof(),
+                    TmKind::Stuck { .. } => return None,
                 }
             },
 
             NeutralKind::ProjTail { elim } => {
-                match elim {
+                match elim.clone().reduced() {
                     TmKind::Intro { intro } => {
-                        let IntroKind::Pair { head_tm: _, tail_tm } = &**intro else {
+                        let IntroKind::Pair { head_tm: _, tail_tm } = &*intro else {
                             return None;
                         };
                         tail_tm.clone()
                     },
-                    TmKind::Neutral { neutral } => {
-                        let (usages, elim) = neutral.try_reduce()?.into_usages_and_weak();
-                        match elim {
-                            TmKind::Intro { intro } => {
-                                let IntroKind::Pair { head_tm: _, tail_tm } = &*intro else {
-                                    unreachable!();
-                                };
-                                tail_tm.clone().unfiltered(&usages)
-                            },
-                            TmKind::Neutral { .. } => return None,
-                            TmKind::Proof => {
-                                Tm::proof()
-                            },
-                        }
-                    },
                     TmKind::Proof => Tm::proof(),
+                    TmKind::Stuck { .. } => return None,
                 }
             },
 
@@ -636,8 +440,8 @@ impl NeutralKind {
                         };
                         res_tm.bind(arg_tm.clone())
                     },
-                    TmKind::Neutral { .. } => return None,
                     TmKind::Proof => Tm::proof(),
+                    TmKind::Stuck { .. } => return None,
                 }
             },
 
@@ -872,9 +676,7 @@ impl NeutralKind {
                                     Ty::obs_equal(
                                         Ty::nat(),
                                         Tm::constant(ubig),
-                                        Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm,
-                                        }),
+                                        Weaken::new(pred_tm),
                                     )
                                 } else {
                                     Ty::never()
@@ -889,9 +691,7 @@ impl NeutralKind {
                                     let ubig = ubig.strict_sub(&(succ_count_m1 + 1usize));
                                     Ty::obs_equal(
                                         Ty::nat(),
-                                        Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm,
-                                        }),
+                                        Weaken::new(pred_tm),
                                         Tm::constant(ubig),
                                     )
                                 } else {
@@ -911,9 +711,7 @@ impl NeutralKind {
                             ) => {
                                 let (tm_0, tm_1) = match succ_count_m1_0.cmp(&succ_count_m1_1) {
                                     cmp::Ordering::Less => {
-                                        let tm_0 = Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm_0,
-                                        });
+                                        let tm_0 = Weaken::new(pred_tm_0);
                                         let tm_1 = {
                                             Weaken::new_arc(IntroKind::Succs {
                                                 succ_count_m1: {
@@ -922,17 +720,15 @@ impl NeutralKind {
                                                 },
                                                 pred_tm: pred_tm_1,
                                             })
-                                            .map(|intro| TmKind::Intro { intro })
+                                            .map(|intro| {
+                                                OrLazy::Reduced(TmKind::Intro { intro })
+                                            })
                                         };
                                         (tm_0, tm_1)
                                     },
                                     cmp::Ordering::Equal => {
-                                        let tm_0 = Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm_0,
-                                        });
-                                        let tm_1 = Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm_1,
-                                        });
+                                        let tm_0 = Weaken::new(pred_tm_0);
+                                        let tm_1 = Weaken::new(pred_tm_1);
                                         (tm_0, tm_1)
                                     },
                                     cmp::Ordering::Greater => {
@@ -944,11 +740,11 @@ impl NeutralKind {
                                                 },
                                                 pred_tm: pred_tm_0,
                                             })
-                                            .map(|intro| TmKind::Intro { intro })
+                                            .map(|intro| {
+                                                OrLazy::Reduced(TmKind::Intro { intro })
+                                            })
                                         };
-                                        let tm_1 = Weaken::new(TmKind::Neutral {
-                                            neutral: pred_tm_1,
-                                        });
+                                        let tm_1 = Weaken::new(pred_tm_1);
                                         (tm_0, tm_1)
                                     },
                                 };
@@ -1182,11 +978,9 @@ impl NeutralKind {
     pub fn try_commuting_conversions(self) -> Option<NeutralKind> {
         match self {
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
-                let elim = {
-                    elim.as_neutral().unwrap().into_inner_arc().reduced_assuming_stuck()
-                };
+                let elim = elim.as_stuck().unwrap().into_inner().into_neutral();
 
-                match elim {
+                match Arc::unwrap_or_clone(elim) {
                     NeutralKind::Explode { motive: inner_motive } => {
                         if let Some(inner_motive) = inner_motive.try_strengthen().ok() {
                             let motive = Scope::constant(
@@ -1258,10 +1052,8 @@ impl NeutralKind {
                 }
             },
             NeutralKind::App { elim, arg_tm } => {
-                let elim = {
-                    elim.as_neutral().unwrap().into_inner_arc().reduced_assuming_stuck()
-                };
-                match elim {
+                let elim = elim.as_stuck().unwrap().into_inner().into_neutral();
+                match Arc::unwrap_or_clone(elim) {
                     NeutralKind::Explode { motive } => {
                         if let Some(motive) = motive.try_strengthen().ok() {
                             let (_, _, res_ty) = Weaken::new(motive).as_pi().unwrap();
@@ -1296,11 +1088,13 @@ impl NeutralKind {
         None
     }
 
-    pub fn reduced(self) -> Tm {
+    pub fn reduced(self) -> ValTm {
         match self.try_reduce() {
             None => {
-                Weaken::new_arc(NeutralData::new(self))
-                .map(|neutral| TmKind::Neutral { neutral })
+                Weaken::new_arc(self)
+                .map(|kind| TmKind::Stuck {
+                    stuck: StuckKind { kind },
+                })
             },
             Some(tm) => tm,
         }
@@ -1320,12 +1114,12 @@ impl NeutralKind {
         Some((eq_ty, eq_tm_0, eq_tm_1))
     }
 
-    pub fn collect_stuck_vars(&self, usages: &mut Usages) {
+    pub(crate) fn collect_stuck_vars_assuming_stuck(self, usages: &mut Usages) {
         match self {
             NeutralKind::Explode { .. } => (),
 
             NeutralKind::Var { index } => {
-                usages.set_to_one(*index);
+                usages.set_to_one(index);
             },
 
             NeutralKind::Bind { .. } => unreachable!(),
@@ -1333,38 +1127,42 @@ impl NeutralKind {
             | NeutralKind::ProjHead { elim }
             | NeutralKind::ProjTail { elim }
             => {
-                elim.clone().as_neutral().unwrap().collect_stuck_vars(usages)
+                elim.as_stuck().unwrap().collect_stuck_vars(usages)
             },
 
             | NeutralKind::Fold { elim, .. }
             | NeutralKind::Case { elim, .. }
             | NeutralKind::App { elim, .. }
             => {
-                elim.clone().as_neutral().unwrap().collect_stuck_vars(usages)
+                elim
+                .into_inner()
+                .as_stuck()
+                .unwrap()
+                .collect_stuck_vars(usages)
             },
 
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
-                match eq_ty.clone().into_inner() {
-                    TyKind::Neutral { neutral } => {
-                        neutral.collect_stuck_vars(usages);
-                    },
+                match eq_ty.into_inner().reduced() {
                     TyKind::Form { .. } => {
-                        if let Some(neutral) = eq_tm_0.clone().as_neutral() {
-                            neutral.collect_stuck_vars(usages);
+                        if let Some(stuck) = eq_tm_0.clone().as_stuck() {
+                            stuck.collect_stuck_vars(usages);
                         }
-                        if let Some(neutral) = eq_tm_1.clone().as_neutral() {
-                            neutral.collect_stuck_vars(usages);
+                        if let Some(stuck) = eq_tm_1.clone().as_stuck() {
+                            stuck.collect_stuck_vars(usages);
                         }
+                    },
+                    TyKind::Stuck { stuck } => {
+                        stuck.collect_stuck_vars(usages);
                     },
                 }
             },
 
             NeutralKind::Cast { ty_0, ty_1, tm_0: _ } => {
-                if let Some(neutral) = ty_0.clone().as_neutral() {
-                    neutral.collect_stuck_vars(usages);
+                if let Some(stuck) = ty_0.as_stuck() {
+                    stuck.collect_stuck_vars(usages);
                 }
-                if let Some(neutral) = ty_1.clone().as_neutral() {
-                    neutral.collect_stuck_vars(usages);
+                if let Some(stuck) = ty_1.as_stuck() {
+                    stuck.collect_stuck_vars(usages);
                 }
             },
         }
@@ -1404,110 +1202,119 @@ impl NeutralKind {
             NeutralKind::Bind { .. } => unreachable!(),
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
-                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
-                let motive = motive.deep_nf();
-                let zero_inhab = zero_inhab.deep_nf();
-                let succ_inhab = succ_inhab.deep_nf();
+                let elim = elim.as_stuck().unwrap().deep_nf().into_tm();
+                let motive = motive.deep_nf().map_without_capture(|motive| motive.into_ty());
+                let zero_inhab = zero_inhab.deep_nf().into_tm();
+                let succ_inhab = {
+                    succ_inhab
+                    .deep_nf()
+                    .map_without_capture(|succ_inhab| {
+                        succ_inhab.map_without_capture(|succ_inhab| succ_inhab.into_tm())
+                    })
+                };
                 Weaken::new(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
             },
 
             NeutralKind::Explode { motive } => {
-                let motive = motive.map_without_capture(|motive| {
-                    Weaken::new(motive).deep_nf().into_inner()
-                });
+                let motive = {
+                    motive
+                    .deep_nf()
+                    .lift_weaken()
+                    .into_inner()
+                    .map_without_capture(OrLazy::Reduced)
+                };
+
                 Weaken::new(NeutralKind::Explode { motive })
             },
 
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
-                let lhs_name = lhs_name.deep_nf();
-                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
-                let motive = motive.deep_nf();
-                let lhs_inhab = lhs_inhab.deep_nf();
-                let rhs_inhab = rhs_inhab.deep_nf();
+                let lhs_name = lhs_name.deep_nf().into_name();
+                let elim = elim.as_stuck().unwrap().deep_nf().into_tm();
+                let motive = motive.deep_nf().map_without_capture(|motive| motive.into_ty());
+                let lhs_inhab = {
+                    lhs_inhab.deep_nf().map_without_capture(|lhs_inhab| lhs_inhab.into_tm())
+                };
+                let rhs_inhab = {
+                    rhs_inhab.deep_nf().map_without_capture(|rhs_inhab| rhs_inhab.into_tm())
+                };
                 Weaken::new(NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab })
             },
 
             NeutralKind::ProjHead { elim } => {
-                let elim = Arc::unwrap_or_clone(elim.as_neutral().unwrap());
-                elim.deep_nf_assuming_stuck().map(|neutral| {
-                    let elim = TmKind::Neutral { neutral };
+                elim.as_stuck().unwrap().deep_nf().map(|stuck| {
+                    let elim = OrLazy::Reduced(TmKind::Stuck { stuck });
                     NeutralKind::ProjHead { elim }
                 })
             },
 
             NeutralKind::ProjTail { elim } => {
-                let elim = Arc::unwrap_or_clone(elim.as_neutral().unwrap());
-                elim.deep_nf_assuming_stuck().map(|neutral| {
-                    let elim = TmKind::Neutral { neutral };
+                elim.as_stuck().unwrap().deep_nf().map(|stuck| {
+                    let elim = OrLazy::Reduced(TmKind::Stuck { stuck });
                     NeutralKind::ProjTail { elim }
                 })
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let elim = elim.as_neutral().unwrap().deep_nf_assuming_stuck().into_tm();
-                let arg_tm = arg_tm.deep_nf();
+                let elim = elim.as_stuck().unwrap().deep_nf().into_tm();
+                let arg_tm = arg_tm.deep_nf().into_tm();
                 Weaken::new(NeutralKind::App { elim, arg_tm })
             },
 
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
-                let eq_ty = eq_ty.deep_nf();
-                let eq_tm_0 = eq_tm_0.deep_nf();
-                let eq_tm_1 = eq_tm_1.deep_nf();
+                let eq_ty = eq_ty.deep_nf().into_ty();
+                let eq_tm_0 = eq_tm_0.deep_nf().into_tm();
+                let eq_tm_1 = eq_tm_1.deep_nf().into_tm();
                 Weaken::new(NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 })
             },
 
             NeutralKind::Cast { ty_0, ty_1, tm_0 } => {
-                let ty_0 = ty_0.deep_nf();
-                let ty_1 = ty_1.deep_nf();
-                let tm_0 = tm_0.deep_nf();
+                let ty_0 = ty_0.deep_nf().into_ty();
+                let ty_1 = ty_1.deep_nf().into_ty();
+                let tm_0 = tm_0.deep_nf().into_tm();
                 Weaken::new(NeutralKind::Cast { ty_0, ty_1, tm_0 })
             },
         }
     }
 
-    pub fn infer_ty_assuming_stuck(self, ctx: &mut Vec<Ty>) -> Ty {
-        match self {
-            NeutralKind::Var { index } => ctx[index].clone(),
+    pub fn try_infer_ty(
+        &self,
+        ctx: &mut Vec<Ty>,
+    ) -> Option<Ty> {
+        let ty = match self {
+            NeutralKind::Var { index } => ctx[*index].clone(),
 
-            NeutralKind::Bind { .. } => unreachable!(),
+            NeutralKind::Bind { .. } => return None,
 
             NeutralKind::Fold { elim, motive, .. } => {
-                motive.bind(elim)
+                motive.clone().bind(elim.clone())
             },
 
             NeutralKind::Explode { motive } => {
-                Weaken::new(motive)
+                Weaken::new(motive.clone())
                 .lift_scope()
                 .bind(Tm::proof())
             },
 
             NeutralKind::Case { elim, motive, .. } => {
-                motive.bind(elim)
+                motive.clone().bind(elim.clone())
             },
 
             NeutralKind::ProjHead { elim } => {
-                let elim_ty = {
-                    Arc::unwrap_or_clone(elim.as_neutral().unwrap())
-                    .infer_ty_assuming_stuck(ctx)
-                };
+                let elim_ty = elim.clone().as_stuck()?.infer_ty(ctx);
                 let (_head_name, head_ty, _tail_ty) = elim_ty.as_sigma().unwrap();
                 head_ty
             },
 
             NeutralKind::ProjTail { elim } => {
-                let elim_ty = {
-                    (*elim.clone().as_neutral().unwrap())
-                    .clone()
-                    .infer_ty_assuming_stuck(ctx)
-                };
+                let elim_ty = elim.clone().as_stuck()?.infer_ty(ctx);
                 let (_head_name, _head_ty, tail_ty) = elim_ty.as_sigma().unwrap();
-                tail_ty.bind(Weaken::new(elim).proj_head())
+                tail_ty.bind(Weaken::new(elim.clone()).proj_head())
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let elim_ty = elim.as_neutral().unwrap().infer_ty_assuming_stuck(ctx);
+                let elim_ty = elim.clone().as_stuck()?.infer_ty(ctx);
                 let (_arg_name, _arg_ty, res_ty) = elim_ty.as_pi().unwrap();
-                res_ty.bind(arg_tm)
+                res_ty.bind(arg_tm.clone())
             },
 
             NeutralKind::ObsEqual { .. } => {
@@ -1515,356 +1322,20 @@ impl NeutralKind {
             },
 
             NeutralKind::Cast { ty_1, .. } => {
-                ty_1
+                ty_1.clone()
             },
-        }
-    }
-}
-
-impl Unify for NeutralKind {
-    fn unify(
-        neutral_kind_0: NeutralKind,
-        neutral_kind_1: NeutralKind,
-    ) -> Option<NeutralKind> {
-        fn unify_structurally_equal(
-            neutral_kind_0: NeutralKind,
-            neutral_kind_1: NeutralKind,
-        ) -> Option<NeutralKind> {
-            match neutral_kind_0 {
-                NeutralKind::Bind { .. } => unreachable!(),
-                NeutralKind::Var { index: index_0 } => {
-                    let NeutralKind::Var { index: index_1 } = neutral_kind_1 else {
-                        return None;
-                    };
-                    let index = as_equal(index_0, &index_1)?;
-                    Some(NeutralKind::Var { index })
-                },
-
-                NeutralKind::Fold {
-                    elim: elim_0,
-                    motive: motive_0,
-                    zero_inhab: zero_inhab_0,
-                    succ_inhab: succ_inhab_0,
-                } => {
-                    let NeutralKind::Fold {
-                        elim: elim_1,
-                        motive: motive_1,
-                        zero_inhab: zero_inhab_1,
-                        succ_inhab: succ_inhab_1,
-                    } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                    let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                    let neutral = NeutralData::unify_assuming_irreducible_to_intro(
-                        neutral_0, neutral_1,
-                    )?;
-                    let motive = Unify::unify(motive_0, motive_1)?;
-                    let zero_inhab = Unify::unify(zero_inhab_0, zero_inhab_1)?;
-                    let succ_inhab = Unify::unify(succ_inhab_0, succ_inhab_1)?;
-                    let elim = Weaken::new(TmKind::Neutral { neutral });
-                    Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
-                },
-
-                NeutralKind::Explode { motive: motive_0 } => {
-                    let NeutralKind::Explode {
-                        motive: motive_1,
-                    } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let motive = Unify::unify(motive_0, motive_1)?;
-
-                    Some(NeutralKind::Explode { motive })
-                },
-
-                NeutralKind::Case {
-                    lhs_name,
-                    elim: elim_0,
-                    motive: motive_0,
-                    lhs_inhab: lhs_inhab_0,
-                    rhs_inhab: rhs_inhab_0,
-                } => {
-                    let NeutralKind::Case {
-                        lhs_name: _,
-                        elim: elim_1,
-                        motive: motive_1,
-                        lhs_inhab: lhs_inhab_1,
-                        rhs_inhab: rhs_inhab_1,
-                    } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                    let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                    let neutral = NeutralData::unify_assuming_irreducible_to_intro(
-                        neutral_0, neutral_1,
-                    )?;
-
-                    let motive = Unify::unify(motive_0, motive_1)?;
-
-                    let lhs_inhab = Unify::unify(lhs_inhab_0, lhs_inhab_1)?;
-                    let rhs_inhab = Unify::unify(rhs_inhab_0, rhs_inhab_1)?;
-                    let elim = Weaken::new(TmKind::Neutral { neutral });
-                    Some(NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab })
-                },
-
-                NeutralKind::ProjHead { elim: elim_0 } => {
-                    let NeutralKind::ProjHead { elim: elim_1 } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let neutral_0 = elim_0.as_neutral().unwrap();
-                    let neutral_1 = elim_1.as_neutral().unwrap();
-                    let neutral = NeutralData::unify_assuming_irreducible_to_intro(
-                        neutral_0, neutral_1,
-                    )?;
-
-                    let elim = TmKind::Neutral { neutral };
-                    Some(NeutralKind::ProjHead { elim })
-                },
-
-                NeutralKind::ProjTail { elim: elim_0 } => {
-                    let NeutralKind::ProjTail { elim: elim_1 } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let neutral_0 = elim_0.as_neutral().unwrap();
-                    let neutral_1 = elim_1.as_neutral().unwrap();
-                    let neutral = NeutralData::unify_assuming_irreducible_to_intro(
-                        neutral_0, neutral_1,
-                    )?;
-
-                    let elim = TmKind::Neutral { neutral };
-                    Some(NeutralKind::ProjTail { elim })
-                },
-
-                NeutralKind::App { elim: elim_0, arg_tm: arg_tm_0 } => {
-                    let NeutralKind::App { elim: elim_1, arg_tm: arg_tm_1 } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let neutral_0 = elim_0.as_neutral().unwrap().into_inner();
-                    let neutral_1 = elim_1.as_neutral().unwrap().into_inner();
-                    let neutral = NeutralData::unify_assuming_irreducible_to_intro(
-                        neutral_0, neutral_1,
-                    )?;
-                    let arg_tm = Unify::unify(arg_tm_0, arg_tm_1)?;
-
-                    let elim = Weaken::new(TmKind::Neutral { neutral });
-                    Some(NeutralKind::App { elim, arg_tm })
-                },
-
-                NeutralKind::ObsEqual {
-                    eq_ty: eq_ty_0,
-                    eq_tm_0: eq_tm_0_0,
-                    eq_tm_1: eq_tm_1_0,
-                } => {
-                    let NeutralKind::ObsEqual {
-                        eq_ty: eq_ty_1,
-                        eq_tm_0: eq_tm_0_1,
-                        eq_tm_1: eq_tm_1_1,
-                    } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let eq_ty = Unify::unify(eq_ty_0, eq_ty_1)?;
-                    let eq_tm_0 = Unify::unify(eq_tm_0_0, eq_tm_0_1)?;
-                    let eq_tm_1 = Unify::unify(eq_tm_1_0, eq_tm_1_1)?;
-
-                    Some(NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 })
-                },
-
-                NeutralKind::Cast {
-                    ty_0: ty_0_0,
-                    ty_1: ty_1_0,
-                    tm_0: tm_0_0,
-                } => {
-                    let NeutralKind::Cast {
-                        ty_0: ty_0_1,
-                        ty_1: ty_1_1,
-                        tm_0: tm_0_1,
-                    } = neutral_kind_1 else {
-                        return None;
-                    };
-
-                    let ty_0 = Unify::unify(ty_0_0, ty_0_1)?;
-                    let ty_1 = Unify::unify(ty_1_0, ty_1_1)?;
-                    let tm_0 = Unify::unify(tm_0_0, tm_0_1)?;
-                    Some(NeutralKind::Cast { ty_0, ty_1, tm_0 })
-                },
-            }
-        }
-
-        if let Some(neutral_kind) = unify_structurally_equal(
-            neutral_kind_0.clone(),
-            neutral_kind_1.clone(),
-        ) {
-            return Some(neutral_kind);
-        }
-
-        if let Some(neutral_kind_0) = neutral_kind_0.clone().try_commuting_conversions() {
-            return Unify::unify(neutral_kind_0, neutral_kind_1);
-        }
-
-        if let Some(neutral_kind_1) = neutral_kind_1.try_commuting_conversions() {
-            return Unify::unify(neutral_kind_0, neutral_kind_1);
-        }
-
-        None
-    }
-}
-
-impl Neutral {
-    pub fn into_tm(self) -> Tm {
-        self.map(|neutral| TmKind::Neutral { neutral })
-    }
-
-    pub fn into_ty(self) -> Ty {
-        self.map(|neutral| TyKind::Neutral { neutral })
-    }
-
-    pub fn var(index: usize) -> Neutral {
-        lazy_static! {
-            static ref VAR_0: Arc<NeutralData> = {
-                NeutralData::new_arc(NeutralKind::Var { index: 0 })
-            };
-        }
-
-        let usages = Usages::single_var(index);
-        Weaken::from_usages_and_weak(usages, VAR_0.clone())
-    }
-
-    pub fn fold(
-        elim: Tm,
-        motive: Scope<Ty>,
-        zero_inhab: Tm,
-        succ_inhab: Scope<Scope<Tm>>,
-    ) -> Neutral {
-        Weaken::new_arc(NeutralData::new(NeutralKind::Fold {
-            elim, motive, zero_inhab, succ_inhab,
-        }))
-    }
-
-    pub fn explode(
-        motive: Scope<Ty>,
-    ) -> Neutral {
-        motive
-        .lift_weaken()
-        .map(|motive| Arc::new(NeutralData::new(NeutralKind::Explode { motive })))
-    }
-
-    pub fn case(
-        elim: Tm,
-        lhs_name: Name,
-        motive: Scope<Ty>,
-        lhs_inhab: Scope<Tm>,
-        rhs_inhab: Scope<Tm>,
-    ) -> Neutral {
-        Weaken::new_arc(NeutralData::new(NeutralKind::Case {
-            lhs_name, elim, motive, lhs_inhab, rhs_inhab,
-        }))
-    }
-
-    pub fn proj_head(elim: Tm) -> Neutral {
-        elim.map(|elim| NeutralData::new_arc(NeutralKind::ProjHead { elim }))
-    }
-
-    pub fn proj_tail(elim: Tm) -> Neutral {
-        elim.map(|elim| NeutralData::new_arc(NeutralKind::ProjTail { elim }))
-    }
-
-    pub fn app(elim: Tm, arg_tm: Tm) -> Neutral {
-        Weaken::new_arc(NeutralData::new(NeutralKind::App { elim, arg_tm }))
-    }
-
-    pub fn obs_equal(eq_ty: Ty, eq_tm_0: Tm, eq_tm_1: Tm) -> Neutral {
-        Weaken::new_arc(NeutralData::new(NeutralKind::ObsEqual {
-            eq_ty, eq_tm_0, eq_tm_1,
-        }))
-    }
-
-    pub fn cast(ty_0: Ty, ty_1: Ty, tm_0: Tm) -> Neutral {
-        Weaken::new_arc(NeutralData::new(NeutralKind::Cast {
-            ty_0, ty_1, tm_0,
-        }))
-    }
-
-    pub fn collect_stuck_vars(&self, usages: &mut Usages) {
-        self.clone().into_inner().collect_stuck_vars(usages);
-    }
-
-    pub fn is_prop(&self) -> bool {
-        self.weak().is_prop()
-    }
-
-    pub fn deep_nf_assuming_stuck(self) -> Neutral {
-        self.map_out_unfiltered(|neutral| {
-            Arc::unwrap_or_clone(neutral).deep_nf_assuming_stuck()
-        })
-    }
-
-    pub fn infer_ty_assuming_stuck(self, ctx: &mut Vec<Ty>) -> Ty {
-        self.map_out_unfiltered(|neutral| {
-            Arc::unwrap_or_clone(neutral).infer_ty_assuming_stuck(ctx)
-        })
-    }
-}
-
-impl Substitutable for Neutral {
-    type Output = Tm;
-
-    fn subst(self, subst: &mut Subst) -> Tm {
-        if self.ctx_len() <= subst.subst_index() {
-            return self.into_tm();
-        }
-        self.into_inner().subst(subst)
-    }
-
-    fn into_output(self) -> Tm {
-        self.into_tm()
-    }
-
-    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
-        Some(self.do_try_strengthen_index(var_index)?.flatten())
-    }
-}
-
-impl Substitutable for Arc<NeutralData> {
-    type Output = Tm;
-
-    fn subst(self, subst: &mut Subst) -> Tm {
-        if let Some(tm) = self.get_cached_reduction() {
-            return tm.subst(subst);
-        }
-        let neutral_data = Arc::unwrap_or_clone(self);
-        neutral_data.kind.subst(subst)
-    }
-
-    fn into_output(self) -> Tm {
-        Weaken::new(TmKind::Neutral { neutral: self })
-    }
-
-    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
-        match self.try_reduce() {
-            None => {
-                self.kind.clone().try_strengthen_index(var_index)
-            },
-            Some(tm) => {
-                tm.try_strengthen_index(var_index)
-            },
-        }
+        };
+        Some(ty)
     }
 }
 
 impl Substitutable for NeutralKind {
-    type Output = Tm;
+    type Output = ValTm;
 
-    fn subst(self, subst: &mut Subst) -> Tm {
+    fn subst(self, subst: &mut Subst) -> ValTm {
         let neutral_kind = match self {
             NeutralKind::Var { index } => {
-                return subst.get_var_tm(index);
+                return subst.get_var_tm(index).reduced();
             },
 
             NeutralKind::Bind { var_tms, mut truncated_body_usages, body } => {
@@ -1878,7 +1349,7 @@ impl Substitutable for NeutralKind {
             },
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
-                let elim = elim.subst(subst);
+                let elim = elim.subst(subst).into_tm();
                 let motive = motive.capture_subst(subst.clone());
                 let zero_inhab = zero_inhab.capture_subst(subst.clone());
                 let succ_inhab = succ_inhab.capture_subst(subst.clone());
@@ -1898,7 +1369,7 @@ impl Substitutable for NeutralKind {
 
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
                 let lhs_name = lhs_name.capture_subst(subst.clone());
-                let elim = elim.subst(subst);
+                let elim = elim.subst(subst).into_tm();
                 let motive = motive.capture_subst(subst.clone());
                 let lhs_inhab = lhs_inhab.capture_subst(subst.clone());
                 let rhs_inhab = rhs_inhab.capture_subst(subst.clone());
@@ -1906,31 +1377,31 @@ impl Substitutable for NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                let elim = elim.subst(subst).into_inner();
+                let elim = elim.subst(subst).into_tm().into_inner();
                 NeutralKind::ProjHead { elim }
             },
 
             NeutralKind::ProjTail { elim } => {
-                let elim = elim.subst(subst).into_inner();
+                let elim = elim.subst(subst).into_tm().into_inner();
                 NeutralKind::ProjTail { elim }
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                let elim = elim.subst(subst);
+                let elim = elim.subst(subst).into_tm();
                 let arg_tm = arg_tm.capture_subst(subst.clone());
                 NeutralKind::App { elim, arg_tm }
             },
 
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
-                let eq_ty = eq_ty.subst(subst);
-                let eq_tm_0 = eq_tm_0.subst(subst);
-                let eq_tm_1 = eq_tm_1.subst(subst);
+                let eq_ty = eq_ty.subst(subst).into_ty();
+                let eq_tm_0 = eq_tm_0.subst(subst).into_tm();
+                let eq_tm_1 = eq_tm_1.subst(subst).into_tm();
                 NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 }
             },
 
             NeutralKind::Cast { ty_0, ty_1, tm_0 } => {
-                let ty_0 = ty_0.subst(subst);
-                let ty_1 = ty_1.subst(subst);
+                let ty_0 = ty_0.subst(subst).into_ty();
+                let ty_1 = ty_1.subst(subst).into_ty();
                 let tm_0 = tm_0.capture_subst(subst.clone());
                 NeutralKind::Cast { ty_0, ty_1, tm_0 }
             },
@@ -1938,38 +1409,51 @@ impl Substitutable for NeutralKind {
         neutral_kind.reduced()
     }
 
-    fn into_output(self) -> Tm {
-        Weaken::new_arc(NeutralData::new(self))
-        .map(|neutral| TmKind::Neutral { neutral })
+    fn into_output(self) -> ValTm {
+        self.reduced()
     }
 
-    fn try_strengthen_index(self, var_index: usize) -> Option<Tm> {
+    fn try_strengthen_index(self, var_index: usize) -> Option<NeutralKind> {
         match self {
             NeutralKind::Var { index } => {
                 match index.cmp(&var_index) {
-                    cmp::Ordering::Less => Some(Tm::var(index)),
+                    cmp::Ordering::Less => Some(NeutralKind::Var { index }),
                     cmp::Ordering::Equal => None,
-                    cmp::Ordering::Greater => Some(Tm::var(index - 1)),
+                    cmp::Ordering::Greater => Some(NeutralKind::Var { index: index - 1 }),
                 }
             },
 
-            NeutralKind::Bind { .. } => unreachable!(),
+            NeutralKind::Bind { var_tms, truncated_body_usages, body } => {
+                let (truncated_body_usages, bit) = truncated_body_usages.shift_remove(var_index);
+                if bit {
+                    return None;
+                }
+
+                let var_tms = {
+                    var_tms
+                    .into_iter()
+                    .map(|var_tm| var_tm.try_strengthen_index(var_index))
+                    .collect::<Option<Vec<Tm>>>()?
+                };
+                Some(NeutralKind::Bind { var_tms, truncated_body_usages, body })
+            },
 
             NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab } => {
                 let elim = elim.try_strengthen_index(var_index)?;
                 let motive = motive.try_strengthen_index(var_index)?;
                 let zero_inhab = zero_inhab.try_strengthen_index(var_index)?;
                 let succ_inhab = succ_inhab.try_strengthen_index(var_index)?;
-                Some(elim.fold(motive, zero_inhab, succ_inhab))
+                Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
             },
 
             NeutralKind::Explode { motive } => {
                 let motive = {
-                    Weaken::new(motive)
-                    .lift_scope()
+                    motive
+                    .map_without_capture(Weaken::new)
                     .try_strengthen_index(var_index)?
+                    .map_without_capture(Weaken::into_inner)
                 };
-                Some(Tm::explode(motive))
+                Some(NeutralKind::Explode { motive })
             },
 
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
@@ -1978,55 +1462,47 @@ impl Substitutable for NeutralKind {
                 let motive = motive.try_strengthen_index(var_index)?;
                 let lhs_inhab = lhs_inhab.try_strengthen_index(var_index)?;
                 let rhs_inhab = rhs_inhab.try_strengthen_index(var_index)?;
-                Some(elim.case(lhs_name, motive, lhs_inhab, rhs_inhab))
+                Some(NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab })
             },
 
             NeutralKind::ProjHead { elim } => {
                 let elim = elim.try_strengthen_index(var_index)?;
-                Some(elim.proj_head())
+                Some(NeutralKind::ProjHead { elim })
             },
 
             NeutralKind::ProjTail { elim } => {
                 let elim = elim.try_strengthen_index(var_index)?;
-                Some(elim.proj_tail())
+                Some(NeutralKind::ProjTail { elim })
             },
 
             NeutralKind::App { elim, arg_tm } => {
                 let elim = elim.try_strengthen_index(var_index)?;
                 let arg_tm = arg_tm.try_strengthen_index(var_index)?;
-                Some(elim.app(arg_tm))
+                Some(NeutralKind::App { elim, arg_tm })
             },
 
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
                 let eq_ty = eq_ty.try_strengthen_index(var_index)?;
                 let eq_tm_0 = eq_tm_0.try_strengthen_index(var_index)?;
                 let eq_tm_1 = eq_tm_1.try_strengthen_index(var_index)?;
-                Some(Ty::obs_equal(eq_ty, eq_tm_0, eq_tm_1).into_tm())
+                Some(NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 })
             },
 
             NeutralKind::Cast { ty_0, ty_1, tm_0 } => {
                 let ty_0 = ty_0.try_strengthen_index(var_index)?;
                 let ty_1 = ty_1.try_strengthen_index(var_index)?;
                 let tm_0 = tm_0.try_strengthen_index(var_index)?;
-                Some(Neutral::cast(ty_0, ty_1, tm_0).into_tm())
+                Some(NeutralKind::Cast { ty_0, ty_1, tm_0 })
             },
         }
     }
 }
 
-impl DeepNf for NeutralData {
-    type Output = Tm;
+impl DeepNf for NeutralKind {
+    type Output = ValTm;
 
-    fn deep_nf(self) -> Tm {
-        match self.try_reduce() {
-            Some(tm) => tm.deep_nf(),
-            None => {
-                let kind = self.kind.deep_nf_assuming_stuck();
-                kind.map(|kind| {
-                    TmKind::Neutral { neutral: NeutralData::new_arc(kind) }
-                })
-            },
-        }
+    fn deep_nf(self) -> ValTm {
+        self.reduced().deep_nf()
     }
 }
 

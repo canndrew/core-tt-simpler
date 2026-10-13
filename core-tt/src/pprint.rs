@@ -422,7 +422,7 @@ impl Pretty<()> for NeutralKind {
     }
 }
 
-impl Pretty<()> for NeutralData {
+impl Pretty<()> for LazyData {
     fn pretty(
         self,
         ctx: &mut Vec<(Option<Name>, Option<Ty>)>,
@@ -430,18 +430,49 @@ impl Pretty<()> for NeutralData {
         s: &mut String,
         (): (),
     ) {
-        if let Some(tm) = self.try_reduce() {
-            tm.pretty(ctx, indent, s, ())
-        } else {
-            self.kind.pretty(ctx, indent, s, ());
+        match self.into_cached_reduced_or_neutral() {
+            Ok(tm) => {
+                tm.pretty(ctx, indent, s, ())
+            },
+            Err(neutral) => {
+                neutral.pretty(ctx, indent, s, ())
+            },
         }
     }
 
     fn is_shallow(&self) -> bool {
-        if let Some(tm) = self.get_cached_reduction() {
+        if let Some(tm) = self.cached_reduced() {
             tm.is_shallow()
         } else {
-            self.kind.is_shallow()
+            self.weak_neutral_kind().is_shallow()
+        }
+    }
+}
+
+impl<T> Pretty<()> for OrLazy<T>
+where
+    T: Clone,
+    T: Contextual,
+    T: AsTmKind,
+    T: Pretty<()>,
+{
+    fn pretty(
+        self,
+        ctx: &mut Vec<(Option<Name>, Option<Ty>)>,
+        indent: usize,
+        s: &mut String,
+        (): (),
+    ) {
+        match self {
+            OrLazy::Reduced(reduced) => reduced.pretty(ctx, indent, s, ()),
+            OrLazy::Lazy(lazy) => lazy.pretty(ctx, indent, s, ()),
+        }
+    }
+
+    fn is_shallow(&self) -> bool {
+        match self {
+            OrLazy::Reduced(reduced) => reduced.is_shallow(),
+            OrLazy::Lazy(lazy) => lazy.is_shallow(),
         }
     }
 }
@@ -458,8 +489,8 @@ impl Pretty<()> for NameKind {
             NameKind::Tag { tag } => {
                 tag.pretty(ctx, indent, s, ())
             },
-            NameKind::Neutral { neutral } => {
-                neutral.pretty(ctx, indent, s, ());
+            NameKind::Stuck { stuck } => {
+                stuck.pretty(ctx, indent, s, ());
             },
         }
     }
@@ -467,7 +498,7 @@ impl Pretty<()> for NameKind {
     fn is_shallow(&self) -> bool {
         match self {
             NameKind::Tag { .. } => true,
-            NameKind::Neutral { neutral } => neutral.is_shallow(),
+            NameKind::Stuck { stuck } => stuck.is_shallow(),
         }
     }
 }
@@ -484,8 +515,8 @@ impl Pretty<()> for TyKind {
             TyKind::Form { form } => {
                 form.pretty(ctx, indent, s, ());
             },
-            TyKind::Neutral { neutral } => {
-                neutral.pretty(ctx, indent, s, ());
+            TyKind::Stuck { stuck } => {
+                stuck.pretty(ctx, indent, s, ());
             },
         }
     }
@@ -495,8 +526,8 @@ impl Pretty<()> for TyKind {
             TyKind::Form { form } => {
                 form.is_shallow()
             },
-            TyKind::Neutral { neutral } => {
-                neutral.is_shallow()
+            TyKind::Stuck { stuck } => {
+                stuck.is_shallow()
             },
         }
     }
@@ -514,8 +545,8 @@ impl Pretty<()> for TmKind {
             TmKind::Intro { intro } => {
                 intro.pretty(ctx, indent, s, ());
             },
-            TmKind::Neutral { neutral } => {
-                neutral.pretty(ctx, indent, s, ());
+            TmKind::Stuck { stuck } => {
+                stuck.pretty(ctx, indent, s, ());
             },
             TmKind::Proof => s.push('_'),
         }
@@ -526,11 +557,27 @@ impl Pretty<()> for TmKind {
             TmKind::Intro { intro } => {
                 intro.is_shallow()
             },
-            TmKind::Neutral { neutral } => {
-                neutral.is_shallow()
+            TmKind::Stuck { stuck } => {
+                stuck.is_shallow()
             },
             TmKind::Proof => true,
         }
+    }
+}
+
+impl Pretty<()> for StuckKind {
+    fn pretty(
+        self,
+        ctx: &mut Vec<(Option<Name>, Option<Ty>)>,
+        indent: usize,
+        s: &mut String,
+        (): (),
+    ) {
+        self.kind.pretty(ctx, indent, s, ())
+    }
+
+    fn is_shallow(&self) -> bool {
+        self.kind.is_shallow()
     }
 }
 

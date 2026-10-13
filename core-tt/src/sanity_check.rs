@@ -146,9 +146,8 @@ impl SanityCheck for NeutralKind {
             NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
                 lhs_name.clone().sanity_check(ctx, ());
 
-                if let Some(neutral) = elim.clone().as_neutral()
-                && let Some(elim_ty) = neutral.try_infer_ty(ctx)
-                {
+                if let Some(stuck) = elim.clone().as_stuck() {
+                    let elim_ty = stuck.infer_ty(ctx);
                     let (actual_lhs_name, lhs_ty, rhs_ty) = elim_ty.clone().as_sum().unwrap();
                     Unify::unify(lhs_name, actual_lhs_name).unwrap();
                     elim.clone().sanity_check(ctx, elim_ty.clone());
@@ -173,7 +172,7 @@ impl SanityCheck for NeutralKind {
 
             NeutralKind::ProjHead { elim } => {
                 match elim {
-                    TmKind::Intro { intro } => {
+                    OrLazy::Reduced(TmKind::Intro { intro }) => {
                         let IntroKind::Pair {
                             head_tm, tail_tm: _,
                         } = Arc::unwrap_or_clone(intro) else {
@@ -181,27 +180,30 @@ impl SanityCheck for NeutralKind {
                         };
                         head_tm.sanity_check(ctx, ty);
                     },
-                    TmKind::Neutral { neutral } => {
-                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                    OrLazy::Reduced(TmKind::Proof) => {
+                        assert!(ty.is_prop());
+                    },
+                    OrLazy::Reduced(TmKind::Stuck { stuck }) => {
+                        stuck.sanity_check(ctx, None);
+                    },
+                    OrLazy::Lazy(lazy) => {
+                        if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
                             let (_head_name, head_ty, _tail_ty) = {
                                 elim_ty
                                 .clone()
                                 .as_sigma()
                                 .unwrap()
                             };
-                            neutral.sanity_check(ctx, elim_ty);
+                            lazy.sanity_check(ctx, elim_ty);
                             Unify::unify(head_ty, ty).unwrap();
                         }
-                    },
-                    TmKind::Proof => {
-                        assert!(ty.is_prop());
                     },
                 }
             },
 
             NeutralKind::ProjTail { elim } => {
                 match elim {
-                    TmKind::Intro { intro } => {
+                    OrLazy::Reduced(TmKind::Intro { intro }) => {
                         let IntroKind::Pair {
                             head_tm: _, tail_tm,
                         } = Arc::unwrap_or_clone(intro) else {
@@ -209,43 +211,49 @@ impl SanityCheck for NeutralKind {
                         };
                         tail_tm.sanity_check(ctx, ty);
                     },
-                    TmKind::Neutral { neutral } => {
-                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                    OrLazy::Reduced(TmKind::Proof) => {
+                        assert!(ty.is_prop());
+                    },
+                    OrLazy::Reduced(TmKind::Stuck { stuck }) => {
+                        stuck.sanity_check(ctx, None);
+                    },
+                    OrLazy::Lazy(lazy) => {
+                        if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
                             let (_head_name, _head_ty, tail_ty) = {
                                 elim_ty
                                 .clone()
                                 .as_sigma()
                                 .unwrap()
                             };
-                            neutral.clone().sanity_check(ctx, elim_ty);
-                            let head_tm = Weaken::new(TmKind::Neutral { neutral }).proj_head();
+                            lazy.clone().sanity_check(ctx, elim_ty);
+                            let head_tm = Weaken::new(OrLazy::Lazy(lazy)).proj_head();
                             Unify::unify(tail_ty.bind(head_tm), ty).unwrap();
                         }
-                    },
-                    TmKind::Proof => {
-                        assert!(ty.is_prop());
                     },
                 }
             },
 
             NeutralKind::App { elim, arg_tm } => {
-                match elim.clone().into_inner() {
-                    TmKind::Intro { intro } => {
+                match elim.into_inner() {
+                    OrLazy::Reduced(TmKind::Intro { intro }) => {
                         match Arc::unwrap_or_clone(intro) {
                             IntroKind::Func { .. } => (),
                             _ => unreachable!(),
                         }
                     },
-                    TmKind::Neutral { neutral } => {
-                        if let Some(elim_ty) = neutral.try_infer_ty(ctx) {
+                    OrLazy::Reduced(TmKind::Proof) => {
+                        assert!(ty.is_prop());
+                    },
+                    OrLazy::Reduced(TmKind::Stuck { stuck }) => {
+                        stuck.sanity_check(ctx, None);
+                    },
+                    OrLazy::Lazy(lazy) => {
+                        if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
                             let (_arg_name, arg_ty, res_ty) = elim_ty.clone().as_pi().unwrap();
-                            elim.sanity_check(ctx, elim_ty);
+                            lazy.sanity_check(ctx, elim_ty);
                             arg_tm.clone().sanity_check(ctx, arg_ty);
                             Unify::unify(res_ty.bind(arg_tm), ty).unwrap();
                         }
-                    },
-                    TmKind::Proof => {
-                        assert!(ty.is_prop());
                     },
                 }
             },
@@ -265,14 +273,34 @@ impl SanityCheck for NeutralKind {
     }
 }
 
-impl SanityCheck for NeutralData {
+impl SanityCheck for LazyData {
     type Meta = Ty;
 
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
-        if let Some(tm) = self.get_cached_reduction() {
+        if let Some(tm) = self.cached_reduced() {
             tm.sanity_check(ctx, ty.clone());
         }
-        self.kind.sanity_check(ctx, ty);
+        self.neutral_kind().sanity_check(ctx, ty);
+    }
+}
+
+impl<T> SanityCheck for OrLazy<T>
+where
+    T: SanityCheck,
+    T: AsTmKind<Type = T::Meta>,
+{
+    type Meta = T::Meta;
+
+    fn sanity_check(self, ctx: &mut Vec<Ty>, meta: T::Meta) {
+        match self {
+            OrLazy::Reduced(reduced) => {
+                reduced.sanity_check(ctx, meta);
+            },
+            OrLazy::Lazy(lazy) => {
+                let ty = T::full_type(meta);
+                lazy.sanity_check(ctx, ty);
+            },
+        }
     }
 }
 
@@ -281,12 +309,29 @@ impl SanityCheck for TmKind {
 
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
         match self {
-            TmKind::Intro { intro } => intro.sanity_check(ctx, ty),
-            TmKind::Neutral { neutral } => neutral.sanity_check(ctx, ty),
+            TmKind::Intro { intro } => {
+                intro.sanity_check(ctx, ty)
+            },
             TmKind::Proof => {
                 assert!(ty.is_prop());
             },
+            TmKind::Stuck { stuck } => {
+                stuck.sanity_check(ctx, Some(ty));
+            },
         }
+    }
+}
+
+impl SanityCheck for StuckKind {
+    type Meta = Option<Ty>;
+
+    fn sanity_check(self, ctx: &mut Vec<Ty>, ty_opt: Option<Ty>) {
+        assert!(self.kind.try_reduce().is_none());
+        let ty = self.clone().infer_ty(ctx);
+        if let Some(expected_ty) = ty_opt {
+            Unify::unify(ty.clone(), expected_ty).unwrap();
+        }
+        self.kind.sanity_check(ctx, ty);
     }
 }
 
@@ -296,7 +341,7 @@ impl SanityCheck for TyKind {
     fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         match self {
             TyKind::Form { form } => form.sanity_check(ctx, ()),
-            TyKind::Neutral { neutral } => neutral.sanity_check(ctx, Ty::universe()),
+            TyKind::Stuck { stuck } => stuck.sanity_check(ctx, Some(Ty::universe())),
         }
     }
 }
@@ -307,7 +352,7 @@ impl SanityCheck for NameKind {
     fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         match self {
             NameKind::Tag { .. } => (),
-            NameKind::Neutral { neutral } => neutral.sanity_check(ctx, Ty::name()),
+            NameKind::Stuck { stuck } => stuck.sanity_check(ctx, Some(Ty::name())),
         }
     }
 }
@@ -329,7 +374,7 @@ where
     }
 }
 
-impl Neutral {
+impl Lazy {
     pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
@@ -338,66 +383,15 @@ impl Neutral {
     }
 }
 
-impl NeutralData {
+impl LazyData {
     pub fn try_infer_ty(
         &self,
         ctx_tys: &mut Vec<Ty>,
     ) -> Option<Ty> {
-        self.kind.try_infer_ty(ctx_tys)
+        self.neutral_kind().into_inner().try_infer_ty(ctx_tys)
     }
 }
 
 impl NeutralKind {
-    pub fn try_infer_ty(
-        &self,
-        ctx_tys: &mut Vec<Ty>,
-    ) -> Option<Ty> {
-        match self {
-            NeutralKind::Var { index } => Some(ctx_tys[*index].clone()),
-
-            NeutralKind::Bind { .. } => None,
-
-            NeutralKind::Fold { elim, motive, zero_inhab: _, succ_inhab: _ } => {
-                Some(motive.clone().bind(elim.clone()))
-            },
-
-            NeutralKind::Explode { motive } => {
-                Some(Weaken::new(motive.clone()).lift_scope().bind(Tm::proof()))
-            },
-
-            NeutralKind::Case { lhs_name: _, elim, motive, lhs_inhab: _, rhs_inhab: _ } => {
-                Some(motive.clone().bind(elim.clone()))
-            },
-
-            NeutralKind::ProjHead { elim } => {
-                let neutral = elim.clone().as_neutral()?;
-                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
-                let (_head_name, head_ty, _tail_ty) = elim_ty.as_sigma().unwrap();
-                Some(head_ty)
-            },
-
-            NeutralKind::ProjTail { elim } => {
-                let neutral = elim.clone().as_neutral()?;
-                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
-                let (_head_name, _head_ty, tail_ty) = elim_ty.as_sigma().unwrap();
-                Some(tail_ty.bind(Weaken::new(elim.clone()).proj_head()))
-            },
-
-            NeutralKind::App { elim, arg_tm } => {
-                let neutral = elim.clone().as_neutral()?;
-                let elim_ty = neutral.try_infer_ty(ctx_tys)?;
-                let (_arg_name, _arg_ty, res_ty) = elim_ty.as_pi().unwrap();
-                Some(res_ty.bind(arg_tm.clone()))
-            },
-
-            NeutralKind::ObsEqual { .. } => {
-                Some(Ty::universe())
-            },
-
-            NeutralKind::Cast { ty_0: _, ty_1, tm_0: _ } => {
-                Some(ty_1.clone())
-            },
-        }
-    }
 }
 

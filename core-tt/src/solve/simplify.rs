@@ -42,7 +42,7 @@ impl Ty {
         let this = self.clone().reduced();
         if let Some((_eq_ty, eq_tm_0, eq_tm_1)) = this.clone().as_equal() {
             //debug!("as_equal({}) == ObsEqual({}, {}, {})", debug_print(ctx, &this), debug_print(ctx, &eq_ty), debug_print(ctx, &eq_tm_0), debug_print(ctx, &eq_tm_1));
-            return simplify_equal(ctx, &this, &eq_tm_0, &eq_tm_1);
+            return simplify_equal(ctx, &this.into_ty(), &eq_tm_0, &eq_tm_1);
         }
 
         match this.clone().into_inner() {
@@ -52,7 +52,7 @@ impl Ty {
                     | FormKind::Universe
                     | FormKind::Nat
                     | FormKind::Unit
-                    => Ok(Simplification::id(this)),
+                    => Ok(Simplification::id(this.into_ty())),
 
                     FormKind::Never => {
                         Err(Uninhabited::new())
@@ -75,10 +75,10 @@ impl Ty {
                     },
                 }
             },
-            TyKind::Neutral { neutral } => {
+            TyKind::Stuck { stuck } => {
                 let mut eliminated = Usages::empty();
-                neutral.collect_stuck_vars(&mut eliminated);
-                Ok(Simplification::from_eliminated(&this, eliminated))
+                stuck.collect_stuck_vars(&mut eliminated);
+                Ok(Simplification::from_eliminated(&this.into_ty(), eliminated))
             },
         }
     }
@@ -101,16 +101,16 @@ pub fn simplify_equal(
 
     if let Some(var_index) = eq_tm_0.usages().as_single_var()
     && eq_tm_1.ctx_len() <= var_index
-    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_0.clone())
+    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_0.clone().into_tm())
     {
-        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_1.clone()));
+        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_1.into_tm()));
     }
 
     if let Some(var_index) = eq_tm_1.usages().as_single_var()
     && eq_tm_0.ctx_len() <= var_index
-    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_1.clone())
+    && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_1.into_tm())
     {
-        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_0.clone()));
+        return Ok(Simplification::from_constraint(orig_ty, var_index, eq_tm_0.into_tm()));
     }
 
     //debug!("failed to do anything with {}", debug_print(ctx, orig_ty));
@@ -129,7 +129,7 @@ fn simplify_sum(
             Err(Uninhabited { tags: lhs_tags }),
             Err(Uninhabited { tags: _ }),
         ) => {
-            let tags = match rhs_ty.clone().as_never().and_then(|()| lhs_name.as_tag()) {
+            let tags = match rhs_ty.clone().as_never().and_then(|()| lhs_name.clone().as_tag()) {
                 Some(tag) => {
                     let mut tags = lhs_tags;
                     tags.push(tag.clone());
@@ -242,7 +242,7 @@ fn simplify_sigma(
         eliminated: head_eliminated,
     } = match head_ty.simplify(ctx, preserved_constraint_depth) {
         Err(Uninhabited { mut tags }) => {
-            if let Some(tag) = head_name.as_tag() {
+            if let Some(tag) = head_name.clone().as_tag() {
                 tags.push(tag.clone());
             };
             return Err(Uninhabited { tags });
@@ -570,7 +570,7 @@ fn simplify_pi(
     if let Some(unique_arg) = arg_constrained_opt
     && let Some(_) = arg_new_ty.try_find_alternate_tm(ctx, unique_arg)
     {
-        let tags = arg_name.as_tag().cloned().into_iter().collect();
+        let tags = arg_name.clone().as_tag().into_iter().collect();
         return Err(Uninhabited { tags });
     }
 
@@ -783,8 +783,8 @@ fn debug_print_short(ty: Ty, output: &mut String) {
                 },
             }
         },
-        TyKind::Neutral { neutral } => {
-            if let Some(index) = neutral.as_var() {
+        TyKind::Stuck { stuck } => {
+            if let Some(index) = stuck.as_var() {
                 let c = (('a' as u8) + ((index % 26) as u8)) as char;
                 for _ in 0..(1 + (index / 26)) {
                     output.push(c);

@@ -216,7 +216,10 @@ where
 
 impl<T> Scope<Weaken<T>> {
     // More efficient than Weaken::new(self.map(Weaken::into_inner))
-    pub fn lift_weaken(self) -> Weaken<Scope<T>> {
+    pub fn lift_weaken(self) -> Weaken<Scope<T>>
+    where
+        T: Contextual,
+    {
         let Scope { ctx_len, inner } = self;
         let (mut usages, weak) = inner.into_usages_and_weak();
         usages.set_to_zero(ctx_len);
@@ -284,7 +287,7 @@ where
     }
 }
 
-impl<T: Contextual + Bindable + Substitutable<Output = T>> Substitutable for Scope<T> {
+impl<T: Contextual + Bindable + Substitutable> Substitutable for Scope<T> {
     type Output = Scope<T>;
 
     fn subst(self, subst: &mut Subst) -> Scope<T> {
