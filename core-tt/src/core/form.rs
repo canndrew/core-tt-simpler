@@ -351,7 +351,8 @@ impl FormKind {
         Some((eq_ty, eq_tm_0, eq_tm_1))
     }
 
-    pub fn is_prop(self) -> bool {
+    pub fn is_prop(self, prop_ty_vars: &mut Vec<usize>) -> bool {
+        let ctx_len = prop_ty_vars.last().map_or(0, |index| index + 1);
         match self {
             | FormKind::Name
             | FormKind::Universe
@@ -364,11 +365,66 @@ impl FormKind {
             => true,
 
             FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
-                head_ty.is_prop() && tail_ty.inner.is_prop()
+                let ctx_len = cmp::max(tail_ty.ctx_len(), ctx_len);
+
+                head_ty.is_prop(prop_ty_vars) &&
+                tail_ty.into_inner(ctx_len).is_prop(prop_ty_vars)
             },
 
             FormKind::Pi { arg_name: _, arg_ty: _, res_ty } => {
-                res_ty.inner.is_prop()
+                let ctx_len = cmp::max(res_ty.ctx_len(), ctx_len);
+
+                res_ty.into_inner(ctx_len).is_prop(prop_ty_vars)
+            },
+        }
+    }
+
+    pub fn is_discrete(self) -> bool {
+        match self {
+            | FormKind::Name
+            | FormKind::Nat
+            | FormKind::Never
+            | FormKind::Unit
+            => true,
+
+            FormKind::Universe => false,
+
+            FormKind::Sum { lhs_name: _, lhs_ty, rhs_ty } => {
+                lhs_ty.is_discrete() && rhs_ty.is_discrete()
+            },
+
+            FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
+                head_ty.is_discrete() && tail_ty.inner.is_discrete()
+            },
+
+            FormKind::Pi { arg_name: _, arg_ty: _, res_ty } => {
+                res_ty.inner.is_discrete()
+            },
+        }
+    }
+
+    pub fn is_functorial(self, ty_var_index: usize, negative: bool) -> bool {
+        match self {
+            | FormKind::Name
+            | FormKind::Universe
+            | FormKind::Nat
+            | FormKind::Never
+            | FormKind::Unit
+            => true,
+
+            FormKind::Sum { lhs_name: _, lhs_ty, rhs_ty } => {
+                lhs_ty.is_functorial(ty_var_index, negative) &&
+                rhs_ty.is_functorial(ty_var_index, negative)
+            },
+
+            FormKind::Sigma { head_name: _, head_ty, tail_ty } => {
+                head_ty.is_functorial(ty_var_index, negative) &&
+                tail_ty.is_functorial(ty_var_index, negative)
+            },
+
+            FormKind::Pi { arg_name: _, arg_ty, res_ty } => {
+                arg_ty.is_functorial(ty_var_index, !negative) &&
+                res_ty.is_functorial(ty_var_index, negative)
             },
         }
     }

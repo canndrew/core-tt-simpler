@@ -117,14 +117,21 @@ impl Ty {
         self.into_inner().reduced().as_equal()
     }
 
-    pub fn is_prop(self) -> bool {
-        self.into_weak().is_prop()
+    pub fn is_prop(self, prop_ty_vars: &mut Vec<usize>) -> bool {
+        self.reduced().into_inner().is_prop(prop_ty_vars)
     }
-}
 
-impl OrLazy<TyKind> {
-    pub fn is_prop(self) -> bool {
-        self.reduced().is_prop()
+    pub fn is_discrete(self) -> bool {
+        self.reduced().into_weak().is_discrete()
+    }
+
+    pub fn is_functorial(self, ty_var_index: usize, negative: bool) -> bool {
+        let (usages, ty_kind) = self.reduced().into_usages_and_weak();
+        if !usages.get(ty_var_index) {
+            return true;
+        }
+        let ty_var_index = usages.filter_index(ty_var_index);
+        ty_kind.is_functorial(ty_var_index, negative)
     }
 }
 
@@ -155,10 +162,28 @@ impl TyKind {
         }
     }
 
-    pub fn is_prop(self) -> bool {
+    pub fn is_prop(self, prop_ty_vars: &mut Vec<usize>) -> bool {
         match self {
-            TyKind::Form { form } => Arc::unwrap_or_clone(form).is_prop(),
-            TyKind::Stuck { stuck } => stuck.is_prop(),
+            TyKind::Form { form } => Arc::unwrap_or_clone(form).is_prop(prop_ty_vars),
+            TyKind::Stuck { stuck } => stuck.is_prop(prop_ty_vars),
+        }
+    }
+
+    pub fn is_discrete(self) -> bool {
+        match self {
+            TyKind::Form { form } => Arc::unwrap_or_clone(form).is_discrete(),
+            TyKind::Stuck { stuck } => stuck.is_discrete(),
+        }
+    }
+
+    pub fn is_functorial(self, ty_var_index: usize, negative: bool) -> bool {
+        match self {
+            TyKind::Form { form } => {
+                Arc::unwrap_or_clone(form).is_functorial(ty_var_index, negative)
+            },
+            TyKind::Stuck { stuck } => {
+                stuck.is_functorial(ty_var_index, negative)
+            },
         }
     }
 

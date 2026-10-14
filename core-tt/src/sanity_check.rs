@@ -1,9 +1,7 @@
 use crate::priv_prelude::*;
 
-pub trait SanityCheck {
-    type Meta;
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, meta: Self::Meta);
+pub trait SanityCheck: WellFormed {
+    fn sanity_check(self, ctx: &mut Vec<Ty>, params: Self::Params);
 }
 
 impl<T> SanityCheck for Weaken<T>
@@ -11,11 +9,9 @@ where
     T: Contextual,
     T: SanityCheck,
 {
-    type Meta = T::Meta;
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, meta: T::Meta) {
+    fn sanity_check(self, ctx: &mut Vec<Ty>, params: T::Params) {
         assert!(self.ctx_len() <= ctx.len());
-        self.into_inner().sanity_check(ctx, meta)
+        self.into_inner().sanity_check(ctx, params)
     }
 }
 
@@ -24,16 +20,12 @@ where
     T: SanityCheck,
     T: Clone,
 {
-    type Meta = T::Meta;
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, meta: T::Meta) {
-        Arc::unwrap_or_clone(self).sanity_check(ctx, meta)
+    fn sanity_check(self, ctx: &mut Vec<Ty>, params: T::Params) {
+        Arc::unwrap_or_clone(self).sanity_check(ctx, params)
     }
 }
 
 impl SanityCheck for IntroKind {
-    type Meta = Ty;
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
         match self {
             IntroKind::Tag { .. } => {
@@ -73,8 +65,6 @@ impl SanityCheck for IntroKind {
 }
 
 impl SanityCheck for FormKind {
-    type Meta = ();
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         match self {
             FormKind::Name => (),
@@ -103,8 +93,6 @@ impl SanityCheck for FormKind {
 }
 
 impl SanityCheck for NeutralKind {
-    type Meta = Ty;
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
         match self {
             NeutralKind::Var { index } => {
@@ -181,10 +169,10 @@ impl SanityCheck for NeutralKind {
                         head_tm.sanity_check(ctx, ty);
                     },
                     OrLazy::Reduced(TmKind::Proof) => {
-                        assert!(ty.is_prop());
+                        assert!(ty.is_prop(&mut Vec::new()));
                     },
                     OrLazy::Reduced(TmKind::Stuck { stuck }) => {
-                        stuck.sanity_check(ctx, None);
+                        stuck.sanity_check(ctx, ());
                     },
                     OrLazy::Lazy(lazy) => {
                         if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
@@ -212,10 +200,10 @@ impl SanityCheck for NeutralKind {
                         tail_tm.sanity_check(ctx, ty);
                     },
                     OrLazy::Reduced(TmKind::Proof) => {
-                        assert!(ty.is_prop());
+                        assert!(ty.is_prop(&mut Vec::new()));
                     },
                     OrLazy::Reduced(TmKind::Stuck { stuck }) => {
-                        stuck.sanity_check(ctx, None);
+                        stuck.sanity_check(ctx, ());
                     },
                     OrLazy::Lazy(lazy) => {
                         if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
@@ -242,10 +230,10 @@ impl SanityCheck for NeutralKind {
                         }
                     },
                     OrLazy::Reduced(TmKind::Proof) => {
-                        assert!(ty.is_prop());
+                        assert!(ty.is_prop(&mut Vec::new()));
                     },
                     OrLazy::Reduced(TmKind::Stuck { stuck }) => {
-                        stuck.sanity_check(ctx, None);
+                        stuck.sanity_check(ctx, ());
                     },
                     OrLazy::Lazy(lazy) => {
                         if let Some(elim_ty) = lazy.try_infer_ty(ctx) {
@@ -274,8 +262,6 @@ impl SanityCheck for NeutralKind {
 }
 
 impl SanityCheck for LazyData {
-    type Meta = Ty;
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
         if let Some(tm) = self.cached_reduced() {
             tm.sanity_check(ctx, ty.clone());
@@ -287,17 +273,15 @@ impl SanityCheck for LazyData {
 impl<T> SanityCheck for OrLazy<T>
 where
     T: SanityCheck,
-    T: AsTmKind<Type = T::Meta>,
+    T: AsTmKind<Type = T::Params>,
 {
-    type Meta = T::Meta;
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, meta: T::Meta) {
+    fn sanity_check(self, ctx: &mut Vec<Ty>, params: T::Params) {
         match self {
             OrLazy::Reduced(reduced) => {
-                reduced.sanity_check(ctx, meta);
+                reduced.sanity_check(ctx, params);
             },
             OrLazy::Lazy(lazy) => {
-                let ty = T::full_type(meta);
+                let ty = T::full_type(params);
                 lazy.sanity_check(ctx, ty);
             },
         }
@@ -305,54 +289,52 @@ where
 }
 
 impl SanityCheck for TmKind {
-    type Meta = Ty;
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, ty: Ty) {
         match self {
             TmKind::Intro { intro } => {
                 intro.sanity_check(ctx, ty)
             },
             TmKind::Proof => {
-                assert!(ty.is_prop());
+                assert!(ty.is_prop(&mut Vec::new()));
             },
             TmKind::Stuck { stuck } => {
-                stuck.sanity_check(ctx, Some(ty));
+                stuck.clone().sanity_check(ctx, ());
+                Unify::unify(stuck.infer_ty(ctx), ty).unwrap();
             },
         }
     }
 }
 
 impl SanityCheck for StuckKind {
-    type Meta = Option<Ty>;
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, ty_opt: Option<Ty>) {
+    fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         assert!(self.kind.try_reduce().is_none());
         let ty = self.clone().infer_ty(ctx);
-        if let Some(expected_ty) = ty_opt {
-            Unify::unify(ty.clone(), expected_ty).unwrap();
-        }
         self.kind.sanity_check(ctx, ty);
     }
 }
 
 impl SanityCheck for TyKind {
-    type Meta = ();
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         match self {
-            TyKind::Form { form } => form.sanity_check(ctx, ()),
-            TyKind::Stuck { stuck } => stuck.sanity_check(ctx, Some(Ty::universe())),
+            TyKind::Form { form } => {
+                form.sanity_check(ctx, ())
+            },
+            TyKind::Stuck { stuck } => {
+                stuck.clone().sanity_check(ctx, ());
+                Unify::unify(stuck.infer_ty(ctx), Ty::universe()).unwrap();
+            },
         }
     }
 }
 
 impl SanityCheck for NameKind {
-    type Meta = ();
-
     fn sanity_check(self, ctx: &mut Vec<Ty>, (): ()) {
         match self {
             NameKind::Tag { .. } => (),
-            NameKind::Stuck { stuck } => stuck.sanity_check(ctx, Some(Ty::name())),
+            NameKind::Stuck { stuck } => {
+                stuck.clone().sanity_check(ctx, ());
+                Unify::unify(stuck.infer_ty(ctx), Ty::name()).unwrap();
+            },
         }
     }
 }
@@ -360,16 +342,14 @@ impl SanityCheck for NameKind {
 impl<T> SanityCheck for Scope<T>
 where
     T: Contextual,
-    T: SanityCheck<Meta: Contextual>,
+    T: SanityCheck<Params: Contextual>,
 {
-    type Meta = (Ty, Scope<T::Meta>);
-
-    fn sanity_check(self, ctx: &mut Vec<Ty>, (var_ty, meta): (Ty, Scope<T::Meta>)) {
+    fn sanity_check(self, ctx: &mut Vec<Ty>, (var_ty, params): (Ty, Scope<T::Params>)) {
         assert!(self.ctx_len <= ctx.len());
         let inner = self.into_inner(ctx.len());
-        let meta = meta.into_inner(ctx.len());
+        let params = params.into_inner(ctx.len());
         ctx.push(var_ty);
-        inner.sanity_check(ctx, meta);
+        inner.sanity_check(ctx, params);
         ctx.pop();
     }
 }
@@ -390,8 +370,5 @@ impl LazyData {
     ) -> Option<Ty> {
         self.neutral_kind().into_inner().try_infer_ty(ctx_tys)
     }
-}
-
-impl NeutralKind {
 }
 

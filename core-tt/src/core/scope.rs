@@ -228,6 +228,23 @@ impl<T> Scope<Weaken<T>> {
     }
 }
 
+impl Scope<Ty> {
+    pub fn is_functor(self) -> bool {
+        match self.inner.ctx_len().cmp(&(self.ctx_len + 1)) {
+            cmp::Ordering::Less => true,
+            cmp::Ordering::Equal => self.inner.is_functorial(self.ctx_len, false),
+            cmp::Ordering::Greater => unreachable!(),
+        }
+    }
+
+    pub fn is_functorial(self, ty_var_index: usize, negative: bool) -> bool {
+        if self.ctx_len <= ty_var_index {
+            return true;
+        }
+        self.inner.is_functorial(ty_var_index, negative)
+    }
+}
+
 impl<T: Contextual + Bindable> Bindable for Scope<T> {
     fn capture_subst(
         self,
@@ -266,23 +283,10 @@ where
         scope_0: Scope<T>,
         scope_1: Scope<T>,
     ) -> Option<Scope<T>> {
-        let Scope { ctx_len: ctx_len_0, inner: inner_0 } = scope_0;
-        let Scope { ctx_len: ctx_len_1, inner: inner_1 } = scope_1;
-
-        let ctx_len = max_all([ctx_len_0, ctx_len_1]);
-        let inner_0 = {
-            let mut usages = Usages::ones(ctx_len_0);
-            usages.set_to_one(ctx_len);
-            inner_0.unfiltered(&usages)
-        };
-        let inner_1 = {
-            let mut usages = Usages::ones(ctx_len_1);
-            usages.set_to_one(ctx_len);
-            inner_1.unfiltered(&usages)
-        };
-
+        let ctx_len = max_all([scope_0.ctx_len(), scope_1.ctx_len()]);
+        let inner_0 = scope_0.into_inner(ctx_len);
+        let inner_1 = scope_1.into_inner(ctx_len);
         let inner = Unify::unify(inner_0, inner_1)?;
-
         Some(Scope::new(ctx_len, inner))
     }
 }

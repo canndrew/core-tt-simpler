@@ -26,7 +26,7 @@ impl fmt::Display for SolveError {
             SolveErrorKind::Uninhabited { tags } => {
                 writeln!(f, "uninhabited at:")?;
                 for tag in tags {
-                    write!(f, "    {:?}", tag)?;
+                    writeln!(f, "    {:?}", tag)?;
                 }
                 Ok(())
             },

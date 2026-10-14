@@ -12,4 +12,5 @@ pub mod lazy;
 pub mod unify;
 pub mod usages;
 pub mod weaken;
+pub mod well_formed;
 

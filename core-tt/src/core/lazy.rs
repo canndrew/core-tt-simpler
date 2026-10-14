@@ -143,6 +143,10 @@ impl Lazy {
         self.map(|lazy| OrLazy::Lazy(lazy))
     }
 
+    pub fn into_name(self) -> Name {
+        self.map(|lazy| OrLazy::Lazy(lazy))
+    }
+
     pub fn fold(
         elim: Tm,
         motive: Scope<Ty>,
@@ -328,22 +332,6 @@ impl<T> OrLazy<T> {
             OrLazy::Lazy(lazy) => T::from_tm_kind(lazy.reduced().into_inner()),
         }
     }
-
-    /*
-    pub fn as_reduced_ref(&self) -> Option<&T> {
-        match self {
-            OrLazy::Reduced(reduced) => Some(reduced),
-            OrLazy::Lazy(_) => None,
-        }
-    }
-
-    pub fn as_reduced(self) -> Option<T> {
-        match self {
-            OrLazy::Reduced(reduced) => Some(reduced),
-            OrLazy::Lazy(_) => None,
-        }
-    }
-    */
 }
 
 impl<T> Contextual for OrLazy<T>

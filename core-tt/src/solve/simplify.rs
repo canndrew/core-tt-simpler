@@ -582,6 +582,39 @@ fn simplify_pi(
         return Ok(Simplification { new_ty, iso, constraints, eliminated });
     }
 
+    /*
+    if let Some(()) = arg_new_ty.clone().as_universe() {
+        let res_new_ty_inner = res_new_ty.clone().into_inner(ctx.len());
+        if let Some((_res_arg_name, res_arg_ty, _res_res_ty)) = res_new_ty_inner.as_pi()
+        && let Some(res_arg_ty) = res_arg_ty.as_stuck()
+        && let Some(var_index) = res_arg_ty.as_var()
+        && var_index == ctx.len()
+        {
+            todo!()
+        }
+    }
+    */
+
+    /*
+    if let Some(()) = arg_new_ty.clone().as_universe() {
+        let (
+            parametricity_constraints,
+            parametricity_eliminated,
+        ) = collect_parametricity_constraints(
+            ctx, preserved_constraint_depth, res_new_ty.clone(),
+        )?;
+        eliminated.or_assign(&parametricity_eliminated);
+        if !parametricity_constraints.is_empty() {
+            return Ok(Simplification {
+                new_ty,
+                iso,
+                constraints: parametricity_constraints,
+                eliminated,
+            });
+        }
+    }
+    */
+
     if let Some((new_ty, next_iso)) = try_distribute_pi_over_sigmas(
         ctx.len(), arg_name.clone(), arg_new_ty.clone(), res_new_ty.clone(),
     ) {
@@ -670,6 +703,37 @@ fn try_distribute_pi_over_sigmas(
 
     None
 }
+
+/*
+fn collect_parametricity_constraints(
+    ctx: &mut Vec<Ty>,
+    preserved_constraint_depth: usize,
+    res_ty: Scope<Ty>,
+) -> Result<(Constraints, Usages), Uninhabited> {
+    let never_res_ty = res_ty.clone().bind(Ty::never().into_tm());
+    let Simplification {
+        constraints: never_constraints,
+        eliminated: never_eliminated,
+        ..
+    } = never_res_ty.simplify(ctx, preserved_constraint_depth)?;
+
+    let unit_res_ty = res_ty.clone().bind(Ty::unit().into_tm());
+    let Simplification {
+        constraints: unit_constraints,
+        eliminated: unit_eliminated,
+        ..
+    } = unit_res_ty.simplify(ctx, preserved_constraint_depth)?;
+
+    let mut eliminated = never_eliminated.or(unit_eliminated);
+    let constraints = Constraints::union(
+        ctx,
+        never_constraints,
+        unit_constraints,
+        &mut eliminated,
+    )?;
+    Ok((constraints, eliminated))
+}
+*/
 
 fn distribute_pi_over_sigmas(
     ctx_len: usize,

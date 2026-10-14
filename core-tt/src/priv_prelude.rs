@@ -26,6 +26,7 @@ pub(crate) use {
             scope::{Scope, Bindable},
             subst::{Subst, Substitutable},
             unify::Unify,
+            well_formed::WellFormed,
         },
         check::{
             check_ctx::CheckCtx,
