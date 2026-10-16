@@ -11,7 +11,7 @@ mod debug;
 
 pub use self::{
     token::{Token, Tokens, TokensRef, Ident, GroupKind, PunctKind, TokenizeError},
-    span::{Position, Span, Spanned},
+    span::{Position, Span, Spanned, Spans, HasSpan},
     parser::ParseError,
     parse::parse_prec_stmt,
 };

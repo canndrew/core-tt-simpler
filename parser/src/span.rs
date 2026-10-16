@@ -107,22 +107,28 @@ impl fmt::Debug for Span {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Spanned<T> {
-    pub span: Span,
+impl<S, T: fmt::Debug> fmt::Debug for Spanned<S, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Spanned<S, T> {
+    pub span: S,
     pub inner: T,
 }
 
-impl<T> Spanned<T> {
-    pub fn new(span: Span, inner: T) -> Spanned<T> {
+impl<S: Spans, T> Spanned<S, T> {
+    pub fn new(span: S, inner: T) -> Spanned<S, T> {
         Spanned { span, inner }
     }
 
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> S {
         self.span.clone()
     }
 
-    pub fn map<R>(self, func: impl FnOnce(T) -> R) -> Spanned<R> {
+    pub fn map<R>(self, func: impl FnOnce(T) -> R) -> Spanned<S, R> {
         let Spanned { span, inner } = self;
         Spanned {
             span,
@@ -130,14 +136,14 @@ impl<T> Spanned<T> {
         }
     }
 
-    pub fn as_ref(&self) -> Spanned<&T> {
+    pub fn as_ref(&self) -> Spanned<S, &T> {
         Spanned {
             span: self.span.clone(),
             inner: &self.inner,
         }
     }
 
-    pub fn as_deref(&self) -> Spanned<&T::Target>
+    pub fn as_deref(&self) -> Spanned<S, &T::Target>
     where
         T: Deref,
     {
@@ -146,5 +152,17 @@ impl<T> Spanned<T> {
             inner: &self.inner,
         }
     }
+}
+
+pub trait Spans: Clone + fmt::Debug {
+    type Ident: HasSpan<Self> + Clone + fmt::Debug + AsRef<str>;
+}
+
+impl Spans for Span {
+    type Ident = Ident;
+}
+
+pub trait HasSpan<S> {
+    fn span(&self) -> S;
 }
 

@@ -8,7 +8,7 @@ pub fn parse(full_src: &Arc<str>) -> Result<ast::Program, ParseError> {
 }
 */
 
-pub fn parse_prec_stmt(full_src: &Arc<str>) -> Result<ast::PrecStmt, ParseError> {
+pub fn parse_prec_stmt(full_src: &Arc<str>) -> Result<ast::PrecStmt<Span>, ParseError> {
     let tokens = crate::token::tokenize(full_src)?;
     let expr_opt = crate::combinators::parse_to_completion(crate::parser::prec_stmt(), &tokens.as_ref())?;
     Ok(expr_opt.unwrap())

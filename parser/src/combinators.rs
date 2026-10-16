@@ -2,7 +2,7 @@ use crate::priv_prelude::*;
 
 pub fn parse_to_completion<T, E: From<UnexpectedTokenError>>(
     parser: impl Parser<Output = T, Error = E>,
-    tokens: &TokensRef<'_>,
+    tokens: &TokensRef<'_, Span>,
 ) -> Result<Option<T>, E> {
     match must_consume_all(parser).parse(tokens)? {
         Some((_count, val)) => Ok(Some(val)),
@@ -14,14 +14,14 @@ pub trait Parser {
     type Output;
     type Error;
 
-    fn parse(&self, tokens: &TokensRef<'_>) -> Result<Option<(usize, Self::Output)>, Self::Error>;
+    fn parse(&self, tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, Self::Output)>, Self::Error>;
 }
 
 impl<P: Parser + ?Sized> Parser for Box<P> {
     type Output = P::Output;
     type Error = P::Error;
 
-    fn parse(&self, tokens: &TokensRef<'_>) -> Result<Option<(usize, P::Output)>, P::Error> {
+    fn parse(&self, tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, P::Output)>, P::Error> {
         (**self).parse(tokens)
     }
 }
@@ -37,7 +37,7 @@ macro_rules! impl_any_of_inner (
             type Error = E;
 
             #[allow(non_snake_case)]
-            fn parse(&self, tokens: &TokensRef<'_>) -> Result<Option<(usize, T)>, E> {
+            fn parse(&self, tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, T)>, E> {
                 let AnyOf { tup: ($($tys,)*) } = self;
                 $(
                     match $tys.parse(tokens)? {
@@ -55,7 +55,7 @@ impl Parser for AnyOf<()> {
     type Output = !;
     type Error = !;
 
-    fn parse(&self, _tokens: &TokensRef<'_>) -> Result<Option<(usize, !)>, !> {
+    fn parse(&self, _tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, !)>, !> {
         Ok(None)
     }
 }
@@ -85,7 +85,7 @@ macro_rules! impl_all_of_inner (
             type Error = E;
 
             #[allow(non_snake_case)]
-            fn parse(&self, tokens: &TokensRef<'_>) -> Result<Option<(usize, ($($tys::Output,)*))>, E> {
+            fn parse(&self, tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, ($($tys::Output,)*))>, E> {
                 let AllOf { tup: ($($tys,)*) } = self;
                 let mut total_count = 0;
                 $(
@@ -105,7 +105,7 @@ impl Parser for AllOf<()> {
     type Output = ();
     type Error = !;
 
-    fn parse(&self, _tokens: &TokensRef<'_>) -> Result<Option<(usize, ())>, !> {
+    fn parse(&self, _tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, ())>, !> {
         Ok(Some((0, ())))
     }
 }
@@ -130,19 +130,19 @@ struct FromFn<F> {
 
 impl<T, E, F> Parser for FromFn<F>
 where
-    F: Fn(&TokensRef<'_>) -> Result<Option<(usize, T)>, E>,
+    F: Fn(&TokensRef<'_, Span>) -> Result<Option<(usize, T)>, E>,
 {
     type Output = T;
     type Error = E;
 
-    fn parse(&self, tokens: &TokensRef<'_>) -> Result<Option<(usize, T)>, E> {
+    fn parse(&self, tokens: &TokensRef<'_, Span>) -> Result<Option<(usize, T)>, E> {
         (self.func)(tokens)
     }
 }
 
 fn from_fn<T, E, F>(func: F) -> impl Parser<Output = T, Error = E>
 where
-    F: Fn(&TokensRef<'_>) -> Result<Option<(usize, T)>, E>,
+    F: Fn(&TokensRef<'_, Span>) -> Result<Option<(usize, T)>, E>,
 {
     FromFn { func }
 }
@@ -166,7 +166,7 @@ where
     })
 }
 
-pub fn token<E>() -> impl Parser<Output = Token, Error = E> {
+pub fn token<E>() -> impl Parser<Output = Token<Span>, Error = E> {
     from_fn(|tokens| {
         match tokens.first() {
             Some(token) => Ok(Some((1, token.clone()))),
@@ -182,7 +182,7 @@ pub fn ident<E>() -> impl Parser<Output = Ident, Error = E> {
     })
 }
 
-pub fn string<E>() -> impl Parser<Output = Spanned<String>, Error = E> {
+pub fn string<E>() -> impl Parser<Output = Spanned<Span, String>, Error = E> {
     token().filter_map(move |token| match token {
         Token::Str(s) => Some(s),
         _ => None,
@@ -225,7 +225,7 @@ fn must_consume_all<T, E: From<UnexpectedTokenError>>(
 pub fn group<T, E: From<UnexpectedTokenError>, P>(
     kind: GroupKind,
     parser: impl Fn(Span) -> P,
-) -> impl Parser<Output = Spanned<T>, Error = E>
+) -> impl Parser<Output = Spanned<Span, T>, Error = E>
 where
     P: Parser<Output = T, Error = E>,
 {
@@ -249,7 +249,7 @@ where
 
 pub fn curly_braced<T, E: From<UnexpectedTokenError>, P: Parser<Output = T, Error = E>>(
     parser: impl Fn(Span) -> P,
-) -> impl Parser<Output = Spanned<T>, Error = E>
+) -> impl Parser<Output = Spanned<Span, T>, Error = E>
 where
 {
     group(GroupKind::CurlyBrace, parser)
@@ -257,7 +257,7 @@ where
 
 pub fn parens<T, E: From<UnexpectedTokenError>, P: Parser<Output = T, Error = E>>(
     parser: impl Fn(Span) -> P,
-) -> impl Parser<Output = Spanned<T>, Error = E>
+) -> impl Parser<Output = Spanned<Span, T>, Error = E>
 where
 {
     group(GroupKind::RoundParen, parser)
@@ -331,7 +331,7 @@ impl<T, E, P: Parser<Output = T, Error = E>> P {
         })
     }
 
-    fn spanned(self) -> impl Parser<Output = Spanned<T>, Error = E> {
+    fn spanned(self) -> impl Parser<Output = Spanned<Span, T>, Error = E> {
         from_fn(move |tokens| {
             let start = tokens.span().start;
             match self.parse(tokens)? {
@@ -391,13 +391,13 @@ impl<E, P: Parser<Output = (), Error = E>> P {
 }
 
 #[extension(pub trait ParserExtSpannedUnit)]
-impl<E, P: Parser<Output = Spanned<()>, Error = E>> P {
+impl<E, P: Parser<Output = Spanned<Span, ()>, Error = E>> P {
     fn spanned_unit_then<U, F, Q>(
         self,
         next: F,
     ) -> impl Parser<Output = U, Error = E>
     where
-        P: Parser<Output = Spanned<()>>,
+        P: Parser<Output = Spanned<Span, ()>>,
         F: Fn(Span) -> Q,
         Q: Parser<Output = U, Error = E>,
     {
@@ -519,6 +519,6 @@ impl<T: 'static, E: 'static> Box<dyn Parser<Output = T, Error = E>> {
 }
 
 pub struct UnexpectedTokenError {
-    pub token: Token,
+    pub token: Token<Span>,
 }
 

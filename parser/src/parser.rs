@@ -4,7 +4,7 @@ use crate::priv_prelude::*;
 pub enum ParseError {
     #[error("unexpected token at {}", token.span())]
     UnexpectedToken {
-        token: Token,
+        token: Token<Span>,
     },
     #[error("{0}")]
     Tokenize(TokenizeError),
@@ -145,7 +145,7 @@ fn name_ident<E>() -> impl Parser<Output = Ident, Error = E> {
 
 pub type DynParser<T> = Box<dyn Parser<Output = T, Error = ParseError>>;
 
-fn name() -> DynParser<ast::Name> {
+fn name() -> DynParser<ast::Name<Span>> {
     lazy(|| {
         any_of((
             name_ident().map(ast::Name::Ident),
@@ -176,7 +176,7 @@ fn item_def() -> Box<dyn Parser<Output = ast::ItemDef, Error = ParseError>> {
 }
 */
 
-fn let_stmt() -> DynParser<ast::LetStmt> {
+fn let_stmt() -> DynParser<ast::LetStmt<Span>> {
     keyword(Keyword::Let)
     .spanned()
     .spanned_unit_then(|let_span| {
@@ -231,7 +231,7 @@ fn let_stmt() -> DynParser<ast::LetStmt> {
     .box_dyn()
 }
 
-fn expr_func_type() -> DynParser<ast::ExprFuncType> {
+fn expr_func_type() -> DynParser<ast::ExprFuncType<Span>> {
     all_of((
         keyword(Keyword::FnUpper).unit_then(parens(|_| func_term_arg().spanned().box_dyn().comma_separated())),
         punct(PunctKind::Arrow).unit_then(prec_func().boxed()),
@@ -240,7 +240,7 @@ fn expr_func_type() -> DynParser<ast::ExprFuncType> {
     .box_dyn()
 }
 
-fn func_term_arg() -> DynParser<ast::FuncTermArg> {
+fn func_term_arg() -> DynParser<ast::FuncTermArg<Span>> {
     name()
     .spanned()
     .then(func_term_arg_ty().optional())
@@ -248,7 +248,7 @@ fn func_term_arg() -> DynParser<ast::FuncTermArg> {
     .box_dyn()
 }
 
-fn func_term_arg_ty() -> DynParser<ast::FuncTermArgTy> {
+fn func_term_arg_ty() -> DynParser<ast::FuncTermArgTy<Span>> {
     all_of((
         parens(|_| {
             func_term_arg()
@@ -269,7 +269,7 @@ fn func_term_arg_ty() -> DynParser<ast::FuncTermArgTy> {
     .box_dyn()
 }
 
-fn expr_func_term() -> DynParser<ast::ExprFuncTerm> {
+fn expr_func_term() -> DynParser<ast::ExprFuncTerm<Span>> {
     all_of((
         keyword(Keyword::FnLower)
         .spanned()
@@ -289,7 +289,7 @@ fn expr_func_term() -> DynParser<ast::ExprFuncTerm> {
     .box_dyn()
 }
 
-fn expr_equal() -> DynParser<ast::ExprEqual> {
+fn expr_equal() -> DynParser<ast::ExprEqual<Span>> {
     all_of((
         prec_add().boxed(),
         punct(PunctKind::DoubleEqual).unit_then(prec_add().boxed()),
@@ -298,7 +298,7 @@ fn expr_equal() -> DynParser<ast::ExprEqual> {
     .box_dyn()
 }
 
-fn expr_inj_lhs() -> DynParser<ast::ExprInjLhs> {
+fn expr_inj_lhs() -> DynParser<ast::ExprInjLhs<Span>> {
     all_of((
         //punct(PunctKind::Dot).unit_then(name_ident()),
         punct(PunctKind::Dot).unit_then(name().spanned()),
@@ -308,21 +308,21 @@ fn expr_inj_lhs() -> DynParser<ast::ExprInjLhs> {
     .box_dyn()
 }
 
-fn expr_inj_rhs() -> DynParser<ast::ExprInjRhs> {
+fn expr_inj_rhs() -> DynParser<ast::ExprInjRhs<Span>> {
     punct(PunctKind::TripleDot)
     .unit_then(prec_inj().boxed())
     .map(|payload| ast::ExprInjRhs { payload })
     .box_dyn()
 }
 
-fn expr_refl() -> DynParser<ast::ExprRefl> {
+fn expr_refl() -> DynParser<ast::ExprRefl<Span>> {
     keyword(Keyword::Refl)
     .unit_then(prec_inj().boxed())
     .map(|eq_expr| ast::ExprRefl { eq_expr })
     .box_dyn()
 }
 
-fn func_app_arg() -> DynParser<ast::FuncAppArg> {
+fn func_app_arg() -> DynParser<ast::FuncAppArg<Span>> {
     all_of((
         name().spanned(),
         func_app_arg_expr().optional(),
@@ -331,7 +331,7 @@ fn func_app_arg() -> DynParser<ast::FuncAppArg> {
     .box_dyn()
 }
 
-fn func_app_arg_expr() -> DynParser<ast::FuncAppArgExpr> {
+fn func_app_arg_expr() -> DynParser<ast::FuncAppArgExpr<Span>> {
     all_of((
         parens(|_| {
             func_term_arg()
@@ -346,7 +346,7 @@ fn func_app_arg_expr() -> DynParser<ast::FuncAppArgExpr> {
     .box_dyn()
 }
 
-fn expr_match() -> DynParser<ast::ExprMatch> {
+fn expr_match() -> DynParser<ast::ExprMatch<Span>> {
     all_of((
         keyword(Keyword::Match).unit_then(prec_equal().boxed()),
         curly_braced(|_| match_branch().spanned().box_dyn().comma_separated()),
@@ -355,7 +355,7 @@ fn expr_match() -> DynParser<ast::ExprMatch> {
     .box_dyn()
 }
 
-fn match_branch() -> DynParser<ast::MatchBranch> {
+fn match_branch() -> DynParser<ast::MatchBranch<Span>> {
     all_of((
         punct(PunctKind::Dot).unit_then(name().spanned()),
         pat_prec_inj().boxed(),
@@ -368,7 +368,7 @@ fn match_branch() -> DynParser<ast::MatchBranch> {
 }
 
 /*
-fn expr_for_loop() -> Box<dyn Parser<Output = ast::ExprForLoop, Error = ParseError>> {
+fn expr_for_loop() -> Box<dyn Parser<Output = ast::ExprForLoop<Span>, Error = ParseError>> {
     all_of((
         keyword(Keyword::For).unit_then(name_ident()),
         keyword(Keyword::In).unit_then(prec_equal().boxed()),
@@ -384,7 +384,7 @@ fn expr_for_loop() -> Box<dyn Parser<Output = ast::ExprForLoop, Error = ParseErr
 }
 */
 
-fn expr_struct_type() -> DynParser<ast::ExprStructType> {
+fn expr_struct_type() -> DynParser<ast::ExprStructType<Span>> {
     keyword(Keyword::Struct)
     .unit_then(curly_braced(|_| {
         type_field()
@@ -402,7 +402,7 @@ fn expr_struct_type() -> DynParser<ast::ExprStructType> {
     .box_dyn()
 }
 
-fn expr_enum_type() -> DynParser<ast::ExprEnumType> {
+fn expr_enum_type() -> DynParser<ast::ExprEnumType<Span>> {
     keyword(Keyword::Enum)
     .unit_then(curly_braced(|_| {
         type_field()
@@ -420,7 +420,7 @@ fn expr_enum_type() -> DynParser<ast::ExprEnumType> {
     .box_dyn()
 }
 
-fn type_field() -> DynParser<ast::TypeField> {
+fn type_field() -> DynParser<ast::TypeField<Span>> {
     name()
     .spanned()
     .then(
@@ -436,7 +436,7 @@ fn type_field() -> DynParser<ast::TypeField> {
     .box_dyn()
 }
 
-fn expr_struct_term() -> DynParser<ast::ExprStructTerm> {
+fn expr_struct_term() -> DynParser<ast::ExprStructTerm<Span>> {
     parens(|_| {
         expr_struct_term_field()
         .spanned()
@@ -453,7 +453,7 @@ fn expr_struct_term() -> DynParser<ast::ExprStructTerm> {
     .box_dyn()
 }
 
-fn expr_struct_term_field() -> DynParser<ast::ExprStructTermField> {
+fn expr_struct_term_field() -> DynParser<ast::ExprStructTermField<Span>> {
     name()
     .spanned()
     .then(
@@ -465,7 +465,7 @@ fn expr_struct_term_field() -> DynParser<ast::ExprStructTermField> {
     .box_dyn()
 }
 
-pub fn prec_stmt() -> DynParser<ast::PrecStmt> {
+pub fn prec_stmt() -> DynParser<ast::PrecStmt<Span>> {
     lazy(|| {
         any_of((
             let_stmt().spanned().map(ast::PrecStmt::Let),
@@ -476,7 +476,7 @@ pub fn prec_stmt() -> DynParser<ast::PrecStmt> {
     .box_dyn()
 }
 
-fn prec_func() -> DynParser<ast::PrecFunc> {
+fn prec_func() -> DynParser<ast::PrecFunc<Span>> {
     lazy(|| {
         any_of((
             expr_func_type().spanned().map(ast::PrecFunc::FuncType),
@@ -487,7 +487,7 @@ fn prec_func() -> DynParser<ast::PrecFunc> {
     .box_dyn()
 }
 
-fn prec_equal() -> DynParser<ast::PrecEqual> {
+fn prec_equal() -> DynParser<ast::PrecEqual<Span>> {
     lazy(|| {
         any_of((
             expr_equal().spanned().map(ast::PrecEqual::Equal),
@@ -497,7 +497,7 @@ fn prec_equal() -> DynParser<ast::PrecEqual> {
     .box_dyn()
 }
 
-fn prec_add() -> DynParser<ast::PrecAdd> {
+fn prec_add() -> DynParser<ast::PrecAdd<Span>> {
     lazy(|| {
         prec_mul()
         .map(ast::PrecAdd::Other)
@@ -510,7 +510,7 @@ fn prec_add() -> DynParser<ast::PrecAdd> {
     .box_dyn()
 }
 
-fn prec_mul() -> DynParser<ast::PrecMul> {
+fn prec_mul() -> DynParser<ast::PrecMul<Span>> {
     lazy(|| {
         prec_inj()
         .map(ast::PrecMul::Other)
@@ -523,7 +523,7 @@ fn prec_mul() -> DynParser<ast::PrecMul> {
     .box_dyn()
 }
 
-fn prec_inj() -> DynParser<ast::PrecInj> {
+fn prec_inj() -> DynParser<ast::PrecInj<Span>> {
     lazy(|| {
         any_of((
             expr_inj_lhs().spanned().map(ast::PrecInj::InjLhs),
@@ -535,7 +535,7 @@ fn prec_inj() -> DynParser<ast::PrecInj> {
     .box_dyn()
 }
 
-fn prec_proj() -> DynParser<ast::PrecProj> {
+fn prec_proj() -> DynParser<ast::PrecProj<Span>> {
     lazy(|| {
         prec_app()
         .map(ast::PrecProj::Other)
@@ -548,7 +548,7 @@ fn prec_proj() -> DynParser<ast::PrecProj> {
     .box_dyn()
 }
 
-fn prec_app() -> DynParser<ast::PrecApp> {
+fn prec_app() -> DynParser<ast::PrecApp<Span>> {
     lazy(|| {
         prec_atom()
         .map(ast::PrecApp::Other)
@@ -561,7 +561,7 @@ fn prec_app() -> DynParser<ast::PrecApp> {
     .box_dyn()
 }
 
-fn prec_atom() -> DynParser<ast::PrecAtom> {
+fn prec_atom() -> DynParser<ast::PrecAtom<Span>> {
     lazy(|| {
         any_of((
             name().spanned().map(ast::PrecAtom::Var),
@@ -582,14 +582,14 @@ fn prec_atom() -> DynParser<ast::PrecAtom> {
     .box_dyn()
 }
 
-fn pat_refl() -> DynParser<ast::PatRefl> {
+fn pat_refl() -> DynParser<ast::PatRefl<Span>> {
     keyword(Keyword::Refl)
     .unit_then(pat_prec_inj().boxed())
     .map(|eq_pat| ast::PatRefl { eq_pat })
     .box_dyn()
 }
 
-fn pat_struct_term() -> DynParser<ast::PatStructTerm> {
+fn pat_struct_term() -> DynParser<ast::PatStructTerm<Span>> {
     parens(|_| {
         pat_struct_term_field()
         .spanned()
@@ -606,7 +606,7 @@ fn pat_struct_term() -> DynParser<ast::PatStructTerm> {
     .box_dyn()
 }
 
-fn pat_struct_term_field() -> DynParser<ast::PatStructTermField> {
+fn pat_struct_term_field() -> DynParser<ast::PatStructTermField<Span>> {
     name()
     .spanned()
     .then(
@@ -617,7 +617,7 @@ fn pat_struct_term_field() -> DynParser<ast::PatStructTermField> {
     .box_dyn()
 }
 
-fn pat_prec_inj() -> DynParser<ast::PatPrecInj> {
+fn pat_prec_inj() -> DynParser<ast::PatPrecInj<Span>> {
     lazy(|| {
         any_of((
             pat_refl().spanned().map(ast::PatPrecInj::Refl),
@@ -627,7 +627,7 @@ fn pat_prec_inj() -> DynParser<ast::PatPrecInj> {
     .box_dyn()
 }
 
-fn pat_prec_atom() -> DynParser<ast::PatPrecAtom> {
+fn pat_prec_atom() -> DynParser<ast::PatPrecAtom<Span>> {
     lazy(||
         any_of((
             name().spanned().map(ast::PatPrecAtom::Var),

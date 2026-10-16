@@ -1,240 +1,240 @@
 use crate::priv_prelude::*;
 
 #[derive(Debug)]
-pub enum Name {
-    Ident(Ident),
-    Quoted(Box<PrecAtom>),
+pub enum Name<S: Spans> {
+    Ident(S::Ident),
+    Quoted(Box<PrecAtom<S>>),
 }
 
 #[derive(Debug)]
-pub enum PrecStmt {
-    Let(Spanned<LetStmt>),
-    Blank(Span),
-    Other(PrecFunc),
+pub enum PrecStmt<S: Spans> {
+    Let(Spanned<S, LetStmt<S>>),
+    Blank(S),
+    Other(PrecFunc<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecFunc {
-    FuncType(Spanned<ExprFuncType>),
-    FuncTerm(Spanned<ExprFuncTerm>),
-    Other(PrecEqual),
+pub enum PrecFunc<S: Spans> {
+    FuncType(Spanned<S, ExprFuncType<S>>),
+    FuncTerm(Spanned<S, ExprFuncTerm<S>>),
+    Other(PrecEqual<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecEqual {
-    Equal(Spanned<ExprEqual>),
-    Other(PrecAdd),
+pub enum PrecEqual<S: Spans> {
+    Equal(Spanned<S, ExprEqual<S>>),
+    Other(PrecAdd<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecAdd {
-    Add(Spanned<ExprAdd>),
-    Other(PrecMul),
+pub enum PrecAdd<S: Spans> {
+    Add(Spanned<S, ExprAdd<S>>),
+    Other(PrecMul<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecMul {
-    Mul(Spanned<ExprMul>),
-    Other(PrecInj),
+pub enum PrecMul<S: Spans> {
+    Mul(Spanned<S, ExprMul<S>>),
+    Other(PrecInj<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecInj {
-    InjLhs(Spanned<ExprInjLhs>),
-    InjRhs(Spanned<ExprInjRhs>),
-    Refl(Spanned<ExprRefl>),
-    Other(PrecProj),
+pub enum PrecInj<S: Spans> {
+    InjLhs(Spanned<S, ExprInjLhs<S>>),
+    InjRhs(Spanned<S, ExprInjRhs<S>>),
+    Refl(Spanned<S, ExprRefl<S>>),
+    Other(PrecProj<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecProj {
-    Proj(Spanned<ExprProj>),
-    Other(PrecApp),
+pub enum PrecProj<S: Spans> {
+    Proj(Spanned<S, ExprProj<S>>),
+    Other(PrecApp<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecApp {
-    App(Spanned<ExprApp>),
-    Other(PrecAtom),
+pub enum PrecApp<S: Spans> {
+    App(Spanned<S, ExprApp<S>>),
+    Other(PrecAtom<S>),
 }
 
 #[derive(Debug)]
-pub enum PrecAtom {
-    Var(Spanned<Name>),
-    NameLiteral(Spanned<String>),
-    Nat(Spanned<BigUint>),
-    Match(Spanned<ExprMatch>),
-    StructType(Spanned<ExprStructType>),
-    StructTerm(Spanned<ExprStructTerm>),
-    EnumType(Spanned<ExprEnumType>),
-    Braced(Spanned<Box<PrecStmt>>),
+pub enum PrecAtom<S: Spans> {
+    Var(Spanned<S, Name<S>>),
+    NameLiteral(Spanned<S, String>),
+    Nat(Spanned<S, BigUint>),
+    Match(Spanned<S, ExprMatch<S>>),
+    StructType(Spanned<S, ExprStructType<S>>),
+    StructTerm(Spanned<S, ExprStructTerm<S>>),
+    EnumType(Spanned<S, ExprEnumType<S>>),
+    Braced(Spanned<S, Box<PrecStmt<S>>>),
 }
 
 #[derive(Debug)]
-pub struct LetStmt {
-    pub var_pat: Box<PatPrecInj>,
-    pub var_args_opt: Option<Spanned<Vec<Spanned<FuncTermArg>>>>,
-    pub var_ty_opt: Option<Box<PrecFunc>>,
-    pub var_expr: Box<PrecFunc>,
-    pub body: Box<PrecStmt>,
+pub struct LetStmt<S: Spans> {
+    pub var_pat: Box<PatPrecInj<S>>,
+    pub var_args_opt: Option<Spanned<S, Vec<Spanned<S, FuncTermArg<S>>>>>,
+    pub var_ty_opt: Option<Box<PrecFunc<S>>>,
+    pub var_expr: Box<PrecFunc<S>>,
+    pub body: Box<PrecStmt<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprFuncType {
-    pub args: Spanned<Vec<Spanned<FuncTermArg>>>,
-    pub return_ty: Box<PrecFunc>,
+pub struct ExprFuncType<S: Spans> {
+    pub args: Spanned<S, Vec<Spanned<S, FuncTermArg<S>>>>,
+    pub return_ty: Box<PrecFunc<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprFuncTerm {
-    pub args: Spanned<Vec<Spanned<FuncTermArg>>>,
-    pub body: Box<PrecFunc>,
+pub struct ExprFuncTerm<S: Spans> {
+    pub args: Spanned<S, Vec<Spanned<S, FuncTermArg<S>>>>,
+    pub body: Box<PrecFunc<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprEqual {
-    pub eq_expr_0: Box<PrecAdd>,
-    pub eq_expr_1: Box<PrecAdd>,
+pub struct ExprEqual<S: Spans> {
+    pub eq_expr_0: Box<PrecAdd<S>>,
+    pub eq_expr_1: Box<PrecAdd<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprAdd {
-    pub lhs: Box<PrecAdd>,
-    pub rhs: Box<PrecMul>,
+pub struct ExprAdd<S: Spans> {
+    pub lhs: Box<PrecAdd<S>>,
+    pub rhs: Box<PrecMul<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprMul {
-    pub lhs: Box<PrecMul>,
-    pub rhs: Box<PrecInj>,
+pub struct ExprMul<S: Spans> {
+    pub lhs: Box<PrecMul<S>>,
+    pub rhs: Box<PrecInj<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprInjLhs {
-    pub variant_name: Spanned<Name>,
-    pub payload: Box<PrecInj>,
+pub struct ExprInjLhs<S: Spans> {
+    pub variant_name: Spanned<S, Name<S>>,
+    pub payload: Box<PrecInj<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprInjRhs {
-    pub payload: Box<PrecInj>,
+pub struct ExprInjRhs<S: Spans> {
+    pub payload: Box<PrecInj<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprRefl {
-    pub eq_expr: Box<PrecInj>,
+pub struct ExprRefl<S: Spans> {
+    pub eq_expr: Box<PrecInj<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprProj {
-    pub base: Box<PrecProj>,
-    pub field_name: Spanned<Name>,
+pub struct ExprProj<S: Spans> {
+    pub base: Box<PrecProj<S>>,
+    pub field_name: Spanned<S, Name<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprApp {
-    pub func: Box<PrecApp>,
-    pub args: Spanned<Vec<Spanned<FuncAppArg>>>,
+pub struct ExprApp<S: Spans> {
+    pub func: Box<PrecApp<S>>,
+    pub args: Spanned<S, Vec<Spanned<S, FuncAppArg<S>>>>,
 }
 
 #[derive(Debug)]
-pub struct FuncAppArg {
-    pub arg_name: Spanned<Name>,
-    pub arg_expr_opt: Option<FuncAppArgExpr>,
+pub struct FuncAppArg<S: Spans> {
+    pub arg_name: Spanned<S, Name<S>>,
+    pub arg_expr_opt: Option<FuncAppArgExpr<S>>,
 }
 
 #[derive(Debug)]
-pub struct FuncAppArgExpr {
-    pub args_opt: Option<Spanned<Vec<Spanned<FuncTermArg>>>>,
-    pub expr: Box<PrecFunc>,
+pub struct FuncAppArgExpr<S: Spans> {
+    pub args_opt: Option<Spanned<S, Vec<Spanned<S, FuncTermArg<S>>>>>,
+    pub expr: Box<PrecFunc<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprMatch {
-    pub elim: Box<PrecEqual>,
-    pub branches: Spanned<Vec<Spanned<MatchBranch>>>,
+pub struct ExprMatch<S: Spans> {
+    pub elim: Box<PrecEqual<S>>,
+    pub branches: Spanned<S, Vec<Spanned<S, MatchBranch<S>>>>,
 }
 
 #[derive(Debug)]
-pub struct MatchBranch {
-    pub variant_name: Spanned<Name>,
-    pub payload_pat: Box<PatPrecInj>,
-    pub body: Box<PrecEqual>,
+pub struct MatchBranch<S: Spans> {
+    pub variant_name: Spanned<S, Name<S>>,
+    pub payload_pat: Box<PatPrecInj<S>>,
+    pub body: Box<PrecEqual<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprStructType {
-    pub fields: Vec<Spanned<TypeField>>,
-    pub tail_ty_opt: Option<Box<PrecFunc>>,
+pub struct ExprStructType<S: Spans> {
+    pub fields: Vec<Spanned<S, TypeField<S>>>,
+    pub tail_ty_opt: Option<Box<PrecFunc<S>>>,
 }
 
 #[derive(Debug)]
-pub struct ExprStructTerm {
-    pub fields: Vec<Spanned<ExprStructTermField>>,
-    pub tail_opt: Option<Box<PrecFunc>>,
+pub struct ExprStructTerm<S: Spans> {
+    pub fields: Vec<Spanned<S, ExprStructTermField<S>>>,
+    pub tail_opt: Option<Box<PrecFunc<S>>>,
 }
 
 #[derive(Debug)]
-pub struct ExprStructTermField {
-    pub name: Spanned<Name>,
-    pub expr_opt: Option<PrecEqual>,
+pub struct ExprStructTermField<S: Spans> {
+    pub name: Spanned<S, Name<S>>,
+    pub expr_opt: Option<PrecEqual<S>>,
 }
 
 #[derive(Debug)]
-pub struct ExprEnumType {
-    pub variants: Vec<Spanned<TypeField>>,
-    pub rhs_ty_opt: Option<Box<PrecFunc>>,
+pub struct ExprEnumType<S: Spans> {
+    pub variants: Vec<Spanned<S, TypeField<S>>>,
+    pub rhs_ty_opt: Option<Box<PrecFunc<S>>>,
 }
 
 #[derive(Debug)]
-pub struct FuncTermArg {
-    pub arg_name: Spanned<Name>,
-    pub arg_ty_opt: Option<FuncTermArgTy>,
+pub struct FuncTermArg<S: Spans> {
+    pub arg_name: Spanned<S, Name<S>>,
+    pub arg_ty_opt: Option<FuncTermArgTy<S>>,
 }
 
 #[derive(Debug)]
-pub struct FuncTermArgTy {
-    pub args_opt: Option<Spanned<Vec<Spanned<FuncTermArg>>>>,
-    pub ty: Box<PrecFunc>,
+pub struct FuncTermArgTy<S: Spans> {
+    pub args_opt: Option<Spanned<S, Vec<Spanned<S, FuncTermArg<S>>>>>,
+    pub ty: Box<PrecFunc<S>>,
 }
 
 #[derive(Debug)]
-pub struct TypeField {
-    pub name: Spanned<Name>,
-    pub ty: Box<PrecEqual>,
+pub struct TypeField<S: Spans> {
+    pub name: Spanned<S, Name<S>>,
+    pub ty: Box<PrecEqual<S>>,
 }
 
 #[derive(Debug)]
-pub enum PatPrecInj {
-    Refl(Spanned<PatRefl>),
-    Other(PatPrecAtom),
+pub enum PatPrecInj<S: Spans> {
+    Refl(Spanned<S, PatRefl<S>>),
+    Other(PatPrecAtom<S>),
 }
 
 #[derive(Debug)]
-pub enum PatPrecAtom {
-    Var(Spanned<Name>),
-    Struct(Spanned<PatStructTerm>),
+pub enum PatPrecAtom<S: Spans> {
+    Var(Spanned<S, Name<S>>),
+    Struct(Spanned<S, PatStructTerm<S>>),
 }
 
 #[derive(Debug)]
-pub struct PatRefl {
-    pub eq_pat: Box<PatPrecInj>,
+pub struct PatRefl<S: Spans> {
+    pub eq_pat: Box<PatPrecInj<S>>,
 }
 
 #[derive(Debug)]
-pub struct PatStructTerm {
-    pub fields: Vec<Spanned<PatStructTermField>>,
-    pub tail_opt: Option<Box<PatPrecInj>>,
+pub struct PatStructTerm<S: Spans> {
+    pub fields: Vec<Spanned<S, PatStructTermField<S>>>,
+    pub tail_opt: Option<Box<PatPrecInj<S>>>,
 }
 
 #[derive(Debug)]
-pub struct PatStructTermField {
-    pub name: Spanned<Name>,
-    pub pat_opt: Option<PatPrecInj>,
+pub struct PatStructTermField<S: Spans> {
+    pub name: Spanned<S, Name<S>>,
+    pub pat_opt: Option<PatPrecInj<S>>,
 }
 
-impl Name {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for Name<S> {
+    fn span(&self) -> S {
         match self {
             Name::Ident(ident) => ident.span(),
             Name::Quoted(prec_atom) => prec_atom.span(),
@@ -242,8 +242,8 @@ impl Name {
     }
 }
 
-impl PrecStmt {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecStmt<S> {
+    fn span(&self) -> S {
         match self {
             PrecStmt::Let(x) => x.span(),
             PrecStmt::Blank(span) => span.clone(),
@@ -252,8 +252,8 @@ impl PrecStmt {
     }
 }
 
-impl PrecFunc {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecFunc<S> {
+    fn span(&self) -> S {
         match self {
             PrecFunc::FuncType(x) => x.span(),
             PrecFunc::FuncTerm(x) => x.span(),
@@ -262,8 +262,8 @@ impl PrecFunc {
     }
 }
 
-impl PrecEqual {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecEqual<S> {
+    fn span(&self) -> S {
         match self {
             PrecEqual::Equal(expr_equal) => expr_equal.span(),
             PrecEqual::Other(prec_add) => prec_add.span(),
@@ -271,8 +271,8 @@ impl PrecEqual {
     }
 }
 
-impl PrecAdd {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecAdd<S> {
+    fn span(&self) -> S {
         match self {
             PrecAdd::Add(expr_add) => expr_add.span(),
             PrecAdd::Other(prec_mul) => prec_mul.span(),
@@ -280,8 +280,8 @@ impl PrecAdd {
     }
 }
 
-impl PrecMul {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecMul<S> {
+    fn span(&self) -> S {
         match self {
             PrecMul::Mul(expr_mul) => expr_mul.span(),
             PrecMul::Other(prec_inj) => prec_inj.span(),
@@ -289,8 +289,8 @@ impl PrecMul {
     }
 }
 
-impl PrecInj {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecInj<S> {
+    fn span(&self) -> S {
         match self {
             PrecInj::InjLhs(expr_inj_lhs) => expr_inj_lhs.span(),
             PrecInj::InjRhs(expr_inj_rhs) => expr_inj_rhs.span(),
@@ -300,8 +300,8 @@ impl PrecInj {
     }
 }
 
-impl PrecProj {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecProj<S> {
+    fn span(&self) -> S {
         match self {
             PrecProj::Proj(expr_proj) => expr_proj.span(),
             PrecProj::Other(prec_app) => prec_app.span(),
@@ -309,8 +309,8 @@ impl PrecProj {
     }
 }
 
-impl PrecApp {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecApp<S> {
+    fn span(&self) -> S {
         match self {
             PrecApp::App(expr_app) => expr_app.span(),
             PrecApp::Other(prec_atom) => prec_atom.span(),
@@ -318,8 +318,8 @@ impl PrecApp {
     }
 }
 
-impl PrecAtom {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PrecAtom<S> {
+    fn span(&self) -> S {
         match self {
             PrecAtom::Var(s) => s.span(),
             PrecAtom::NameLiteral(s) => s.span(),
@@ -333,8 +333,8 @@ impl PrecAtom {
     }
 }
 
-impl PatPrecInj {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PatPrecInj<S> {
+    fn span(&self) -> S {
         match self {
             PatPrecInj::Refl(x) => x.span(),
             PatPrecInj::Other(x) => x.span(),
@@ -342,8 +342,8 @@ impl PatPrecInj {
     }
 }
 
-impl PatPrecAtom {
-    pub fn span(&self) -> Span {
+impl<S: Spans> HasSpan<S> for PatPrecAtom<S> {
+    fn span(&self) -> S {
         match self {
             PatPrecAtom::Var(s) => s.span(),
             PatPrecAtom::Struct(x) => x.span(),

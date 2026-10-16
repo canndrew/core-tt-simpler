@@ -9,7 +9,7 @@ pub trait Check {
     fn check(&self, ch: &mut CheckCtx) -> Checked<Self::Output>;
 }
 
-impl Check for Spanned<ast::Name> {
+impl Check for Spanned<Span, ast::Name<Span>> {
     type Output = Name;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Name> {
@@ -38,7 +38,7 @@ impl Check for Spanned<ast::Name> {
     }
 }
 
-impl Check for ast::PrecStmt {
+impl Check for ast::PrecStmt<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -56,7 +56,7 @@ impl Check for ast::PrecStmt {
     }
 }
 
-impl Check for ast::PrecFunc {
+impl Check for ast::PrecFunc<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -74,7 +74,7 @@ impl Check for ast::PrecFunc {
     }
 }
 
-impl Check for ast::PrecEqual {
+impl Check for ast::PrecEqual<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -89,7 +89,7 @@ impl Check for ast::PrecEqual {
     }
 }
 
-impl Check for ast::PrecAdd {
+impl Check for ast::PrecAdd<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -104,7 +104,7 @@ impl Check for ast::PrecAdd {
     }
 }
 
-impl Check for ast::PrecMul {
+impl Check for ast::PrecMul<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -119,7 +119,7 @@ impl Check for ast::PrecMul {
     }
 }
 
-impl Check for ast::PrecInj {
+impl Check for ast::PrecInj<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -140,7 +140,7 @@ impl Check for ast::PrecInj {
     }
 }
 
-impl Check for ast::PrecProj {
+impl Check for ast::PrecProj<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -155,7 +155,7 @@ impl Check for ast::PrecProj {
     }
 }
 
-impl Check for ast::PrecApp {
+impl Check for ast::PrecApp<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -170,7 +170,7 @@ impl Check for ast::PrecApp {
     }
 }
 
-impl Check for ast::PrecAtom {
+impl Check for ast::PrecAtom<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -219,7 +219,7 @@ impl Check for ast::PrecAtom {
     }
 }
 
-impl Check for Spanned<ast::LetStmt> {
+impl Check for Spanned<Span, ast::LetStmt<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -293,7 +293,7 @@ impl Check for Spanned<ast::LetStmt> {
     }
 }
 
-impl Check for Spanned<ast::ExprFuncType> {
+impl Check for Spanned<Span, ast::ExprFuncType<Span>> {
     type Output = Ty;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
@@ -318,7 +318,7 @@ impl Check for Spanned<ast::ExprFuncType> {
     }
 }
 
-impl Check for Spanned<ast::ExprFuncTerm> {
+impl Check for Spanned<Span, ast::ExprFuncTerm<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -332,7 +332,7 @@ impl Check for Spanned<ast::ExprFuncTerm> {
     }
 }
 
-impl Check for Spanned<ast::ExprEqual> {
+impl Check for Spanned<Span, ast::ExprEqual<Span>> {
     type Output = Ty;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
@@ -370,7 +370,7 @@ impl Check for Spanned<ast::ExprEqual> {
     }
 }
 
-impl Check for Spanned<ast::ExprAdd> {
+impl Check for Spanned<Span, ast::ExprAdd<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, _ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -378,7 +378,7 @@ impl Check for Spanned<ast::ExprAdd> {
     }
 }
 
-impl Check for Spanned<ast::ExprMul> {
+impl Check for Spanned<Span, ast::ExprMul<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, _ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -386,7 +386,7 @@ impl Check for Spanned<ast::ExprMul> {
     }
 }
 
-impl Check for Spanned<ast::ExprInjLhs> {
+impl Check for Spanned<Span, ast::ExprInjLhs<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -454,7 +454,7 @@ impl Check for Spanned<ast::ExprInjLhs> {
     }
 }
 
-impl Check for Spanned<ast::ExprInjRhs> {
+impl Check for Spanned<Span, ast::ExprInjRhs<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -492,7 +492,7 @@ impl Check for Spanned<ast::ExprInjRhs> {
     }
 }
 
-impl Check for Spanned<ast::ExprRefl> {
+impl Check for Spanned<Span, ast::ExprRefl<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -510,7 +510,7 @@ impl Check for Spanned<ast::ExprRefl> {
     }
 }
 
-impl Check for Spanned<ast::ExprProj> {
+impl Check for Spanned<Span, ast::ExprProj<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -611,7 +611,7 @@ impl Check for Spanned<ast::ExprProj> {
     }
 }
 
-impl Check for Spanned<ast::ExprApp> {
+impl Check for Spanned<Span, ast::ExprApp<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -669,7 +669,7 @@ impl Check for Spanned<ast::ExprApp> {
     }
 }
 
-impl Check for Spanned<ast::FuncAppArg> {
+impl Check for Spanned<Span, ast::FuncAppArg<Span>> {
     type Output = (Name, Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty, Tm)> {
@@ -695,7 +695,7 @@ impl Check for Spanned<ast::FuncAppArg> {
     }
 }
 
-impl Check for &ast::FuncAppArgExpr {
+impl Check for &ast::FuncAppArgExpr<Span> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -710,7 +710,7 @@ impl Check for &ast::FuncAppArgExpr {
     }
 }
 
-impl Check for Spanned<ast::ExprMatch> {
+impl Check for Spanned<Span, ast::ExprMatch<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
@@ -730,14 +730,14 @@ impl Check for Spanned<ast::ExprMatch> {
     }
 }
 
-impl Check for Spanned<ast::ExprStructType> {
+impl Check for Spanned<Span, ast::ExprStructType<Span>> {
     type Output = Ty;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
         fn recurse(
             ch: &mut CheckCtx,
-            fields: &[Spanned<ast::TypeField>],
-            tail_ty_opt: Option<&ast::PrecFunc>,
+            fields: &[Spanned<Span, ast::TypeField<Span>>],
+            tail_ty_opt: Option<&ast::PrecFunc<Span>>,
         ) -> Checked<Ty> {
             match fields.split_first() {
                 None => {
@@ -791,14 +791,14 @@ impl Check for Spanned<ast::ExprStructType> {
     }
 }
 
-impl Check for Spanned<ast::ExprStructTerm> {
+impl Check for Spanned<Span, ast::ExprStructTerm<Span>> {
     type Output = (Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
         fn check_struct_term_fields(
             ch: &mut CheckCtx,
-            fields: &[Spanned<ast::ExprStructTermField>],
-            tail_opt: Option<&ast::PrecFunc>,
+            fields: &[Spanned<Span, ast::ExprStructTermField<Span>>],
+            tail_opt: Option<&ast::PrecFunc<Span>>,
         ) -> Checked<(Ty, Tm)> {
             match fields.split_first() {
                 None => {
@@ -867,7 +867,7 @@ impl Check for Spanned<ast::ExprStructTerm> {
     }
 }
 
-impl Check for Spanned<ast::ExprStructTermField> {
+impl Check for Spanned<Span, ast::ExprStructTermField<Span>> {
     type Output = (Name, Ty, Tm);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty, Tm)> {
@@ -896,7 +896,7 @@ impl Check for Spanned<ast::ExprStructTermField> {
     }
 }
 
-impl Check for Spanned<ast::ExprEnumType> {
+impl Check for Spanned<Span, ast::ExprEnumType<Span>> {
     type Output = Ty;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
@@ -939,7 +939,7 @@ impl Check for Spanned<ast::ExprEnumType> {
     }
 }
 
-impl Check for Spanned<ast::TypeField> {
+impl Check for Spanned<Span, ast::TypeField<Span>> {
     type Output = (Name, Ty);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty)> {
@@ -974,7 +974,7 @@ impl Check for Spanned<ast::TypeField> {
     }
 }
 
-impl Check for Spanned<ast::FuncTermArg> {
+impl Check for Spanned<Span, ast::FuncTermArg<Span>> {
     type Output = (Name, Ty);
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<(Name, Ty)> {
@@ -1002,7 +1002,7 @@ impl Check for Spanned<ast::FuncTermArg> {
     }
 }
 
-impl Check for ast::FuncTermArgTy {
+impl Check for ast::FuncTermArgTy<Span> {
     type Output = Ty;
 
     fn check(&self, ch: &mut CheckCtx) -> Checked<Ty> {
@@ -1032,7 +1032,7 @@ impl Check for ast::FuncTermArgTy {
 
 fn check_func_term(
     ch: &mut CheckCtx,
-    func_term_args: &[Spanned<ast::FuncTermArg>],
+    func_term_args: &[Spanned<Span, ast::FuncTermArg<Span>>],
     res_tm_span: Span,
     check_res_tm: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<(Ty, Tm)> {
@@ -1080,7 +1080,7 @@ fn check_func_term(
 
 fn check_func_type(
     ch: &mut CheckCtx,
-    func_term_args: &[Spanned<ast::FuncTermArg>],
+    func_term_args: &[Spanned<Span, ast::FuncTermArg<Span>>],
     res_ty_span: Span,
     check_res_ty: impl FnOnce(&mut CheckCtx) -> Checked<Ty>,
 ) -> Checked<Ty> {
@@ -1125,7 +1125,7 @@ fn check_func_type(
 
 fn check_pat_prec_inj(
     ch: &mut CheckCtx,
-    pat_prec_inj: &ast::PatPrecInj,
+    pat_prec_inj: &ast::PatPrecInj<Span>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1141,7 +1141,7 @@ fn check_pat_prec_inj(
 
 fn check_pat_prec_atom(
     ch: &mut CheckCtx,
-    pat_prec_atom: &ast::PatPrecAtom,
+    pat_prec_atom: &ast::PatPrecAtom<Span>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1157,7 +1157,7 @@ fn check_pat_prec_atom(
 
 fn check_pat_var(
     ch: &mut CheckCtx,
-    name: &Spanned<ast::Name>,
+    name: &Spanned<Span, ast::Name<Span>>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1172,7 +1172,7 @@ fn check_pat_var(
 
 fn check_pat_refl(
     ch: &mut CheckCtx,
-    pat_refl: &Spanned<ast::PatRefl>,
+    pat_refl: &Spanned<Span, ast::PatRefl<Span>>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1298,7 +1298,7 @@ fn check_pat_refl(
 
 fn check_pat_struct_term(
     ch: &mut CheckCtx,
-    pat_struct_term: &Spanned<ast::PatStructTerm>,
+    pat_struct_term: &Spanned<Span, ast::PatStructTerm<Span>>,
     var_ty: Ty,
     func: impl FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)>,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1306,8 +1306,8 @@ fn check_pat_struct_term(
     fn check_pat_struct_term_fields(
         ch: &mut CheckCtx,
         pat_span: Span,
-        fields: &[Spanned<ast::PatStructTermField>],
-        tail_opt: Option<&ast::PatPrecInj>,
+        fields: &[Spanned<Span, ast::PatStructTermField<Span>>],
+        tail_opt: Option<&ast::PatPrecInj<Span>>,
         var_ty: Ty,
         func: Box<dyn FnOnce(&mut CheckCtx) -> Checked<(Ty, Tm)> + '_>,
     ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
@@ -1443,7 +1443,7 @@ fn check_pat_struct_term(
 fn check_match_branches(
     ch: &mut CheckCtx,
     branches_span: Span,
-    branches: &[Spanned<ast::MatchBranch>],
+    branches: &[Spanned<Span, ast::MatchBranch<Span>>],
     var_ty: Ty,
 ) -> Checked<Scope<Checked<(Ty, Tm)>>> {
     match branches.split_first() {

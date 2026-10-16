@@ -1,16 +1,16 @@
 use crate::priv_prelude::*;
 
 #[derive(Clone, Debug)]
-pub enum Token {
-    Lit(Spanned<BigUint>),
-    Str(Spanned<String>),
-    Group(Group),
-    Punct(Punct),
-    Ident(Ident),
+pub enum Token<S: Spans> {
+    Lit(Spanned<S, BigUint>),
+    Str(Spanned<S, String>),
+    Group(Group<S>),
+    Punct(Punct<S>),
+    Ident(S::Ident),
 }
 
-impl Token {
-    pub fn span(&self) -> Span {
+impl<S: Spans> Token<S> {
+    pub fn span(&self) -> S {
         match self {
             Token::Lit(val) => val.span.clone(),
             Token::Str(s) => s.span.clone(),
@@ -22,13 +22,13 @@ impl Token {
 }
 
 #[derive(Clone, Debug)]
-pub struct Tokens {
-    span: Span,
-    tokens: Vec<Token>,
+pub struct Tokens<S: Spans> {
+    span: S,
+    tokens: Vec<Token<S>>,
 }
 
-impl Tokens {
-    pub fn as_ref(&self) -> TokensRef<'_> {
+impl<S: Spans> Tokens<S> {
+    pub fn as_ref(&self) -> TokensRef<'_, S> {
         TokensRef {
             span: self.span.clone(),
             tokens: &self.tokens,
@@ -37,21 +37,27 @@ impl Tokens {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokensRef<'a> {
-    span: Span,
-    tokens: &'a [Token],
+pub struct TokensRef<'a, S: Spans> {
+    span: S,
+    tokens: &'a [Token<S>],
 }
 
-impl<'a> TokensRef<'a> {
-    pub fn span(&self) -> Span {
+impl<'a, S: Spans> TokensRef<'a, S> {
+    pub fn span(&self) -> S {
         self.span.clone()
     }
 
-    pub fn first(&self) -> Option<&Token> {
+    pub fn first(&self) -> Option<&Token<S>> {
         self.tokens.first()
     }
 
-    pub fn skip(&self, count: usize) -> TokensRef<'a> {
+    pub fn get(&self, index: usize) -> Option<&'a Token<S>> {
+        self.tokens.get(index)
+    }
+}
+
+impl<'a> TokensRef<'a, Span> {
+    pub fn skip(&self, count: usize) -> TokensRef<'a, Span> {
         let tokens = &self.tokens[count..];
         let start = tokens.first().map(|token| token.span().start).unwrap_or(self.span.end);
         let span = Span {
@@ -61,15 +67,17 @@ impl<'a> TokensRef<'a> {
         };
         TokensRef { span, tokens }
     }
-
-    pub fn get(&self, index: usize) -> Option<&'a Token> {
-        self.tokens.get(index)
-    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Ident {
     span: Span,
+}
+
+impl HasSpan<Span> for Ident {
+    fn span(&self) -> Span {
+        self.span.clone()
+    }
 }
 
 impl PartialEq for Ident {
@@ -101,13 +109,15 @@ impl hash::Hash for Ident {
     }
 }
 
+impl AsRef<str> for Ident {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl Ident {
     pub fn new(span: Span) -> Ident {
         Ident { span }
-    }
-
-    pub fn span(&self) -> Span {
-        self.span.clone()
     }
 
     pub fn as_str(&self) -> &str {
@@ -121,14 +131,14 @@ impl Ident {
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
-    pub outer_span: Span,
+pub struct Group<S: Spans> {
+    pub outer_span: S,
     pub kind: GroupKind,
-    pub tokens: Tokens,
+    pub tokens: Tokens<S>,
 }
 
-impl Group {
-    pub fn span(&self) -> Span {
+impl<S: Spans> Group<S> {
+    pub fn span(&self) -> S {
         self.outer_span.clone()
     }
 }
@@ -140,13 +150,13 @@ pub enum GroupKind {
 }
 
 #[derive(Clone, Debug)]
-pub struct Punct {
-    pub span: Span,
+pub struct Punct<S: Spans> {
+    pub span: S,
     pub kind: PunctKind,
 }
 
-impl Punct {
-    pub fn span(&self) -> Span {
+impl<S: Spans> Punct<S> {
+    pub fn span(&self) -> S {
         self.span.clone()
     }
 }
@@ -319,7 +329,7 @@ impl Tokenizer {
         }
     }
 
-    fn rest_of_group(&mut self, kind: GroupKind, start: Position) -> Result<Group, TokenizeError> {
+    fn rest_of_group(&mut self, kind: GroupKind, start: Position) -> Result<Group<Span>, TokenizeError> {
         let (tokens, position_close_kind_opt) = self.pop_tokens()?;
         let Some((close_position, close_kind)) = position_close_kind_opt else {
             return Err(TokenizeError::UnclosedDelimiter {
@@ -341,7 +351,7 @@ impl Tokenizer {
         return Ok(group);
     }
 
-    fn pop_string(&mut self) -> Result<Option<Spanned<String>>, TokenizeError> {
+    fn pop_string(&mut self) -> Result<Option<Spanned<Span, String>>, TokenizeError> {
         let start_position = self.position;
         if !self.pop_just('"') {
             return Ok(None);
@@ -380,7 +390,7 @@ impl Tokenizer {
         Ok(Some(spanned))
     }
 
-    fn pop_punct(&mut self) -> Option<Punct> {
+    fn pop_punct(&mut self) -> Option<Punct<Span>> {
         if let Some(span) = self.pop_prefix_spanned("->") {
             return Some(Punct { span, kind: PunctKind::Arrow });
         }
@@ -423,7 +433,7 @@ impl Tokenizer {
         None
     }
 
-    fn pop_token(&mut self) -> Result<Result<Token, (Position, Option<GroupKind>)>, TokenizeError> {
+    fn pop_token(&mut self) -> Result<Result<Token<Span>, (Position, Option<GroupKind>)>, TokenizeError> {
         self.trim_leading_whitespace()?;
         let start = self.position;
         if let Some(_) = self.pop_char_matching(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '_')) {
@@ -472,7 +482,7 @@ impl Tokenizer {
         }
     }
 
-    fn pop_tokens(&mut self) -> Result<(Tokens, Option<(Position, GroupKind)>), TokenizeError> {
+    fn pop_tokens(&mut self) -> Result<(Tokens<Span>, Option<(Position, GroupKind)>), TokenizeError> {
         let initial_position = self.position;
         let mut start_end_opt = None;
         let mut tokens = Vec::new();
@@ -497,7 +507,7 @@ impl Tokenizer {
         }
     }
 
-    pub fn tokenize(mut self) -> Result<Tokens, TokenizeError> {
+    pub fn tokenize(mut self) -> Result<Tokens<Span>, TokenizeError> {
         let (tokens, position_kind_opt) = self.pop_tokens()?;
         if let Some((position, kind)) = position_kind_opt {
             return Err(TokenizeError::UnexpectedClosingDelimiter { position, kind });
@@ -506,7 +516,7 @@ impl Tokenizer {
     }
 }
 
-pub fn tokenize(full_src: &Arc<str>) -> Result<Tokens, TokenizeError> {
+pub fn tokenize(full_src: &Arc<str>) -> Result<Tokens<Span>, TokenizeError> {
     Tokenizer::new(full_src.clone()).tokenize()
 }
 

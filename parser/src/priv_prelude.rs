@@ -12,7 +12,7 @@ pub(crate) use {
     crate::{
         ast,
         token::{Token, TokensRef, Ident, GroupKind, PunctKind, TokenizeError},
-        span::{Position, Span, Spanned},
+        span::{Position, Span, Spanned, Spans, HasSpan},
         combinators::{
             UnexpectedTokenError,
             Parser, ParserExt, ParserExtStatic, ParserExtUnit, ParserExtSpannedUnit, ParserExtBox,
