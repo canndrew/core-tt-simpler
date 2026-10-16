@@ -162,7 +162,15 @@ impl Spans for Span {
     type Ident = Ident;
 }
 
+impl Spans for () {
+    type Ident = Arc<str>;
+}
+
 pub trait HasSpan<S> {
     fn span(&self) -> S;
+}
+
+impl HasSpan<()> for Arc<str> {
+    fn span(&self) {}
 }
 
