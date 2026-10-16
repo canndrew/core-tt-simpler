@@ -1,6 +1,7 @@
 use crate::priv_prelude::*;
 
 pub struct Simplification {
+    pub is_changed: bool,
     pub new_ty: Ty,
 
     // between orig_ty and new_ty
@@ -14,6 +15,7 @@ pub struct Simplification {
 impl Simplification {
     pub fn id(ty: Ty) -> Simplification {
         Simplification {
+            is_changed: false,
             new_ty: ty,
             iso: Iso::refl(),
             constraints: Constraints::new(),
@@ -25,9 +27,10 @@ impl Simplification {
         new_ty: Ty,
         iso: Iso,
     ) -> Simplification {
+        let is_changed = true;
         let constraints = Constraints::new();
         let eliminated = Usages::empty();
-        Simplification { new_ty, iso, constraints, eliminated }
+        Simplification { is_changed, new_ty, iso, constraints, eliminated }
     }
 
     pub fn from_constraint(
@@ -35,48 +38,55 @@ impl Simplification {
         index: usize,
         unique_tm: Tm,
     ) -> Simplification {
+        let is_changed = false;
         let new_ty = orig_ty.clone();
         let iso = Iso::refl();
         let constraints = Constraints::single(index, unique_tm);
         let eliminated = Usages::empty();
-        Simplification { new_ty, iso, constraints, eliminated }
+        Simplification { is_changed, new_ty, iso, constraints, eliminated }
     }
 
     pub fn from_eliminated(
         orig_ty: &Ty,
         eliminated: Usages,
     ) -> Simplification {
+        let is_changed = false;
         let new_ty = orig_ty.clone();
         let iso = Iso::refl();
         let constraints = Constraints::new();
-        Simplification { new_ty, iso, constraints, eliminated }
+        Simplification { is_changed, new_ty, iso, constraints, eliminated }
     }
 
     pub fn simplify_more(
         self,
         ctx: &mut Vec<Ty>,
         preserved_constraint_depth: usize,
+        cache: &mut SimplifyCache,
     ) -> Result<Simplification, Uninhabited> {
         let Simplification {
+            is_changed: is_changed_0,
             new_ty: new_ty_0,
             iso: iso_0,
             constraints: constraints_0,
             eliminated: eliminated_0,
         } = self;
+        assert!(is_changed_0);
         let Simplification {
+            is_changed: is_changed_1,
             new_ty: new_ty_1,
             iso: iso_1,
             constraints: constraints_1,
             eliminated: eliminated_1,
-        } = new_ty_0.simplify(ctx, preserved_constraint_depth)?;
+        } = new_ty_0.simplify(ctx, preserved_constraint_depth, cache)?;
 
+        let is_changed = true;
+        let new_ty = new_ty_1;
+        let iso = if is_changed_1 {
+            Iso::transitivity(iso_0, iso_1)
+        } else {
+            iso_0
+        };
         let mut eliminated = eliminated_0.or(eliminated_1);
-
-        let iso = Iso::transitivity(
-            iso_0,
-            iso_1,
-        );
-
         let constraints = Constraints::union(
             ctx,
             constraints_0,
@@ -84,7 +94,7 @@ impl Simplification {
             &mut eliminated,
         )?;
 
-        Ok(Simplification { new_ty: new_ty_1, iso, constraints, eliminated })
+        Ok(Simplification { is_changed, new_ty, iso, constraints, eliminated })
     }
 }
 

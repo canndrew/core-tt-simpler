@@ -280,7 +280,7 @@ impl NeutralKind {
         }
         VAR_0.clone()
     }
-
+    
     pub fn try_reduce(&self) -> Option<ValTm> {
         let tm = match self {
             NeutralKind::Var { .. } => return None,
@@ -1138,13 +1138,13 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                let elim_ty = elim.clone().as_stuck()?.infer_ty(ctx);
+                let elim_ty = elim.clone().reduced().as_stuck()?.infer_ty(ctx);
                 let (_head_name, head_ty, _tail_ty) = elim_ty.as_sigma().unwrap();
                 head_ty
             },
 
             NeutralKind::ProjTail { elim } => {
-                let elim_ty = elim.clone().as_stuck()?.infer_ty(ctx);
+                let elim_ty = elim.clone().reduced().as_stuck()?.infer_ty(ctx);
                 let (_head_name, _head_ty, tail_ty) = elim_ty.as_sigma().unwrap();
                 tail_ty.bind(Weaken::new(elim.clone()).proj_head())
             },

@@ -10,9 +10,12 @@ pub mod check;
 
 pub mod pprint;
 pub mod more;
-mod solve;
+pub mod solve;
 pub mod builtins;
 mod sanity_check;
+
+//mod prettier;
+mod prettier_2;
 
 #[cfg(debug_assertions)]
 mod debug;

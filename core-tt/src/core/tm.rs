@@ -62,11 +62,11 @@ impl Tm {
     }
 
     pub fn into_name(self) -> Name {
-        self.map(|tm| OrLazy::Reduced(tm.reduced().into_name_kind()))
+        self.reduced().map(|tm_kind| OrLazy::Reduced(tm_kind.into_name_kind()))
     }
 
     pub fn into_ty(self) -> Ty {
-        self.map(|tm| OrLazy::Reduced(tm.reduced().into_ty_kind()))
+        self.reduced().map(|tm_kind| OrLazy::Reduced(tm_kind.into_ty_kind()))
     }
 
     pub fn var(index: usize) -> Tm {
@@ -169,6 +169,20 @@ impl Tm {
         Lazy::proj_tail(self).into_tm()
     }
 
+    pub fn func_eta_short(res_tm: Scope<Tm>) -> Tm {
+        let ctx_len = res_tm.ctx_len();
+        if let TmKind::Stuck { stuck } = res_tm.inner_ref().clone().reduced().into_inner()
+        && let NeutralKind::App { elim, arg_tm } = Arc::unwrap_or_clone(stuck.into_neutral())
+        && let TmKind::Stuck { stuck } = arg_tm.reduced().into_inner()
+        && let Some(_) = Unify::unify(stuck, StuckKind::var(ctx_len))
+        && let Some(elim) = elim.try_strengthen_index(ctx_len)
+        {
+            elim
+        } else {
+            Tm::func(res_tm)
+        }
+    }
+
     pub fn func(res_tm: Scope<Tm>) -> Tm {
         Intro::func(res_tm).into_tm()
     }
@@ -200,17 +214,11 @@ impl Tm {
     }
 
     pub fn as_intro(self) -> Option<Intro> {
-        self.try_map(|tm_kind| tm_kind.reduced().as_intro())
+        self.reduced().try_map(|tm_kind| tm_kind.as_intro())
     }
 
     pub fn as_stuck(self) -> Option<Stuck> {
-        self.try_map(|tm_kind| tm_kind.reduced().as_stuck())
-    }
-}
-
-impl OrLazy<TmKind> {
-    pub fn as_stuck(self) -> Option<StuckKind> {
-        self.reduced().as_stuck()
+        self.reduced().try_map(|tm_kind| tm_kind.as_stuck())
     }
 }
 
@@ -291,6 +299,10 @@ impl ValTm {
 
     pub fn as_var(self) -> Option<usize> {
         self.into_inner().as_var()
+    }
+
+    pub fn proof() -> ValTm {
+        Weaken::new(TmKind::Proof)
     }
 }
 

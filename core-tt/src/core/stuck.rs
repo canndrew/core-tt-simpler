@@ -68,6 +68,12 @@ impl StuckKind {
         }
     }
 
+    pub fn var(index: usize) -> StuckKind {
+        StuckKind {
+            kind: Arc::new(NeutralKind::Var { index }),
+        }
+    }
+
     pub fn collect_stuck_vars(self, usages: &mut Usages) {
         Arc::unwrap_or_clone(self.kind).collect_stuck_vars_assuming_stuck(usages)
     }
@@ -99,6 +105,10 @@ impl StuckKind {
 
     pub fn into_neutral(self) -> Arc<NeutralKind> {
         self.kind
+    }
+
+    pub fn neutral_ref(&self) -> &Arc<NeutralKind> {
+        &self.kind
     }
 }
 
@@ -218,8 +228,8 @@ impl Unify for StuckKind {
                         return None;
                     };
 
-                    let stuck_0 = elim_0.as_stuck().unwrap();
-                    let stuck_1 = elim_1.as_stuck().unwrap();
+                    let stuck_0 = elim_0.reduced().as_stuck().unwrap();
+                    let stuck_1 = elim_1.reduced().as_stuck().unwrap();
                     let stuck = StuckKind::unify(
                         stuck_0, stuck_1,
                     )?;
@@ -233,8 +243,8 @@ impl Unify for StuckKind {
                         return None;
                     };
 
-                    let stuck_0 = elim_0.as_stuck().unwrap();
-                    let stuck_1 = elim_1.as_stuck().unwrap();
+                    let stuck_0 = elim_0.reduced().as_stuck().unwrap();
+                    let stuck_1 = elim_1.reduced().as_stuck().unwrap();
                     let stuck = StuckKind::unify(
                         stuck_0, stuck_1,
                     )?;
@@ -355,7 +365,7 @@ impl NeutralKind {
             | NeutralKind::ProjHead { elim }
             | NeutralKind::ProjTail { elim }
             => {
-                elim.as_stuck().unwrap().collect_stuck_vars(usages)
+                elim.reduced().as_stuck().unwrap().collect_stuck_vars(usages)
             },
 
             | NeutralKind::Fold { elim, .. }
@@ -364,6 +374,7 @@ impl NeutralKind {
             => {
                 elim
                 .into_inner()
+                .reduced()
                 .as_stuck()
                 .unwrap()
                 .collect_stuck_vars(usages)
@@ -566,14 +577,14 @@ impl NeutralKind {
             },
 
             NeutralKind::ProjHead { elim } => {
-                elim.as_stuck().unwrap().deep_nf().map(|stuck| {
+                elim.reduced().as_stuck().unwrap().deep_nf().map(|stuck| {
                     let elim = OrLazy::Reduced(TmKind::Stuck { stuck });
                     NeutralKind::ProjHead { elim }
                 })
             },
 
             NeutralKind::ProjTail { elim } => {
-                elim.as_stuck().unwrap().deep_nf().map(|stuck| {
+                elim.reduced().as_stuck().unwrap().deep_nf().map(|stuck| {
                     let elim = OrLazy::Reduced(TmKind::Stuck { stuck });
                     NeutralKind::ProjTail { elim }
                 })
@@ -600,7 +611,5 @@ impl NeutralKind {
             },
         }
     }
-
-
 }
 

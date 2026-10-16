@@ -75,8 +75,9 @@ impl<T> Checked<T> {
         let ctx_len = ctx.len();
         let (constraint_ty, scope) = self.into_constraint_ty_and_scope();
         let result = {
+            let mut cache = SimplifyCache::new();
             let mut ctx = ctx.iter().map(|(_name, ty)| ty.clone()).collect();
-            constraint_ty.simplify(&mut ctx, ctx_len)
+            constraint_ty.simplify(&mut ctx, ctx_len, &mut cache)
         };
 
         let simplification = match result {
@@ -86,7 +87,9 @@ impl<T> Checked<T> {
                 return Err(SolveError { ctx, kind });
             },
         };
-        let Simplification { new_ty, iso, constraints, eliminated } = simplification;
+        let Simplification {
+            is_changed: _, new_ty, iso, constraints, eliminated,
+        } = simplification;
         if !constraints.is_empty() {
             let kind = SolveErrorKind::ConstrainsCtx { constraints };
             return Err(SolveError { ctx, kind });
@@ -94,6 +97,37 @@ impl<T> Checked<T> {
 
         let Some(()) = new_ty.clone().as_unit() else {
             let ty = new_ty.deep_nf().into_ty();
+
+
+            /*
+            // debugging
+            {
+                debug!("starting debugging re-pass");
+                let mut cache = SimplifyCache::new();
+                let mut ctx = ctx.iter().map(|(_name, ty)| ty.clone()).collect();
+                let simplification_res = ty.clone().simplify(&mut ctx, ctx_len, &mut cache);
+                let simplification = simplification_res.ok().unwrap();
+                let Simplification {
+                    is_changed, new_ty, iso, constraints, eliminated: _,
+                } = simplification;
+                assert_eq!(ctx_len, ctx.len());
+                let actually_changed = Unify::unify(ty.clone(), new_ty.clone()).is_none();
+                if is_changed {
+                    println!("simplified type == {}", debug_print(&ctx, &ty));
+                    println!("re-simplified type == {}", debug_print(&ctx, &new_ty));
+                    println!("actually changed == {}", actually_changed);
+                }
+                assert!(!is_changed);
+                assert!(!actually_changed);
+                let (fwd, rev) = iso.into_scopes();
+                Unify::unify(fwd.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+                Unify::unify(rev.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+                assert!(constraints.is_empty());
+            }
+            */
+
+
+
             let kind = SolveErrorKind::Ambiguous { ty };
             return Err(SolveError { ctx, kind });
         };

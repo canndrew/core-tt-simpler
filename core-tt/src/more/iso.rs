@@ -38,6 +38,10 @@ impl Bindable for Iso {
 }
 
 impl Iso {
+    pub fn into_scopes(self) -> (Scope<Tm>, Scope<Tm>) {
+        (self.fwd, self.rev)
+    }
+
     pub fn between_props() -> Iso {
         let scope = Scope::constant(Tm::proof());
         Iso { fwd: scope.clone(), rev: scope }

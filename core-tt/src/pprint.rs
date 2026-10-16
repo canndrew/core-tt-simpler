@@ -11,6 +11,19 @@ pub fn pprint<T: Pretty<()> + Contextual>(thing: T) -> String {
     s
 }
 
+#[allow(unused)]
+pub fn debug_print<T: crate::pprint::Pretty<()> + Clone>(
+    ctx: &[Ty],
+    val: &T,
+) -> impl fmt::Display {
+    fmt::from_fn(|f| {
+        let mut ctx = ctx.iter().map(|ty| (None, Some(ty.clone()))).collect();
+        let mut s = String::new();
+        Pretty::pretty(val.clone(), &mut ctx, 0, &mut s, ());
+        f.write_str(&s)
+    })
+}
+
 pub trait Pretty<V> {
     fn pretty(
         self,
@@ -329,7 +342,7 @@ impl Pretty<()> for NeutralKind {
             },
             NeutralKind::Bind { var_tms, truncated_body_usages, body } => {
                 let mut usages = truncated_body_usages.clone();
-                usages.set_run_to_one(truncated_body_usages.ctx_len(), var_tms.len());
+                usages.set_run_to_one(ctx.len(), var_tms.len());
                 let body = Weaken::from_usages_and_weak(usages, body.clone());
 
                 s.push_str("bind(\n");

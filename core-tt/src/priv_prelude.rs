@@ -6,7 +6,7 @@ pub(crate) use {
     },
     lazy_static::lazy_static,
     ubig::Ubig,
-    parser::{Span, Spanned},
+    parser::{Span, Spanned, HasSpan},
     crate::{
         solve,
         util::{as_equal, max_all, iter::{Which, merge_enumerated}},
@@ -35,6 +35,7 @@ pub(crate) use {
         more::iso::Iso,
         solve::{
             simplification::{Simplification, Uninhabited},
+            cache::SimplifyCache,
             constraint::Constraints,
         },
         builtins::Builtin,
@@ -44,5 +45,8 @@ pub(crate) use {
 
 #[cfg(debug_assertions)]
 #[allow(unused)]
-pub(crate) use crate::debug::{debug_indent, debug, print_on_panic};
+pub(crate) use crate::{
+    debug::{debug_indent, debug, print_on_panic},
+    pprint::debug_print,
+};
 

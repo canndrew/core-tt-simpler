@@ -346,8 +346,10 @@ impl FormKind {
         let res_ty_inner = res_ty.into_inner(ctx_len);
         let (eq_ty, eq_tm_0, eq_tm_1) = res_ty_inner.as_equal()?;
         let eq_ty = Ty::pi(arg_name, arg_ty, Scope::new(ctx_len, eq_ty));
-        let eq_tm_0 = Tm::func(Scope::new(ctx_len, eq_tm_0));
-        let eq_tm_1 = Tm::func(Scope::new(ctx_len, eq_tm_1));
+
+
+        let eq_tm_0 = Tm::func_eta_short(Scope::new(ctx_len, eq_tm_0));
+        let eq_tm_1 = Tm::func_eta_short(Scope::new(ctx_len, eq_tm_1));
         Some((eq_ty, eq_tm_0, eq_tm_1))
     }
 

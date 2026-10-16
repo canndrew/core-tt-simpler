@@ -77,6 +77,7 @@ impl Constraints {
                 unique_tm_1.clone(),
             );
             let Simplification {
+                is_changed: _,
                 new_ty: _,
                 iso: _,
                 constraints: equals_constraints,
