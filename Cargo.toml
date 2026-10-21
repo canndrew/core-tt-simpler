@@ -6,6 +6,7 @@ members = [
     "core-tt/fuzz",
     "ubig",
     "parser",
+    "sure-tt",
     #"more-tt",
     #"small-bit-vec",
     #"small-bit-vec/fuzz",
