@@ -284,7 +284,7 @@ dependent-sigma-tail-congruence :
 dependent-sigma-tail-congruence Head Tail-0 Tail-1 tail-iso =
     MkIso fwd rev fwd-rev rev-fwd
     where
-        fwd : 
+        fwd :
             (sigma-0 : Sigma Head Tail-0) ->
             (Sigma Head Tail-1)
 
@@ -293,7 +293,7 @@ dependent-sigma-tail-congruence Head Tail-0 Tail-1 tail-iso =
                 head
                 (Iso.fwd (tail-iso head) tail-0)
             )
-    
+
         rev :
             (sigma-1 : Sigma Head Tail-1) ->
             (Sigma Head Tail-0)
@@ -360,14 +360,9 @@ dependent-sigma-tail-congruence Head Tail-0 Tail-1 tail-iso =
             let tail-eq :
                     (ObsEqual
                         (Tail-1 head)
-                        (cast
-                            (Tail-1 head)
-                            (Tail-1 head)
-                            _
-                            (Iso.fwd
-                                (tail-iso head)
-                                (Iso.rev (tail-iso head) tail-1)
-                            )
+                        (Iso.fwd
+                            (tail-iso head)
+                            (Iso.rev (tail-iso head) tail-1)
                         )
                         tail-1
                     )
@@ -426,7 +421,7 @@ sigma-tail-constrains-head Head Tail unique-head constrains =
             (tail : Tail unique-head) ->
             (Sigma Head Tail)
 
-        rev tail = 
+        rev tail =
             (MkSigma unique-head tail)
 
         fwd-rev :
@@ -486,7 +481,7 @@ dependent-pi-arg-congruence {Arg-0} {Arg-1} (MkIso arg-fwd arg-rev arg-fwd-rev a
         fwd :
             (func-0 : (arg-0 : Arg-0) -> Res arg-0) ->
             ((arg-1 : Arg-1) -> Res (arg-rev arg-1))
-        
+
         fwd func-0 =
             (\arg-1 ->
                 func-0 (arg-rev arg-1)
@@ -548,7 +543,7 @@ dependent-pi-arg-congruence {Arg-0} {Arg-1} (MkIso arg-fwd arg-rev arg-fwd-rev a
                     (arg-fwd-rev arg-0)
                 )
             )
-            
+
         rev-fwd :
             (func-1 : (arg-1 : Arg-1) -> Res (arg-rev arg-1)) ->
             ObsEqual ((arg-1 : Arg-1) -> Res (arg-rev arg-1)) (fwd (rev func-1)) func-1
@@ -585,7 +580,7 @@ dependent-pi-arg-congruence {Arg-0} {Arg-1} (MkIso arg-fwd arg-rev arg-fwd-rev a
                 )
             )
 
-    
+
 dependent-pi-res-congruence :
     (Arg : Set) ->
     (Res-0 : (arg : Arg) -> Set) ->
@@ -599,7 +594,7 @@ dependent-pi-res-congruence Arg Res-0 Res-1 res-iso =
         fwd :
             (func-0 : (arg : Arg) -> Res-0 arg) ->
             ((arg : Arg) -> Res-1 arg)
-            
+
         fwd func-0 =
             (\arg ->
                 Iso.fwd (res-iso arg) (func-0 arg)
@@ -613,10 +608,10 @@ dependent-pi-res-congruence Arg Res-0 Res-1 res-iso =
             (\arg ->
                 Iso.rev (res-iso arg) (func-1 arg)
             )
-        
+
         fwd-rev :
             (func-0 : (arg : Arg) -> Res-0 arg) ->
-            ObsEqual 
+            ObsEqual
                 ((arg : Arg) -> Res-0 arg)
                 (rev (fwd func-0))
                 func-0
@@ -625,7 +620,7 @@ dependent-pi-res-congruence Arg Res-0 Res-1 res-iso =
             (\arg ->
                 Iso.fwd-rev (res-iso arg) (func-0 arg)
             )
-            
+
         rev-fwd :
             (func-1 : (arg : Arg) -> Res-1 arg) ->
             ObsEqual
@@ -643,7 +638,7 @@ sigma-sum-head-distribute :
     (Lhs : Set) ->
     (Rhs : Set) ->
     (Tail : (sum : Sum Lhs Rhs) -> Set) ->
-    Iso 
+    Iso
         (Sigma (Sum Lhs Rhs) Tail)
         (Sum
             (Sigma Lhs (\lhs -> Tail (InjLhs lhs)))
@@ -653,7 +648,7 @@ sigma-sum-head-distribute :
 sigma-sum-head-distribute Lhs Rhs Tail =
     MkIso fwd rev fwd-rev rev-fwd
     where
-        fwd : 
+        fwd :
             (sigma : Sigma (Sum Lhs Rhs) Tail) ->
             (Sum
                 (Sigma Lhs (\lhs -> Tail (InjLhs lhs)))
@@ -685,7 +680,7 @@ sigma-sum-head-distribute Lhs Rhs Tail =
                     (Sigma Lhs (\lhs -> Tail (InjLhs lhs)))
                     (Sigma Rhs (\rhs -> Tail (InjRhs rhs)))
                 )
-            ) -> 
+            ) ->
             (Sigma (Sum Lhs Rhs) Tail)
 
         rev sum =
@@ -699,7 +694,7 @@ sigma-sum-head-distribute Lhs Rhs Tail =
             )
 
         fwd-rev :
-            (sigma : Sigma (Sum Lhs Rhs) Tail) -> 
+            (sigma : Sigma (Sum Lhs Rhs) Tail) ->
             ObsEqual
                 (Sigma (Sum Lhs Rhs) Tail)
                 (rev (fwd sigma))
@@ -754,7 +749,7 @@ sigma-sum-head-distribute Lhs Rhs Tail =
                     (Sigma Lhs (\lhs -> Tail (InjLhs lhs)))
                     (Sigma Rhs (\rhs -> Tail (InjRhs rhs)))
                 )
-            ) -> 
+            ) ->
             (ObsEqual
                 (Sum
                     (Sigma Lhs (\lhs -> Tail (InjLhs lhs)))
@@ -842,7 +837,7 @@ nat-into-sum-of-zero-and-succs = MkIso fwd rev fwd-rev rev-fwd
                 sum
             )
 
-        fwd-rev : 
+        fwd-rev :
             (n : Nat) ->
             (ObsEqual Nat (rev (fwd n)) n)
 
@@ -879,7 +874,7 @@ nat-into-sum-of-zero-and-succs = MkIso fwd rev fwd-rev rev-fwd
                                 (InjRhs sum)
                             )
                         )
-                        (\n -> 
+                        (\n ->
                             (obs-refl
                                 {Ty = Sum Unit (Sum Nat Never)}
                                 (InjRhs (InjLhs n))
@@ -917,7 +912,7 @@ pi-sigma-res-distribute :
 pi-sigma-res-distribute Arg Head Tail = MkIso fwd rev fwd-rev rev-fwd
     where
 
-        fwd : 
+        fwd :
             (func : (arg : Arg) -> Sigma (Head arg) (Tail arg)) ->
             (Sigma
                 ((arg : Arg) -> Head arg)
@@ -936,7 +931,7 @@ pi-sigma-res-distribute Arg Head Tail = MkIso fwd rev fwd-rev rev-fwd
                 (\head -> (arg : Arg) -> Tail arg (head arg))
             ) ->
             ((arg : Arg) -> Sigma (Head arg) (Tail arg))
-        
+
         rev (MkSigma head tail) =
             (\arg -> MkSigma (head arg) (tail arg))
 
@@ -955,7 +950,7 @@ pi-sigma-res-distribute Arg Head Tail = MkIso fwd rev fwd-rev rev-fwd
                 ((arg : Arg) -> Head arg)
                 (\head -> (arg : Arg) -> Tail arg (head arg))
             ) ->
-            ObsEqual 
+            ObsEqual
                 (Sigma
                     ((arg : Arg) -> Head arg)
                     (\head -> (arg : Arg) -> Tail arg (head arg))
@@ -965,12 +960,181 @@ pi-sigma-res-distribute Arg Head Tail = MkIso fwd rev fwd-rev rev-fwd
 
         rev-fwd (MkSigma head tail) =
             (obs-refl
-                {Ty = 
+                {Ty =
                     (Sigma
                         ((arg : Arg) -> Head arg)
                         (\head -> (arg : Arg) -> Tail arg (head arg))
                     )
                 }
                 (MkSigma head tail)
+            )
+
+
+pi-sum-arg :
+    (Lhs : Set) ->
+    (Rhs : Set) ->
+    (Res : (sum : Sum Lhs Rhs) -> Set) ->
+    (Iso
+        ((sum : Sum Lhs Rhs) -> Res sum)
+        (Sigma
+            ((lhs : Lhs) -> Res (InjLhs lhs))
+            (\_ ->
+                ((rhs : Rhs) -> Res (InjRhs rhs))
+            )
+        )
+    )
+
+pi-sum-arg Lhs Rhs Res = MkIso fwd rev fwd-rev rev-fwd
+    where
+        fwd :
+            (func : (sum : Sum Lhs Rhs) -> Res sum) ->
+            (Sigma
+                ((lhs : Lhs) -> Res (InjLhs lhs))
+                (\_ ->
+                    ((rhs : Rhs) -> Res (InjRhs rhs))
+                )
+            )
+
+        fwd func =
+            (MkSigma
+                (\lhs -> func (InjLhs lhs))
+                (\rhs -> func (InjRhs rhs))
+            )
+
+        rev :
+            (pair :
+                (Sigma
+                    ((lhs : Lhs) -> Res (InjLhs lhs))
+                    (\_ ->
+                        ((rhs : Rhs) -> Res (InjRhs rhs))
+                    )
+                )
+            ) ->
+            ((sum : Sum Lhs Rhs) -> Res sum)
+
+        rev (MkSigma head tail) =
+            (case Res head tail)
+
+        fwd-rev :
+            (func : (sum : Sum Lhs Rhs) -> Res sum) ->
+            (ObsEqual
+                ((sum : Sum Lhs Rhs) -> Res sum)
+                (rev (fwd func))
+                func
+            )
+
+        fwd-rev func =
+            (pcase
+                (\sum ->
+                    (ObsEqual
+                        (Res sum)
+                        (case
+                            Res
+                            (\lhs -> func (InjLhs lhs))
+                            (\rhs -> func (InjRhs rhs))
+                            sum
+                        )
+                        (func sum)
+                    )
+                )
+                (\lhs ->
+                    (obs-refl
+                        {Ty = Res (InjLhs lhs)}
+                        (func (InjLhs lhs))
+                    )
+                )
+                (\rhs ->
+                    (obs-refl
+                        {Ty = Res (InjRhs rhs)}
+                        (func (InjRhs rhs))
+                    )
+                )
+            )
+
+        rev-fwd :
+            (pair :
+                (Sigma
+                    ((lhs : Lhs) -> Res (InjLhs lhs))
+                    (\_ ->
+                        ((rhs : Rhs) -> Res (InjRhs rhs))
+                    )
+                )
+            ) ->
+            (ObsEqual
+                (Sigma
+                    ((lhs : Lhs) -> Res (InjLhs lhs))
+                    (\_ ->
+                        ((rhs : Rhs) -> Res (InjRhs rhs))
+                    )
+                )
+                (fwd (rev pair))
+                pair
+            )
+
+        rev-fwd (MkSigma head tail) =
+            (obs-refl
+                {Ty =
+                    (Sigma
+                        ((lhs : Lhs) -> Res (InjLhs lhs))
+                        (\_ ->
+                            ((rhs : Rhs) -> Res (InjRhs rhs))
+                        )
+                    )
+                }
+                (MkSigma head tail)
+            )
+
+pi-sigma-arg :
+    (Head : Set) ->
+    (Tail : (head : Head) -> Set) ->
+    (Res : (pair : Sigma Head Tail) -> Set) ->
+    (Iso
+        ((pair : Sigma Head Tail) -> Res pair)
+        ((head : Head) -> (tail : Tail head) -> Res (MkSigma head tail))
+    )
+pi-sigma-arg Head Tail Res = MkIso fwd rev fwd-rev rev-fwd
+    where
+        fwd :
+            (func : (pair : Sigma Head Tail) -> Res pair) ->
+            ((head : Head) -> (tail : Tail head) -> Res (MkSigma head tail))
+
+        fwd func head tail = func (MkSigma head tail)
+
+        rev :
+            (func : (head : Head) -> (tail : Tail head) -> Res (MkSigma head tail)) ->
+            ((pair : Sigma Head Tail) -> Res pair)
+
+        rev func (MkSigma head tail) = func head tail
+
+        fwd-rev :
+            (func : (pair : Sigma Head Tail) -> Res pair) ->
+            (ObsEqual
+                ((pair : Sigma Head Tail) -> Res pair)
+                (rev (fwd func))
+                func
+            )
+
+        fwd-rev func =
+            (obs-refl
+                {Ty =
+                    ((pair : Sigma Head Tail) -> Res pair)
+                }
+                func
+            )
+
+        rev-fwd :
+            (func : (head : Head) -> (tail : Tail head) -> Res (MkSigma head tail)) ->
+            (ObsEqual
+                ((head : Head) -> (tail : Tail head) -> Res (MkSigma head tail))
+                (fwd (rev func))
+                func
+            )
+
+        rev-fwd func =
+            (obs-refl
+                {Ty =
+                    ((head : Head) -> (tail : Tail head) -> Res (MkSigma head tail))
+                }
+                func
             )
 

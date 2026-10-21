@@ -8,70 +8,11 @@ open import Agda.Builtin.Equality
 open import Agda.Builtin.Equality.Rewrite
 
 postulate
-    {-
-    IsProp : Set -> Set
-
-    is-prop-set :
-        (IsProp Set)
-        ≡
-        Never
-
-    is-prop-nat :
-        (IsProp Nat)
-        ≡
-        Never
-
-    is-prop-never :
-        (IsProp Never)
-        ≡
-        Unit
-
-    is-prop-unit :
-        (IsProp Unit)
-        ≡
-        Unit
-
-    is-prop-sum :
-        (Lhs : Set) ->
-        (Rhs : Set) ->
-        (IsProp (Sum Lhs Rhs))
-        ≡
-        Never
-
-    is-prop-sigma :
-        (Head : Set) ->
-        (Tail : (head : Head) -> Set) ->
-        (IsProp (Sigma Head Tail))
-        ≡
-        (Pair
-            (IsProp Head)
-            ((head : Head) -> IsProp (Tail head))
-        )
-
-    is-prop-pi :
-        (Arg : Set) ->
-        (Res : (arg : Arg) -> Set) ->
-        (IsProp ((arg : Arg) -> Res arg))
-        ≡
-        ((arg : Arg) -> IsProp (Res arg))
-    -}
-
-
     ObsEqual :
         (Ty : Set) ->
         (eq-tm-0 : Ty) ->
         (eq-tm-1 : Ty) ->
         Prop
-
-    {-
-    is-prop-equal :
-        (Ty : Set) ->
-        (eq-tm-0 : Ty) ->
-        (eq-tm-1 : Ty) ->
-        (IsProp (ObsEqual Ty eq-tm-0 eq-tm-1))
-        ≡
-        Unit
-    -}
 
     obs-refl :
         {Ty : Set} ->
@@ -107,6 +48,16 @@ postulate
             (cast Ty Ty ty-eq val)
             val
         )
+
+    cast-same-type :
+        {Ty : Set} ->
+        (ty-eq : ObsEqual Set Ty Ty) ->
+        (val : Ty) ->
+        (cast Ty Ty ty-eq val)
+        ≡
+        val
+
+    {-# REWRITE cast-same-type #-}
 
 
     {-
