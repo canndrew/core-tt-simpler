@@ -88,13 +88,13 @@ impl PartialEq<Ubig> for [usize] {
 
 impl PartialOrd<Ubig> for usize {
     fn partial_cmp(&self, rhs: &Ubig) -> Option<Ordering> {
-        PartialOrd::partial_cmp(rhs, self)
+        Some(PartialOrd::partial_cmp(rhs, self)?.reverse())
     }
 }
 
 impl PartialOrd<Ubig> for [usize] {
     fn partial_cmp(&self, rhs: &Ubig) -> Option<Ordering> {
-        PartialOrd::partial_cmp(rhs, self)
+        Some(PartialOrd::partial_cmp(rhs, self)?.reverse())
     }
 }
 

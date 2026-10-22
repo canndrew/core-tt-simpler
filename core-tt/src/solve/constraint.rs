@@ -44,11 +44,16 @@ impl Constraints {
     }
 
     pub fn union(
-        ctx: &mut Vec<Ty>,
         constraints_0: Constraints,
         constraints_1: Constraints,
-        eliminated: &mut Usages,
     ) -> Result<Constraints, Uninhabited> {
+        if constraints_0.is_empty() {
+            return Ok(constraints_1);
+        }
+        if constraints_1.is_empty() {
+            return Ok(constraints_0);
+        }
+
         let mut unique_tms = constraints_0.unique_tms;
         let mut unprocessed = constraints_1.unique_tms.into_iter().collect::<Vec<_>>();
         while let Some((index, unique_tm_1)) = unprocessed.pop() {
@@ -63,29 +68,20 @@ impl Constraints {
             let unique_tm_0 = entry.get().clone();
 
             // note: this is what prevents this loop from being infinite.
-            debug_assert!(unique_tm_0.ctx_len() < index);
-            debug_assert!(unique_tm_1.ctx_len() < index);
+            debug_assert!(unique_tm_0.ctx_len() <= index);
+            debug_assert!(unique_tm_1.ctx_len() <= index);
 
             if let Some(unique_tm) = Unify::unify(unique_tm_0.clone(), unique_tm_1.clone()) {
                 *entry.into_mut() = unique_tm;
                 continue;
             }
 
-            let equal_ty = Ty::obs_equal(
-                ctx[index].clone(),
-                unique_tm_0.clone(),
-                unique_tm_1.clone(),
-            );
-            let Simplification {
-                is_changed: _,
-                new_ty: _,
-                iso: _,
-                constraints: equals_constraints,
-                eliminated: equals_eliminated,
-            } = solve::simplify::simplify_equal(ctx, &equal_ty, &unique_tm_0, &unique_tm_1)?;
-
-            unprocessed.extend(equals_constraints);
-            eliminated.or_assign(&equals_eliminated);
+            if let Some((var_index, unique_tm)) = Constraints::single_from_equality(
+                unique_tm_0,
+                unique_tm_1,
+            ) {
+                unprocessed.push((var_index, unique_tm));
+            }
         }
 
         Ok(Constraints { unique_tms })
@@ -109,6 +105,42 @@ impl Constraints {
             }
         }
         Constraints::from_map(constraints)
+    }
+
+    pub fn from_equality(
+        eq_tm_0: Tm,
+        eq_tm_1: Tm,
+    ) -> Constraints {
+        match Constraints::single_from_equality(eq_tm_0, eq_tm_1) {
+            Some((var_index, unique_tm)) => Constraints::single(var_index, unique_tm),
+            None => Constraints::new(),
+        }
+    }
+
+    pub fn single_from_equality(
+        eq_tm_0: Tm,
+        eq_tm_1: Tm,
+    ) -> Option<(usize, Tm)> {
+        let eq_tm_0 = eq_tm_0.deep_nf();
+        let eq_tm_1 = eq_tm_1.deep_nf();
+
+        if let Some(var_index) = eq_tm_0.ctx_len().checked_sub(1)
+        && eq_tm_1.ctx_len() <= var_index
+        && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_0.clone().into_tm())
+        {
+            return Some((var_index, eq_tm_1.into_tm()));
+        }
+
+        if let Some(var_index) = eq_tm_1.ctx_len().checked_sub(1)
+        && eq_tm_0.ctx_len() <= var_index
+        && let Some(_) = Unify::unify(Tm::var(var_index), eq_tm_1.clone().into_tm())
+        {
+            return Some((var_index, eq_tm_0.into_tm()));
+        }
+
+        debug!("no constraint generated from equality");
+
+        None
     }
 }
 

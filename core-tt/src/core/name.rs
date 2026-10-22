@@ -122,3 +122,19 @@ impl Substitutable for NameKind {
     }
 }
 
+impl TryUnswapVars for NameKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<NameKind> {
+        let name_kind = match self {
+            NameKind::Tag { tag } => NameKind::Tag { tag },
+            NameKind::Stuck { stuck } => {
+                let stuck = stuck.try_unswap_vars(var_index)?;
+                NameKind::Stuck { stuck }
+            },
+        };
+        Some(name_kind)
+    }
+}
+

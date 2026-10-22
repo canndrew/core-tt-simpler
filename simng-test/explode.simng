@@ -1,0 +1,10 @@
+let my_explode(
+    Motive(
+        never: enum {},
+    ): Type,
+    never: enum {},
+): Motive(never) = explode(
+    Motive(elim) = Motive(never = elim),
+    elim = never,
+);
+

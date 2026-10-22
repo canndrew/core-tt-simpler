@@ -218,3 +218,26 @@ where
     }
 }
 
+pub trait TryUnswapVars {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+impl<T> TryUnswapVars for Arc<T>
+where
+    T: TryUnswapVars,
+    T: Clone,
+{
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<Arc<T>> {
+        let inner = Arc::unwrap_or_clone(self).try_unswap_vars(var_index)?;
+        Some(Arc::new(inner))
+    }
+}
+

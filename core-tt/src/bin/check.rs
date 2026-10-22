@@ -33,10 +33,10 @@ fn run() -> Result<(), String> {
     };
 
 
-    let (ctx, checked) = CheckCtx::with_builtins(|ch| {
+    let (ctx_names, ctx, checked) = CheckCtx::with_builtins(|ch| {
         prec_stmt.check(ch)
     });
-    let (ty, tm) = match checked.solve(ctx) {
+    let (ty, tm) = match checked.solve(ctx_names, ctx) {
         Ok((ty, tm)) => (ty, tm),
         Err(err) => return Err(format!("typecheck error: {}", err)),
     };

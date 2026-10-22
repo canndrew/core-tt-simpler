@@ -1,6 +1,7 @@
 use crate::priv_prelude::*;
 
 pub trait Unify {
+    #[must_use]
     fn unify(
         thing_0: Self,
         thing_1: Self,

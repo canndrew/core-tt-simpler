@@ -1,11 +1,11 @@
 use crate::priv_prelude::*;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Hash, Debug)]
 pub struct Tag {
     pub kind: TagKind,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Hash, Debug)]
 pub enum TagKind {
     Literal {
         s: Arc<str>,
@@ -15,8 +15,12 @@ pub enum TagKind {
     },
 }
 
-#[derive(Clone, PartialEq, Debug, Hash)]
+#[derive(Clone, PartialEq, Hash, Debug)]
 pub enum MetaTag {
+    Concat {
+        tags: Vec<Tag>,
+    },
+
     QuotedNameConstraint {
         span: Span,
     },
@@ -377,6 +381,23 @@ pub enum MetaTag {
     },
 }
 
+/*
+impl PartialEq for MetaTag {
+    fn eq(&self, other: &MetaTag) -> bool {
+        PartialEq::eq(
+            &mem::discriminant(self),
+            &mem::discriminant(other),
+        )
+    }
+}
+
+impl std::hash::Hash for MetaTag {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        std::hash::Hash::hash(&mem::discriminant(self), hasher)
+    }
+}
+*/
+
 impl From<&str> for Tag {
     fn from(s: &str) -> Tag {
         lazy_static! {
@@ -442,6 +463,139 @@ impl From<MetaTag> for Name {
 impl From<Tag> for Name {
     fn from(tag: Tag) -> Name {
         Name::tag(tag)
+    }
+}
+
+impl Tag {
+    pub(crate) fn concat(iter: impl IntoIterator<Item = Tag>) -> Tag {
+        Tag {
+            kind: TagKind::Meta { meta: MetaTag::concat(iter) },
+        }
+    }
+}
+
+impl MetaTag {
+    pub(crate) fn concat(iter: impl IntoIterator<Item = Tag>) -> Arc<MetaTag> {
+        let mut tags: Vec<Tag> = Vec::new();
+        for tag in iter {
+            if let TagKind::Meta { meta } = &tag.kind
+            && let MetaTag::Concat { tags: tags_1 } = &**meta
+            {
+                tags.extend(tags_1.iter().cloned());
+            } else {
+                tags.push(tag);
+            }
+        }
+        Arc::new(MetaTag::Concat { tags })
+    }
+
+    pub(crate) fn used_for_universe(&self) -> bool {
+        match self {
+            MetaTag::Concat { .. } => false,
+            MetaTag::QuotedNameConstraint { .. } => false,
+            MetaTag::QuotedName { .. } => false,
+            MetaTag::QuotedNameHasTypeName { .. } => false,
+            MetaTag::VarNameConstraint { .. } => false,
+            MetaTag::TypeOfUnresolvedVariable { .. } => true,
+            MetaTag::UnresolvedVariable { .. } => false,
+            MetaTag::LetStmtVarTmConstraint { .. } => false,
+            MetaTag::LetStmtVarTyConstraint { .. } => false,
+            MetaTag::LetStmtVarTy { .. } => true,
+            MetaTag::LetStmtVarTyIsAType { .. } => false,
+            MetaTag::LetStmtVarTm { .. } => false,
+            MetaTag::LetStmtVarTmTypeMatchesAnnotatedType { .. } => false,
+            MetaTag::LetStmtBody { .. } => false,
+            MetaTag::FuncArgNameConstraint { .. } => false,
+            MetaTag::FuncArgTy { .. } => true,
+            MetaTag::FuncArgTyConstraint { .. } => false,
+            MetaTag::FuncArgConstraint { .. } => false,
+            MetaTag::FuncResTmConstraint { .. } => false,
+            MetaTag::FuncResTyConstraint { .. } => false,
+            MetaTag::FuncResTy { .. } => true,
+            MetaTag::FuncResTyIsAType { .. } => false,
+            MetaTag::EqualEqTm0Constraint { .. } => false,
+            MetaTag::EqualEqTm1Constraint { .. } => false,
+            MetaTag::EqualEqTm0 { .. } => false,
+            MetaTag::EqualEndpointTypesAreTheSame { .. } => false,
+            MetaTag::ReflEqTmConstraint { .. } => false,
+            MetaTag::InjLhsLhsNameConstraint { .. } => false,
+            MetaTag::InjLhsLhsTmConstraint { .. } => false,
+            MetaTag::InjLhsRhsType { .. } => true,
+            MetaTag::InjLhsImplicitRhsInjectionCount { .. } => false,
+            MetaTag::InjLhsImplicitRhsInjections { .. } => false,
+            MetaTag::InjLhsImplicitRhsInjection { .. } => false,
+            MetaTag::InjLhsImplicitRhsInjectionLhsName { .. } => false,
+            MetaTag::InjLhsImplicitRhsInjectionLhsTy { .. } => true,
+            MetaTag::InjRhsRhsTmConstraint { .. } => false,
+            MetaTag::InjRhsLhsName { .. } => false,
+            MetaTag::InjRhsLhsType { .. } => true,
+            MetaTag::MatchElimConstraint { .. } => false,
+            MetaTag::MatchElimTypeIsNever { .. } => false,
+            MetaTag::MatchRhsBranchMotive { .. } => true,
+            MetaTag::MatchLhsNameConstraint { .. } => false,
+            MetaTag::MatchLhsTy { .. } => true,
+            MetaTag::MatchRhsTy { .. } => true,
+            MetaTag::MatchElimTypeIsSum { .. } => false,
+            MetaTag::MatchLhsBranchMotive { .. } => true,
+            MetaTag::MatchLhsInhabConstraint { .. } => false,
+            MetaTag::MatchRhsInhabConstraint { .. } => false,
+            MetaTag::MatchLhsInhabTyIsExpectedTy { .. } => false,
+            MetaTag::MatchRhsInhabTyIsExpectedTy { .. } => false,
+            MetaTag::PairHeadTmConstraint { .. } => false,
+            MetaTag::PairTailTy { .. } => true,
+            MetaTag::PairTailTyIsExpectedTy { .. } => false,
+            MetaTag::PairHeadNameConstraint { .. } => false,
+            MetaTag::AppElimConstraint { .. } => false,
+            MetaTag::AppResTy { .. } => true,
+            MetaTag::AppElim { .. } => false,
+            MetaTag::AppElimHasExpectedType { .. } => false,
+            MetaTag::AppArgNameConstraint { .. } => false,
+            MetaTag::AppArgTmConstraint { .. } => false,
+            MetaTag::SigmaTailTyConstraint { .. } => false,
+            MetaTag::SigmaTailTyIsAType { .. } => false,
+            MetaTag::SigmaTailTy { .. } => true,
+            MetaTag::SigmaRemainingTailTyConstraint { .. } => false,
+            MetaTag::SumLhsTyConstraint { .. } => false,
+            MetaTag::SumRhsTyConstraint { .. } => false,
+            MetaTag::SumRhsTy { .. } => true,
+            MetaTag::SumRhsTyIsAType { .. } => false,
+            MetaTag::TypeFieldNameConstraint { .. } => false,
+            MetaTag::TypeFieldTyConstraint { .. } => false,
+            MetaTag::TypeFieldTy { .. } => true,
+            MetaTag::TypeFieldTyIsAType { .. } => false,
+            MetaTag::PatternVarNameConstraint { .. } => false,
+            MetaTag::ProjHeadBaseConstraint { .. } => false,
+            MetaTag::ProjHeadHeadNameConstraint { .. } => false,
+            MetaTag::ProjHeadBaseTy { .. } => true,
+            MetaTag::ProjHeadBaseTm { .. } => false,
+            MetaTag::ProjHeadImplicitTailProjections { .. } => false,
+            MetaTag::ProjHeadImplicitTailProjectionCount { .. } => false,
+            MetaTag::ProjHeadImplicitTailProjection { .. } => false,
+            MetaTag::ProjHeadImplicitTailProjectionInferredHeadName { .. } => false,
+            MetaTag::ProjHeadImplicitTailProjectionHeadTy { .. } => true,
+            MetaTag::ProjHeadImplicitTailProjectionTailTy { .. } => true,
+            MetaTag::ProjHeadImplicitTailProjectionBaseTyEqualsExpectedType { .. } => false,
+            MetaTag::ProjHeadHeadTy { .. } => true,
+            MetaTag::ProjHeadTailTy { .. } => true,
+            MetaTag::ProjHeadHasExpectedType { .. } => false,
+            MetaTag::ReflPatEqTy { .. } => true,
+            MetaTag::ReflPatEqTm0 { .. } => false,
+            MetaTag::ReflPatEqTm1 { .. } => false,
+            MetaTag::ReflPatVarTyIsExpectedTy { .. } => false,
+            MetaTag::ReflPatMotive { .. } => true,
+            MetaTag::ReflPatMotiveEqTm1 { .. } => false,
+            MetaTag::ReflPatMotiveElim { .. } => false,
+            MetaTag::ReflPatInhabOuterConstraint { .. } => false,
+            MetaTag::ReflPatInhabInnerConstraint { .. } => false,
+            MetaTag::ReflPatInhab { .. } => false,
+            MetaTag::ReflPatInhabHasCorrectType { .. } => false,
+            MetaTag::ReflPatVarTm { .. } => false,
+            MetaTag::UnitPatVarTyIsUnit { .. } => false,
+            MetaTag::PairPatHeadNameConstraint { .. } => false,
+            MetaTag::PairPatHeadTy { .. } => true,
+            MetaTag::PairPatTailTy { .. } => true,
+            MetaTag::PairPatVarTyIsExpectedTy { .. } => false,
+        }
     }
 }
 

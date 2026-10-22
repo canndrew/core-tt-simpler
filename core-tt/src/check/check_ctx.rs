@@ -75,7 +75,7 @@ impl CheckCtx {
 
     pub fn with_builtins<T: Contextual + Substitutable>(
         func: impl FnOnce(&mut CheckCtx) -> T,
-    ) -> (Vec<(Name, Ty)>, <T as Substitutable>::Output) {
+    ) -> (Vec<Name>, Vec<Ty>, <T as Substitutable>::Output) {
         let builtins = crate::builtins::BUILTINS.as_slice();
         let mut var_tys = Vec::new();
         let mut var_names = Vec::new();
@@ -96,8 +96,8 @@ impl CheckCtx {
 
         let mut subst = Subst::from_var_tms(0, var_tms);
         let ret = ret.subst(&mut subst);
-        let ctx = var_names.into_iter().map(|(name, _)| name).zip(var_tys).collect();
-        (ctx, ret)
+        let var_names = var_names.into_iter().map(|(name, _)| name).collect();
+        (var_names, var_tys, ret)
     }
 }
 

@@ -204,3 +204,25 @@ where
     }
 }
 
+impl<T> TryUnswapVars for Weaken<T>
+where
+    T: TryUnswapVars,
+    T: Contextual,
+{
+    fn try_unswap_vars(
+        mut self,
+        var_index: usize,
+    ) -> Option<Weaken<T>> {
+        if !self.usages.get(var_index) {
+            if self.usages.get(var_index + 1) {
+                self.usages.set_to_one(var_index);
+                self.usages.set_to_zero(var_index + 1);
+            }
+            return Some(self);
+        }
+
+        let inner = self.into_inner().try_unswap_vars(var_index)?;
+        Some(Weaken::new(inner))
+    }
+}
+

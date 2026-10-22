@@ -1,6 +1,7 @@
 pub(crate) use {
     std::{
-        cmp, iter, fmt, mem,
+        cmp, iter, fmt, mem, ops,
+        cell::Cell,
         collections::{btree_map, hash_map, BTreeMap, HashMap},
         sync::{Arc, OnceLock, RwLock},
     },
@@ -8,13 +9,13 @@ pub(crate) use {
     ubig::Ubig,
     parser::{Span, Spanned, HasSpan},
     crate::{
-        solve,
+        //solve,
         util::{as_equal, max_all, iter::{Which, merge_enumerated}},
         tag::{Tag, TagKind, MetaTag},
         core::{
             usages::Usages,
             weaken::Weaken,
-            contextual::{Contextual, TupleOfContextual, DeepNf},
+            contextual::{Contextual, TupleOfContextual, DeepNf, TryUnswapVars},
             form::{Form, FormKind},
             intro::{Intro, IntroKind},
             neutral::NeutralKind,
@@ -34,11 +35,13 @@ pub(crate) use {
         },
         more::iso::Iso,
         solve::{
-            simplification::{Simplification, Uninhabited},
+            simplification::{Simplification, Uninhabited, Progress, Undecided, UnscopedUndecided},
+            //simplification::{Simplification, Uninhabited},
             cache::SimplifyCache,
             constraint::Constraints,
         },
         builtins::Builtin,
+        prettier::Pprint,
     },
     core_tt_macros::Contextual,
 };

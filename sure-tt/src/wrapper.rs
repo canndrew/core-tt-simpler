@@ -15,6 +15,10 @@ impl<T: WellFormed> Wrapper<T> {
         (self.wrapped, self.ctx_params)
     }
 
+    pub fn into_wrapped(self) -> T {
+        self.wrapped
+    }
+
     pub fn wrapped_ref(&self) -> &T {
         &self.wrapped
     }

@@ -322,8 +322,8 @@ impl Unify for TmKind {
                     let head_tm_1 = tm_1.clone().proj_head();
                     let tail_tm_1 = tm_1.proj_tail();
 
-                    let _head_tm = Unify::unify(head_tm_0, head_tm_1);
-                    let _tail_tm = Unify::unify(tail_tm_0, tail_tm_1);
+                    let _head_tm = Unify::unify(head_tm_0, head_tm_1)?;
+                    let _tail_tm = Unify::unify(tail_tm_0, tail_tm_1)?;
                     Some(tm_kind_1)
                 },
                 IntroKind::Func { res_tm: res_tm_0 } => {
@@ -377,6 +377,26 @@ impl DeepNf for TmKind {
                 stuck.deep_nf().map(|stuck| TmKind::Stuck { stuck })
             },
         }
+    }
+}
+
+impl TryUnswapVars for TmKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<TmKind> {
+        let tm_kind = match self {
+            TmKind::Intro { intro } => {
+                let intro = intro.try_unswap_vars(var_index)?;
+                TmKind::Intro { intro }
+            },
+            TmKind::Proof => TmKind::Proof,
+            TmKind::Stuck { stuck } => {
+                let stuck = stuck.try_unswap_vars(var_index)?;
+                TmKind::Stuck { stuck }
+            },
+        };
+        Some(tm_kind)
     }
 }
 

@@ -14,8 +14,7 @@ pub mod solve;
 pub mod builtins;
 mod sanity_check;
 
-//mod prettier;
-mod prettier_2;
+mod prettier;
 
 #[cfg(debug_assertions)]
 mod debug;
@@ -35,13 +34,15 @@ pub use {
             name::{Name, NameKind},
             ty::{Ty, TyKind},
             tm::{Tm, TmKind},
-            scope::Scope,
+            scope::{Scope, Bindable},
             unify::Unify,
             subst::{Subst, Substitutable},
+            well_formed::WellFormed,
         },
         more::iso::Iso,
         check::{check_ctx::CheckCtx, checked::Checked, typecheck::Check},
         sanity_check::SanityCheck,
+        prettier::{PrettyFmt, Pprint},
     },
     ubig::Ubig,
 };

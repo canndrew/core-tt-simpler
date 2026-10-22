@@ -1,0 +1,15 @@
+let swap(
+    A: Type,
+    B: Type,
+    pair: struct {
+        a: A,
+        b: B,
+    },
+): struct {
+    b: B,
+    a: A,
+} = {
+    let (a, b) = pair;
+    (b, a)
+};
+

@@ -1,0 +1,5 @@
+let make_singleton(
+    Ty: Type,
+    val: Ty,
+): struct { foo: Ty } = (foo = val);
+

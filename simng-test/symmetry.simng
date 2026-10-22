@@ -1,0 +1,16 @@
+let symmetry(
+    Ty: Type,
+    val_0: Ty,
+    val_1: Ty,
+    val_eq: val_0 == val_1,
+): val_1 == val_0 = {
+    cong(
+        Ty,
+        val_0,
+        Motive(val_1, elim) = val_1 == val_0,
+        inhab = refl val_0,
+        val_1,
+        elim = val_eq,
+    )
+};
+

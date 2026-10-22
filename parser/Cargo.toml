@@ -8,3 +8,6 @@ ext-trait = "*"
 thiserror = "*"
 num = "*"
 
+[lints]
+workspace = true
+

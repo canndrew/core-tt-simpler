@@ -4,9 +4,9 @@ pub type Lazy = Weaken<Arc<LazyData>>;
 
 #[derive(Clone, Debug)]
 pub struct LazyData {
-    reduced_filter: Usages,
-    reduced_opt: Arc<OnceLock<Option<ValTm>>>,
-    neutral_kind: Arc<NeutralKind>,
+    pub(crate) reduced_filter: Usages,
+    pub(crate) reduced_opt: Arc<OnceLock<Option<ValTm>>>,
+    pub(crate) neutral_kind: Arc<NeutralKind>,
 }
 
 #[derive(Clone, Debug)]
@@ -483,6 +483,20 @@ where
                 lazy.reduced().map(|tm_kind| T::from_tm_kind(tm_kind)).deep_nf()
             },
         }
+    }
+}
+
+impl<T> TryUnswapVars for OrLazy<T>
+where
+    T: TryUnswapVars,
+    T: AsTmKind,
+{
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<OrLazy<T>> {
+        let reduced = self.reduced().try_unswap_vars(var_index)?;
+        Some(OrLazy::Reduced(reduced))
     }
 }
 

@@ -276,3 +276,20 @@ impl Substitutable for TyKind {
     }
 }
 
+impl TryUnswapVars for TyKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<TyKind> {
+        match self {
+            TyKind::Form { form } => {
+                let form = form.try_unswap_vars(var_index)?;
+                Some(TyKind::Form { form })
+            },
+            TyKind::Stuck { stuck } => {
+                let stuck = stuck.try_unswap_vars(var_index)?;
+                Some(TyKind::Stuck { stuck })
+            },
+        }
+    }
+}

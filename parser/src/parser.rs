@@ -289,15 +289,6 @@ fn expr_func_term() -> DynParser<ast::ExprFuncTerm<Span>> {
     .box_dyn()
 }
 
-fn expr_equal() -> DynParser<ast::ExprEqual<Span>> {
-    all_of((
-        prec_add().boxed(),
-        punct(PunctKind::DoubleEqual).unit_then(prec_add().boxed()),
-    ))
-    .map(|(eq_expr_0, eq_expr_1)| ast::ExprEqual { eq_expr_0, eq_expr_1 })
-    .box_dyn()
-}
-
 fn expr_inj_lhs() -> DynParser<ast::ExprInjLhs<Span>> {
     all_of((
         //punct(PunctKind::Dot).unit_then(name_ident()),
@@ -489,10 +480,24 @@ fn prec_func() -> DynParser<ast::PrecFunc<Span>> {
 
 fn prec_equal() -> DynParser<ast::PrecEqual<Span>> {
     lazy(|| {
-        any_of((
-            expr_equal().spanned().map(ast::PrecEqual::Equal),
-            prec_add().map(ast::PrecEqual::Other),
-        ))
+        prec_add()
+        .then(
+            punct(PunctKind::DoubleEqual)
+            .unit_then(prec_add().boxed())
+            .optional()
+        )
+        .map(|(eq_expr_0, eq_expr_1_opt)| {
+            match eq_expr_1_opt {
+                None => ast::PrecEqual::Other(eq_expr_0),
+                Some(eq_expr_1) => {
+                    let eq_expr_0 = Box::new(eq_expr_0);
+                    let span = Span::combine(&eq_expr_0.span(), &eq_expr_1.span());
+                    ast::PrecEqual::Equal(
+                        Spanned::new(span, ast::ExprEqual { eq_expr_0, eq_expr_1 }),
+                    )
+                },
+            }
+        })
     })
     .box_dyn()
 }

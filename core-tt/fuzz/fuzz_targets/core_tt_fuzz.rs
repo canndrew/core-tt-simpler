@@ -4,12 +4,117 @@ use {
     std::{mem, sync::Arc},
     arbitrary::Arbitrary,
     libfuzzer_sys::fuzz_target,
+    /*
     core_tt::{
+        Contextual, Unify,
+        Ubig, Tag,
+        Name, Ty, Tm, Scope,
+    },
+    */
+    core_tt::{
+        Unify,
         Ubig, Tag,
         Ty, Tm, Scope,
-        Unify,
     },
 };
+
+/*
+trait FuzzTmExtract: Sized {
+    fn fuzz_tm_extract(ctx_len: usize, var_tys: &[Ty], ty: &Ty, tm: &Tm) -> Option<Self>;
+}
+
+impl<T> FuzzTmExtract for (Ty, Scope<T>)
+where
+    T: FuzzTmExtract + Contextual,
+{
+    fn fuzz_tm_extract(ctx_len: usize, var_tys: &[Ty], ty: &Ty, tm: &Tm) -> Option<(Ty, Scope<T>)> {
+        let (var_ty, var_tys) = var_tys.split_first()?;
+        let inner = T::fuzz_tm_extract(ctx_len + 1, var_tys, ty, tm)?;
+        let scope = Scope::new(ctx_len, inner);
+        Some((var_ty.clone(), scope))
+    }
+}
+
+impl FuzzTmExtract for (Ty, Tm) {
+    fn fuzz_tm_extract(_ctx_len: usize, var_tys: &[Ty], ty: &Ty, tm: &Tm) -> Option<(Ty, Tm)> {
+        if !var_tys.is_empty() {
+            return None;
+        }
+        Some((ty.clone(), tm.clone()))
+    }
+}
+
+impl FuzzTmExtract for Ty {
+    fn fuzz_tm_extract(ctx_len: usize, var_tys: &[Ty], ty: &Ty, tm: &Tm) -> Option<Ty> {
+        let (ty, tm) = <(Ty, Tm)>::fuzz_tm_extract(ctx_len, var_tys, ty, tm)?;
+        Unify::unify(ty, Ty::universe())?;
+        Some(tm.into_ty())
+    }
+}
+
+impl FuzzTmExtract for Name {
+    fn fuzz_tm_extract(ctx_len: usize, var_tys: &[Ty], ty: &Ty, tm: &Tm) -> Option<Name> {
+        let (ty, tm) = <(Ty, Tm)>::fuzz_tm_extract(ctx_len, var_tys, ty, tm)?;
+        Unify::unify(ty, Ty::name())?;
+        Some(tm.into_name())
+    }
+}
+
+trait StateExtract: Sized {
+    fn state_extract(ctx_len: usize, stack: &[FuzzTm], position: usize) -> Option<(usize, Self)>;
+}
+
+macro_rules! tuple_impl_state_extract {
+    ($($ty:ident,)*) => {
+        impl<$($ty,)*> StateExtract for ($($ty,)*)
+        where
+            $($ty: FuzzTmExtract,)*
+        {
+            #[allow(unused_variables)]
+            #[allow(non_snake_case)]
+            fn state_extract(
+                ctx_len: usize,
+                stack: &[FuzzTm],
+                position: usize,
+            ) -> Option<(usize, ($($ty,)*))> {
+                $(
+                    let mut attempts = 0;
+                    let (position, $ty) = loop {
+                        if attempts == stack.len() {
+                            return None;
+                        }
+                        let fuzz_tm = &stack[(position + attempts) % stack.len()];
+                        attempts += 1;
+                        if let Some(ret) = $ty::fuzz_tm_extract(
+                            ctx_len,
+                            &fuzz_tm.var_tys,
+                            &fuzz_tm.ty,
+                            &fuzz_tm.tm,
+                        ) {
+                            break ((position + attempts) % stack.len(), ret);
+                        }
+                    };
+                )*
+                Some((position, ($($ty,)*)))
+            }
+        }
+    };
+}
+
+tuple_impl_state_extract!();
+tuple_impl_state_extract!(T0,);
+tuple_impl_state_extract!(T0,T1,);
+tuple_impl_state_extract!(T0,T1,T2,);
+tuple_impl_state_extract!(T0,T1,T2,T3,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,T7,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,T7,T8,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,T7,T8,T9,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,);
+tuple_impl_state_extract!(T0,T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11,);
+*/
 
 #[derive(Debug)]
 struct FuzzTm {
@@ -58,10 +163,12 @@ impl FuzzTm {
     }
 }
 
-#[derive(Arbitrary, Debug)]
+#[derive(Arbitrary, Debug, PartialEq, Clone, Copy)]
 enum Op {
     EnterScope,
     ExitScope,
+
+    //Simplify,
 
     Name,
     Tag {
@@ -79,8 +186,6 @@ enum Op {
 
     Equal,
     Refl,
-    // TODO
-    //Cong,
 
     Never,
     Explode,
@@ -153,6 +258,41 @@ impl State {
                 body.var_tys.insert(0, var_ty);
                 self.stack.push(body);
             },
+
+            /*
+            Op::Simplify => {
+                let ty = self.stack.last()?;
+                let (ty_ty, ty_tm) = ty.scoped_0()?;
+                ty_ty.as_universe()?;
+                let ty = ty_tm.into_ty();
+                let mut cache = SimplifyCache::new();
+                let simplification_res = ty.simplify(&mut self.ctx, ctx_len, &mut cache);
+                assert_eq!(self.ctx.len(), ctx_len);
+                let simplification = simplification_res.ok()?;
+                let Simplification {
+                    is_changed, new_ty: new_ty_0, iso, constraints: _, eliminated: _,
+                } = simplification;
+                if !is_changed {
+                    Unify::unify(new_ty_0.clone(), ty.clone()).unwrap();
+                    let (fwd, rev) = iso.into_scopes();
+                    Unify::unify(fwd.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+                    Unify::unify(rev.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+                }
+                
+                let mut cache = SimplifyCache::new();
+                let simplification_res = new_ty_0.simplify(&mut self.ctx, ctx_len, &mut cache);
+                let simplification = simplification_res.ok().unwrap();
+                let Simplification {
+                    is_changed, new_ty: new_ty_1, iso, constraints: _, eliminated: _,
+                } = simplification;
+
+                assert!(!is_changed);
+                Unify::unify(new_ty_0, new_ty_1).unwrap();
+                let (fwd, rev) = iso.into_scopes();
+                Unify::unify(fwd.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+                Unify::unify(rev.into_inner(ctx_len), Tm::var(ctx_len)).unwrap();
+            },
+            */
 
             Op::Name => {
                 let ty = Ty::universe();
@@ -279,50 +419,6 @@ impl State {
                 let tm = Tm::proof();
                 self.push(ty, tm);
             },
-
-            /*
-            Op::Cong => {
-                let index = self.stack.len().checked_sub(3)?;
-                let elim = &self.stack[index];
-                let motive = &self.stack[index + 1];
-                let inhab = &self.stack[index + 2];
-
-                let (elim_ty, elim) = elim.scoped_0()?;
-                let (eq_ty, eq_tm_0, eq_tm_1) = elim_ty.as_equal()?;
-
-                let (motive_eq_tm_1_ty, motive) = motive.scoped_2(self.stacks.len())?;
-                if !motive.inner().inner().is_prop() {
-                    return None;
-                }
-                let eq_ty = Unify::unify(motive_eq_tm_1_ty, eq_ty)?;
-                let (motive_elim_ty, motive) = motive.lift_tuple();
-                motive_elim_ty
-                .try_map(self.stacks.len(), |eq_tm_1, motive_elim_ty| {
-                    Unify::unify(
-                        motive_elim_ty,
-                        Ty::equal(eq_ty.clone(), eq_tm_0.clone(), eq_tm_1)
-                    )
-                })?;
-                let (motive_ty, motive) = motive.map_without_capture(Scope::lift_tuple).lift_tuple();
-                motive_ty.try_strengthen().ok()?.try_strengthen().ok()?.as_universe()?;
-                let motive = motive.map_without_capture(|motive| {
-                    motive.map_without_capture(|motive| motive.into_ty())
-                });
-
-                let (inhab_ty, inhab) = inhab.scoped_0()?;
-                Unify::unify(
-                    inhab_ty,
-                    motive
-                    .clone()
-                    .bind(eq_tm_0.clone())
-                    .bind(eq_tm_0.refl())
-                )?;
-
-                let ty = motive.clone().bind(eq_tm_1).bind(elim.clone());
-                let tm = Tm::cong(elim, motive, inhab);
-                self.push(ty, tm);
-            },
-            */
 
             Op::Never => {
                 let ty = Ty::universe();

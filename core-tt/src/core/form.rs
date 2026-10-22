@@ -347,7 +347,6 @@ impl FormKind {
         let (eq_ty, eq_tm_0, eq_tm_1) = res_ty_inner.as_equal()?;
         let eq_ty = Ty::pi(arg_name, arg_ty, Scope::new(ctx_len, eq_ty));
 
-
         let eq_tm_0 = Tm::func_eta_short(Scope::new(ctx_len, eq_tm_0));
         let eq_tm_1 = Tm::func_eta_short(Scope::new(ctx_len, eq_tm_1));
         Some((eq_ty, eq_tm_0, eq_tm_1))
@@ -468,6 +467,43 @@ impl DeepNf for FormKind {
                 Weaken::new_arc(FormKind::Pi { arg_name, arg_ty, res_ty })
             },
         }
+    }
+}
+
+impl TryUnswapVars for FormKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<FormKind> {
+        let form = match self {
+            FormKind::Name => FormKind::Name,
+            FormKind::Universe => FormKind::Universe,
+            FormKind::Nat => FormKind::Nat,
+            FormKind::Never => FormKind::Never,
+            FormKind::Unit => FormKind::Unit,
+
+            FormKind::Sum { lhs_name, lhs_ty, rhs_ty } => {
+                let lhs_name = lhs_name.try_unswap_vars(var_index)?;
+                let lhs_ty = lhs_ty.try_unswap_vars(var_index)?;
+                let rhs_ty = rhs_ty.try_unswap_vars(var_index)?;
+                FormKind::Sum { lhs_name, lhs_ty, rhs_ty }
+            },
+
+            FormKind::Sigma { head_name, head_ty, tail_ty } => {
+                let head_name = head_name.try_unswap_vars(var_index)?;
+                let head_ty = head_ty.try_unswap_vars(var_index)?;
+                let tail_ty = tail_ty.try_unswap_vars(var_index)?;
+                FormKind::Sigma { head_name, head_ty, tail_ty }
+            },
+
+            FormKind::Pi { arg_name, arg_ty, res_ty } => {
+                let arg_name = arg_name.try_unswap_vars(var_index)?;
+                let arg_ty = arg_ty.try_unswap_vars(var_index)?;
+                let res_ty = res_ty.try_unswap_vars(var_index)?;
+                FormKind::Pi { arg_name, arg_ty, res_ty }
+            },
+        };
+        Some(form)
     }
 }
 

@@ -133,7 +133,7 @@ impl Ctx {
             cmp::Ordering::Greater => {
                 let diff = ctx_0.len.strict_sub(ctx_1.len);
                 assert!(Ctx::arc_eq(ctx_0.nth_parent(diff), &ctx_1));
-                ctx_1
+                ctx_0
             },
         }
     }
@@ -163,7 +163,7 @@ impl Ctx {
             cmp::Ordering::Greater => {
                 let diff = ctx_0.len.strict_sub(ctx_1.len);
                 assert!(Ctx::arc_eq(ctx_0.nth_parent(diff), &ctx_1));
-                ctx_1
+                ctx_0
             },
         }
     }
@@ -217,25 +217,6 @@ impl PartialCtx {
         let tm = core_tt::Tm::var(index);
         Wrapper::new(tm, ctx_params)
     }
-
-    /*
-    pub fn new_scope<T>(
-        &self,
-        var_ty: DebugOnly<Ty>,
-        inner: Wrapper<T>,
-    ) -> Scope<T> {
-        let (inner, ctx_params) = inner.unwrap_parts();
-        let ctx_params = ctx_params.map(|lock, (ctx, params)| {
-            let var_ty = var_ty.unlock(lock);
-            let (var_ty, var_ty_ctx_params) = var_ty.unwrap_parts();
-            let (var_ty_ctx, ()) = var_ty_ctx_params.unlock(lock);
-            assert!(var_ty_ctx.is_subctx_of(&ctx));
-            let params = core_tt::Scope::new(ctx.len(), params);
-            (ctx, (var_ty, params))
-        });
-        let scope = core_tt::Scope::new(self.len(), 
-    }
-    */
 
     pub fn make_scope<T>(
         &self,

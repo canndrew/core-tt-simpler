@@ -37,7 +37,7 @@ impl Tm {
                         core_tt::Tm::tag(tag_0),
                         core_tt::Tm::tag(tag_1),
                     ),
-                );
+                ).unwrap();
                 let ty = core_tt::Ty::never();
                 (ctx, ty)
             })
@@ -109,9 +109,10 @@ impl Tm {
         Wrapper::new(tm, ctx_params)
     }
 
-    pub fn refl(self) -> Tm {
-        let (eq_tm, ctx_params) = self.unwrap_parts();
-        let ctx_params = ctx_params.map(|_, (ctx, eq_ty)| {
+    pub fn refl(eq_tm: DebugOnly<Tm>) -> Tm {
+        let ctx_params = eq_tm.map(|lock, eq_tm| {
+            let (eq_tm, ctx_params) = eq_tm.unwrap_parts();
+            let (ctx, eq_ty) = ctx_params.unlock(lock);
             let ty = core_tt::Ty::obs_equal(eq_ty, eq_tm.clone(), eq_tm);
             (ctx, ty)
         });
@@ -386,6 +387,14 @@ impl Tm {
         };
         let tm = elim.app(arg_tm);
         Wrapper::new(tm, ctx_params)
+    }
+
+    pub fn as_tag(self) -> Option<Tag> {
+        let (tm, ctx_params) = self.unwrap_parts();
+        ctx_params.map(|_, (_, ty)| {
+            ty.as_name().unwrap();
+        });
+        tm.as_tag()
     }
 }
 

@@ -1,0 +1,23 @@
+let transitivity(
+    Ty: Type,
+    val_0: Ty,
+    val_1: Ty,
+    val_2: Ty,
+    eq_0: val_0 == val_1,
+    eq_1: val_1 == val_2,
+): val_0 == val_2 = {
+    cong(
+        Ty,
+        val_0,
+        Motive(val_1, elim) = Fn(
+            val_2: Ty,
+            eq_1: val_1 == val_2,
+        ) -> val_0 == val_2,
+        inhab(val_2, eq_1) = eq_1,
+        val_1,
+        elim = eq_0,
+        val_2,
+        eq_1,
+    )
+};
+

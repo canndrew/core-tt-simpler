@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 core-tt = { path = "../core-tt" }
 
+[lints]
+workspace = true
+

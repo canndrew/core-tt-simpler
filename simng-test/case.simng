@@ -1,0 +1,36 @@
+let my_case(
+    Lhs: Type,
+    Rhs: Type,
+    Motive(
+        sum: enum {
+            lhs: Lhs,
+            rhs: Rhs,
+        },
+    ): Type,
+    on_lhs(lhs: Lhs): Motive(sum = .lhs lhs),
+    on_rhs(rhs: Rhs): Motive(sum = .rhs rhs),
+    sum: enum {
+        lhs: Lhs,
+        rhs: Rhs,
+    },
+): Motive(sum) = case(
+    lhs_name = "lhs",
+    Lhs,
+    Rhs = enum { rhs: Rhs },
+    Motive(elim) = Motive(sum = elim),
+    on_lhs,
+    on_rhs(rhs) = case(
+        lhs_name = "rhs",
+        Lhs = Rhs,
+        Rhs = enum {},
+        Motive(elim) = Motive(sum = ... elim),
+        on_lhs(lhs) = on_rhs(rhs = lhs),
+        on_rhs(rhs) = explode(
+            Motive(elim) = Motive(sum = ... ... elim),
+            elim = rhs,
+        ),
+        elim = rhs,
+    ),
+    elim = sum,
+);
+

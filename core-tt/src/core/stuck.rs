@@ -128,11 +128,34 @@ impl Unify for StuckKind {
                 return Some(neutral_kind);
             }
 
-            if let Some(neutral_kind_0) = neutral_kind_0.clone().try_commuting_conversions() {
+            if let Some(neutral_kind_0) = {
+                neutral_kind_0
+                .clone()
+                .try_commuting_conversions_assuming_stuck()
+            } {
+                let neutral_kind_0 = Arc::unwrap_or_clone(
+                    neutral_kind_0
+                    .reduced()
+                    .into_inner()
+                    .as_stuck()
+                    .unwrap()
+                    .into_neutral()
+                );
                 return unify_neutral_kind(neutral_kind_0, neutral_kind_1);
             }
 
-            if let Some(neutral_kind_1) = neutral_kind_1.try_commuting_conversions() {
+            if let Some(neutral_kind_1) = {
+                neutral_kind_1
+                .try_commuting_conversions_assuming_stuck()
+            } {
+                let neutral_kind_1 = Arc::unwrap_or_clone(
+                    neutral_kind_1
+                    .reduced()
+                    .into_inner()
+                    .as_stuck()
+                    .unwrap()
+                    .into_neutral()
+                );
                 return unify_neutral_kind(neutral_kind_0, neutral_kind_1);
             }
 
@@ -610,6 +633,130 @@ impl NeutralKind {
                 Weaken::new(NeutralKind::Cast { ty_0, ty_1, tm_0 })
             },
         }
+    }
+
+    fn try_commuting_conversions_assuming_stuck(self) -> Option<NeutralKind> {
+        match self {
+            NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
+                let elim = elim.as_stuck().unwrap().into_inner().into_neutral();
+
+                match Arc::unwrap_or_clone(elim) {
+                    NeutralKind::Explode { motive: inner_motive } => {
+                        if let Some(inner_motive) = inner_motive.try_strengthen().ok() {
+                            let motive = Scope::constant(
+                                motive
+                                .bind(
+                                    Tm::explode(Scope::constant(Weaken::new(inner_motive))),
+                                )
+                                .into_inner(),
+                            );
+                            return Some(NeutralKind::Explode { motive });
+                        }
+                    },
+                    NeutralKind::Case {
+                        lhs_name: inner_lhs_name,
+                        elim,
+                        motive: inner_motive,
+                        lhs_inhab: inner_lhs_inhab,
+                        rhs_inhab: inner_rhs_inhab,
+                    } => {
+                        if let Some(inner_motive) = inner_motive.try_strengthen().ok() {
+                            let ctx_len = max_all([
+                                motive.ctx_len(),
+                                inner_motive.ctx_len(),
+                                lhs_inhab.ctx_len(),
+                                rhs_inhab.ctx_len(),
+                                inner_lhs_inhab.ctx_len(),
+                                inner_rhs_inhab.ctx_len(),
+                            ]);
+                            return Some(NeutralKind::Case {
+                                lhs_name: inner_lhs_name.clone(),
+                                motive: Scope::make(ctx_len, |elim| {
+                                    motive
+                                    .clone()
+                                    .bind(
+                                        elim
+                                        .case(
+                                            inner_lhs_name,
+                                            Scope::constant(inner_motive),
+                                            inner_lhs_inhab.clone(),
+                                            inner_rhs_inhab.clone(),
+                                        ),
+                                    )
+                                }),
+                                lhs_inhab: Scope::make(ctx_len, |lhs| {
+                                    inner_lhs_inhab
+                                    .bind(lhs)
+                                    .case(
+                                        lhs_name.clone(),
+                                        motive.clone(),
+                                        lhs_inhab.clone(),
+                                        rhs_inhab.clone()
+                                    )
+                                }),
+                                rhs_inhab: Scope::make(ctx_len, |rhs| {
+                                    inner_rhs_inhab
+                                    .bind(rhs)
+                                    .case(
+                                        lhs_name.clone(),
+                                        motive,
+                                        lhs_inhab,
+                                        rhs_inhab,
+                                    )
+                                }),
+                                elim,
+                            });
+                        }
+                    },
+                    _ => (),
+                }
+            },
+            NeutralKind::App { elim, arg_tm } => {
+                let elim = elim.as_stuck().unwrap().into_inner().into_neutral();
+                match Arc::unwrap_or_clone(elim) {
+                    NeutralKind::Explode { motive } => {
+                        if let Some(motive) = motive.try_strengthen().ok() {
+                            let (_, _, res_ty) = Weaken::new(motive).as_pi().unwrap();
+                            return Some(NeutralKind::Explode {
+                                motive: Scope::constant(res_ty.bind(arg_tm).into_inner()),
+                            });
+                        }
+                    },
+                    NeutralKind::Case { lhs_name, elim, motive, lhs_inhab, rhs_inhab } => {
+                        if let Some(motive) = motive.try_strengthen().ok() {
+                            let (_, _, res_ty) = motive.as_pi().unwrap();
+                            return Some(NeutralKind::Case {
+                                lhs_name,
+                                elim,
+                                motive: Scope::constant(res_ty.bind(arg_tm.clone())),
+                                lhs_inhab: Scope::make(
+                                    max_all([lhs_inhab.ctx_len(), arg_tm.ctx_len()]),
+                                    |lhs| lhs_inhab.bind(lhs).app(arg_tm.clone()),
+                                ), 
+                                rhs_inhab: Scope::make(
+                                    max_all([rhs_inhab.ctx_len(), arg_tm.ctx_len()]),
+                                    |rhs| rhs_inhab.bind(rhs).app(arg_tm),
+                                ), 
+                            });
+                        }
+                    },
+                    _ => (),
+                }
+            },
+            _ => (),
+        }
+        None
+    }
+}
+
+impl TryUnswapVars for StuckKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<StuckKind> {
+        let StuckKind { kind } = self;
+        let kind = kind.try_unswap_vars(var_index)?;
+        Some(StuckKind { kind })
     }
 }
 

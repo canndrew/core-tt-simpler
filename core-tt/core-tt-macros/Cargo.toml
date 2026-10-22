@@ -11,3 +11,6 @@ syn = { version = "*", features = ["full"] }
 quote = "*"
 proc-macro2 = { version = "*" }
 
+[lints]
+workspace = true
+

@@ -662,3 +662,47 @@ impl Substitutable for IntroKind {
         Some(intro)
     }
 }
+
+impl TryUnswapVars for IntroKind {
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<IntroKind> {
+        let intro_kind = match self {
+            IntroKind::Tag { tag } => {
+                IntroKind::Tag { tag }
+            },
+            
+            IntroKind::Form { form } => {
+                let form = form.try_unswap_vars(var_index)?;
+                IntroKind::Form { form }
+            },
+
+            IntroKind::Constant { ubig } => {
+                IntroKind::Constant { ubig }
+            },
+            IntroKind::Succs { succ_count_m1, pred_tm } => {
+                let pred_tm = pred_tm.try_unswap_vars(var_index)?;
+                IntroKind::Succs { succ_count_m1, pred_tm }
+            },
+            IntroKind::InjLhs { lhs_tm } => {
+                let lhs_tm = lhs_tm.try_unswap_vars(var_index)?;
+                IntroKind::InjLhs { lhs_tm }
+            },
+            IntroKind::InjRhs { rhs_tm } => {
+                let rhs_tm = rhs_tm.try_unswap_vars(var_index)?;
+                IntroKind::InjRhs { rhs_tm }
+            },
+            IntroKind::Pair { head_tm, tail_tm } => {
+                let head_tm = head_tm.try_unswap_vars(var_index)?;
+                let tail_tm = tail_tm.try_unswap_vars(var_index)?;
+                IntroKind::Pair { head_tm, tail_tm }
+            },
+            IntroKind::Func { res_tm } => {
+                let res_tm = res_tm.try_unswap_vars(var_index)?;
+                IntroKind::Func { res_tm }
+            },
+        };
+        Some(intro_kind)
+    }
+}

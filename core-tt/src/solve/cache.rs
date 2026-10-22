@@ -57,3 +57,27 @@ impl Drop for SimplifyCache {
     }
 }
 
+/*
+impl Usages {
+    fn filter_ctx(
+        &self,
+        ctx: &[Ty],
+    ) -> Vec<Ty> {
+        let mut usages = self.clone();
+        let mut var_tys = Vec::new();
+        for (index, var_ty) in ctx[..self.ctx_len()].iter().enumerate().rev() {
+            if usages.get(index) {
+                usages.or_assign(var_ty.usages());
+                var_tys.push(var_ty.clone());
+            }
+        }
+
+        var_tys.reverse();
+        for var_ty in &mut var_tys {
+            var_ty.filter_usages(&usages);
+        }
+        var_tys
+    }
+}
+*/
+

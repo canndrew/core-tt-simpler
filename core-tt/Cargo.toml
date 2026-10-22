@@ -9,3 +9,6 @@ lazy_static = "*"
 parser = { path = "../parser" }
 core-tt-macros = { path = "core-tt-macros" }
 
+[lints]
+workspace = true
+

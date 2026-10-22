@@ -123,7 +123,7 @@ impl<T> Scope<T> {
 
     pub fn map_without_capture<U>(
         self,
-        func: fn(T) -> U,
+        func: impl FnOnce(T) -> U,
     ) -> Scope<U> {
         let Scope { ctx_len, inner } = self;
         let inner = func(inner);
@@ -132,7 +132,7 @@ impl<T> Scope<T> {
 
     pub fn try_map_without_capture<U>(
         self,
-        func: fn(T) -> Option<U>,
+        func: impl FnOnce(T) -> Option<U>,
     ) -> Option<Scope<U>> {
         let Scope { ctx_len, inner } = self;
         let inner = func(inner)?;
@@ -374,4 +374,24 @@ impl_bindable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
 impl_bindable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14,);
 impl_bindable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15,);
 
+
+impl<T> TryUnswapVars for Scope<T>
+where
+    T: TryUnswapVars,
+    T: Contextual,
+{
+    fn try_unswap_vars(
+        self,
+        var_index: usize,
+    ) -> Option<Scope<T>> {
+        if self.ctx_len <= var_index {
+            return Some(self);
+        }
+
+        let ctx_len = self.ctx_len;
+        let inner = self.into_inner(ctx_len);
+        let inner = inner.try_unswap_vars(var_index)?;
+        Some(Scope::new(ctx_len, inner))
+    }
+}
 

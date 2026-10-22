@@ -2,7 +2,9 @@ use crate::priv_prelude::*;
 
 pub(crate) trait UsizeUnstable {
     unsafe fn unchecked_shr_exact(self, rhs: u32) -> usize;
+    #[expect(unused)]
     unsafe fn unchecked_funnel_shl(self, lo: usize, bit_index: u32) -> usize;
+    #[expect(unused)]
     unsafe fn unchecked_funnel_shr(self, lo: usize, bit_index: u32) -> usize;
     unsafe fn unchecked_disjoint_bitor(self, other: usize) -> usize;
     fn extract_bits(self, mask: usize) -> usize;
