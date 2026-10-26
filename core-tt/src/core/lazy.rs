@@ -158,6 +158,12 @@ impl Lazy {
         }))
     }
 
+    pub fn add(tms: Vec<Tm>) -> Lazy {
+        Weaken::new_arc(LazyData::new(NeutralKind::Add {
+            tms: tms,
+        }))
+    }
+
     pub fn explode(
         motive: Scope<Ty>,
     ) -> Lazy {

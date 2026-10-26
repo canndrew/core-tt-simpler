@@ -68,7 +68,10 @@ impl StuckKind {
     fn try_prove_uninhabited(self, ctx: &mut Vec<Ty>) -> Option<()> {
         let ctx_len = ctx.len();
         match Arc::unwrap_or_clone(self.into_neutral()) {
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
+
             NeutralKind::Fold { motive, zero_inhab, succ_inhab, .. } => {
                 zero_inhab.try_prove_uninhabited(ctx)?;
                 succ_inhab.try_prove_uninhabited(
@@ -105,7 +108,9 @@ impl StuckKind {
     fn try_find_arbitrary_tm_excluding_ctx(self, ctx: &mut Vec<Ty>) -> Option<Tm> {
         let ctx_len = ctx.len();
         match Arc::unwrap_or_clone(self.into_neutral()) {
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
 
             NeutralKind::Fold { .. } => {
                 // TODO

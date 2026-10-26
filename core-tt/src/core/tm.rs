@@ -124,6 +124,10 @@ impl Tm {
         Weaken::from_usages_and_weak(usages, OrLazy::Reduced(tm_kind))
     }
 
+    pub fn add(tms: Vec<Tm>) -> Tm {
+        Lazy::add(tms).into_tm()
+    }
+
     pub fn fold(
         self,
         motive: Scope<Ty>,
@@ -282,6 +286,10 @@ impl TmKind {
             TmKind::Stuck { stuck } => stuck.as_var(),
         }
     }
+
+    pub fn zero() -> TmKind {
+        TmKind::Intro { intro: IntroKind::zero() }
+    }
 }
 
 impl ValTm {
@@ -299,6 +307,10 @@ impl ValTm {
 
     pub fn as_var(self) -> Option<usize> {
         self.into_inner().as_var()
+    }
+
+    pub fn zero() -> ValTm {
+        Weaken::new(TmKind::zero())
     }
 
     pub fn proof() -> ValTm {

@@ -148,6 +148,27 @@ where
     }
 }
 
+/*
+impl<T> Substitutable for Vec<T>
+where
+    T: Substitutable,
+{
+    type Output = Vec<T::Output>;
+
+    fn subst(self, subst: &mut Subst) -> Vec<T::Output> {
+        self.into_iter().map(|val| val.subst(&mut subst.clone())).collect()
+    }
+
+    fn into_output(self) -> Vec<T::Output> {
+        self.into_iter().map(|val| val.into_output()).collect()
+    }
+
+    fn try_strengthen_index(self, var_index: usize) -> Option<Vec<T>> {
+        self.into_iter().map(|val| val.try_strengthen_index(var_index)).collect()
+    }
+}
+*/
+
 macro_rules! impl_substitutable_tuple {
     ($($ty:ident,)*) => {
         impl<$($ty,)*> Substitutable for ($($ty,)*)

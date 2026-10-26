@@ -18,6 +18,10 @@ pub enum NeutralKind {
         succ_inhab: Scope<Scope<Tm>>,
     },
 
+    Add {
+        tms: Vec<Tm>,
+    },
+
     Explode {
         motive: Scope<OrLazy<TyKind>>,
     },
@@ -73,6 +77,8 @@ impl Contextual for NeutralKind {
                     succ_inhab.ctx_len(),
                 ])
             },
+
+            NeutralKind::Add { tms } => tms.ctx_len(),
 
             NeutralKind::Explode { motive } => {
                 max_all([
@@ -136,6 +142,8 @@ impl Contextual for NeutralKind {
                 succ_inhab.collect_usages(usages);
             },
 
+            NeutralKind::Add { tms } => tms.collect_usages(usages),
+
             NeutralKind::Explode { motive } => {
                 motive.collect_usages(usages);
             },
@@ -187,6 +195,8 @@ impl Contextual for NeutralKind {
                 succ_inhab.filter_usages(usages);
             },
 
+            NeutralKind::Add { tms } => tms.filter_usages(usages),
+
             NeutralKind::Explode { motive } => {
                 motive.filter_usages(usages);
             },
@@ -237,6 +247,8 @@ impl Contextual for NeutralKind {
                 zero_inhab.unfilter_usages(usages);
                 succ_inhab.unfilter_usages(usages);
             },
+
+            NeutralKind::Add { tms } => tms.unfilter_usages(usages),
 
             NeutralKind::Explode { motive } => {
                 motive.unfilter_usages(usages);
@@ -348,6 +360,69 @@ impl NeutralKind {
                     },
                     _ => unreachable!(),
                 }
+            },
+
+            NeutralKind::Add { tms } => {
+                if tms.is_empty() {
+                    return Some(ValTm::zero());
+                }
+
+                let mut tms = tms.clone();
+                let mut new_tms = Vec::new();
+                let mut any_changes = false;
+                let mut succ_count = Ubig::ZERO;
+
+                while let Some(tm) = tms.pop() {
+                    match tm.reduced().into_inner() {
+                        TmKind::Proof => unreachable!(),
+                        TmKind::Intro { intro } => {
+                            any_changes = true;
+                            match Arc::unwrap_or_clone(intro) {
+                                IntroKind::Constant { ubig } => {
+                                    succ_count += ubig;
+                                },
+                                IntroKind::Succs { succ_count_m1, pred_tm } => {
+                                    succ_count += succ_count_m1 + 1usize;
+                                    tms.push(Weaken::new(pred_tm));
+                                },
+                                _ => unreachable!(),
+                            }
+                        },
+                        TmKind::Stuck { stuck } => {
+                            if matches!(&**stuck.neutral_ref(), NeutralKind::Add { .. }) {
+                                let NeutralKind::Add {
+                                    tms: more_tms,
+                                } = Arc::unwrap_or_clone(stuck.into_neutral()) else {
+                                    unreachable!();
+                                };
+                                any_changes = true;
+                                tms.extend(more_tms);
+                            } else {
+                                new_tms.push(
+                                    Weaken::new(OrLazy::Reduced(TmKind::Stuck { stuck })),
+                                )
+                            }
+                        },
+                    }
+                }
+
+                if !any_changes {
+                    return None;
+                }
+                new_tms.reverse();
+
+                let pred_tm = match new_tms.len() {
+                    0 => Tm::zero(),
+                    1 => new_tms.into_iter().next().unwrap(),
+                    _ => {
+                        Weaken::new(OrLazy::Reduced(TmKind::Stuck {
+                            stuck: StuckKind {
+                                kind: Arc::new(NeutralKind::Add { tms: new_tms }),
+                            },
+                        }))
+                    },
+                };
+                pred_tm.succs(succ_count)
             },
 
             NeutralKind::Explode { motive } => {
@@ -1026,6 +1101,7 @@ impl NeutralKind {
             NeutralKind::Fold { elim, motive, .. } => {
                 motive.clone().bind(elim.clone())
             },
+            NeutralKind::Add { .. } => Ty::nat(),
 
             NeutralKind::Explode { motive } => {
                 Weaken::new(motive.clone())
@@ -1092,6 +1168,16 @@ impl Substitutable for NeutralKind {
                 let zero_inhab = zero_inhab.capture_subst(subst.clone());
                 let succ_inhab = succ_inhab.capture_subst(subst.clone());
                 NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab }
+            },
+
+            NeutralKind::Add { tms } => {
+                let tms = {
+                    tms
+                    .into_iter()
+                    .map(|tm| tm.subst(&mut subst.clone()).into_tm())
+                    .collect()
+                };
+                NeutralKind::Add { tms }
             },
 
             NeutralKind::Explode { motive } => {
@@ -1182,6 +1268,16 @@ impl Substitutable for NeutralKind {
                 let zero_inhab = zero_inhab.try_strengthen_index(var_index)?;
                 let succ_inhab = succ_inhab.try_strengthen_index(var_index)?;
                 Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
+            },
+
+            NeutralKind::Add { tms } => {
+                let tms = {
+                    tms
+                    .into_iter()
+                    .map(|tm| tm.try_strengthen_index(var_index))
+                    .collect::<Option<Vec<_>>>()?
+                };
+                Some(NeutralKind::Add { tms })
             },
 
             NeutralKind::Explode { motive } => {
@@ -1283,6 +1379,16 @@ impl TryUnswapVars for NeutralKind {
                 let zero_inhab = zero_inhab.try_unswap_vars(var_index)?;
                 let succ_inhab = succ_inhab.try_unswap_vars(var_index)?;
                 NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab }
+            },
+
+            NeutralKind::Add { tms } => {
+                let tms = {
+                    tms
+                    .into_iter()
+                    .map(|tm| tm.try_unswap_vars(var_index))
+                    .collect::<Option<Vec<_>>>()?
+                };
+                NeutralKind::Add { tms }
             },
 
             NeutralKind::Explode { motive } => {

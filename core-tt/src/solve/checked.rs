@@ -252,7 +252,9 @@ impl CountCaseSplits for StuckKind {
             | NeutralKind::Cast { .. }
             => 1,
 
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
 
             NeutralKind::Fold { elim: _, motive: _, zero_inhab, succ_inhab } => {
                 cmp::max(

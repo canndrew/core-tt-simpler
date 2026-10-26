@@ -1028,6 +1028,36 @@ impl Prettier for NeutralKind {
                 todo!()
             },
 
+            NeutralKind::Add { tms } => {
+                let mut tms = tms.into_iter();
+                match tms.next() {
+                    None => Doc::text("0").with_precedence(Precedence::Atom),
+                    Some(tm) => {
+                        let mut doc = {
+                            tm
+                            .prettier(ctx_names, ctx, Ty::nat())
+                            .with_precedence(Precedence::Add)
+                            .doc
+                        };
+                        for tm in tms {
+                            let tm = {
+                                tm
+                                .prettier(ctx_names, ctx, Ty::nat())
+                                .with_precedence(Precedence::Add)
+                                .doc
+                            };
+                            doc = Doc::concat([
+                                Doc::newline("", " "),
+                                Doc::text("+"),
+                                Doc::newline("", " "),
+                                tm,
+                            ]);
+                        }
+                        doc.with_precedence(Precedence::Add)
+                    },
+                }
+            },
+
             NeutralKind::ProjHead { mut elim } => {
                 let mut elim_ty = {
                     elim
@@ -1520,6 +1550,7 @@ fn neutral_as_app(
     match neutral_kind {
         | NeutralKind::Var { .. }
         | NeutralKind::Bind { .. }
+        | NeutralKind::Add { .. }
         | NeutralKind::ProjHead { .. }
         | NeutralKind::ProjTail { .. }
         | NeutralKind::ObsEqual { .. }

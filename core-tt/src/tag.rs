@@ -108,6 +108,19 @@ pub enum MetaTag {
         eq_tm_1_span: Span,
     },
 
+    AddRhsConstraint {
+        add_span: Span,
+        rhs_span: Span,
+    },
+    AddLhsTypeIsNat {
+        add_span: Span,
+        lhs_span: Span,
+    },
+    AddRhsTypeIsNat {
+        add_span: Span,
+        rhs_span: Span,
+    },
+
     ReflEqTmConstraint {
         refl_tm_span: Span,
         eq_tm_span: Span,
@@ -517,6 +530,9 @@ impl MetaTag {
             MetaTag::EqualEqTm1Constraint { .. } => false,
             MetaTag::EqualEqTm0 { .. } => false,
             MetaTag::EqualEndpointTypesAreTheSame { .. } => false,
+            MetaTag::AddRhsConstraint { .. } => false,
+            MetaTag::AddLhsTypeIsNat { .. } => false,
+            MetaTag::AddRhsTypeIsNat { .. } => false,
             MetaTag::ReflEqTmConstraint { .. } => false,
             MetaTag::InjLhsLhsNameConstraint { .. } => false,
             MetaTag::InjLhsLhsTmConstraint { .. } => false,

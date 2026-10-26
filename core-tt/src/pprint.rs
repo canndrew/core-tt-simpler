@@ -383,6 +383,32 @@ impl Pretty<()> for NeutralKind {
                     Scoped((((), None, Some(Ty::nat())), None, None), succ_inhab.clone()),
                 ));
             },
+            NeutralKind::Add { tms } => {
+                s.push_str("add(");
+                if tms.iter().all(|tm| tm.is_shallow()) {
+                    let mut printed = false;
+                    for tm in tms {
+                        if printed {
+                            s.push_str(", ");
+                        }
+                        tm.pretty(ctx, indent, s, ());
+                        printed = true;
+                    }
+                } else {
+                    for tm in tms {
+                        s.push('\n');
+                        for _ in 0..(indent + 1) {
+                            s.push_str("    ");
+                        }
+                        tm.pretty(ctx, indent + 1, s, ());
+                        s.push(',');
+                    }
+                    for _ in 0..indent {
+                        s.push_str("    ");
+                    }
+                }
+                s.push_str(")");
+            },
 
             NeutralKind::Explode { motive } => {
                 voom!(ctx, indent, s, explode(
@@ -423,6 +449,7 @@ impl Pretty<()> for NeutralKind {
 
             | NeutralKind::Bind { .. }
             | NeutralKind::Fold { .. }
+            | NeutralKind::Add { .. }
             | NeutralKind::Explode { .. }
             | NeutralKind::Case { .. }
             | NeutralKind::ProjHead { .. }

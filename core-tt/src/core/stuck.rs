@@ -203,6 +203,36 @@ impl Unify for StuckKind {
                     Some(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
                 },
 
+                NeutralKind::Add { tms: mut tms_0 } => {
+                    let NeutralKind::Add { tms: mut tms_1 } = neutral_kind_1 else {
+                        return None;
+                    };
+
+                    let len = as_equal(tms_0.len(), &tms_1.len())?;
+                    let mut tms = Vec::with_capacity(len);
+                    while let Some(tm_0) = tms_0.pop() {
+                        let (tm, index) = {
+                            let mut index = tms_1.len();
+                            loop {
+                                let Some(new_index) = index.checked_sub(1) else {
+                                    return None;
+                                };
+                                index = new_index;
+                                if let Some(tm) = Unify::unify(
+                                    tm_0.clone(),
+                                    tms_1[index].clone(),
+                                ) {
+                                    break (tm, index);
+                                }
+                            }
+                        };
+                        tms.push(tm);
+                        tms_1.swap_remove(index);
+                    }
+                    tms.reverse();
+                    Some(NeutralKind::Add { tms })
+                },
+
                 NeutralKind::Explode { motive: motive_0 } => {
                     let NeutralKind::Explode {
                         motive: motive_1,
@@ -403,6 +433,17 @@ impl NeutralKind {
                 .collect_stuck_vars(usages)
             },
 
+            NeutralKind::Add { tms } => {
+                for tm in tms {
+                    tm
+                    .into_inner()
+                    .reduced()
+                    .as_stuck()
+                    .unwrap()
+                    .collect_stuck_vars(usages)
+                }
+            },
+
             NeutralKind::ObsEqual { eq_ty, eq_tm_0, eq_tm_1 } => {
                 match eq_ty.into_inner().reduced() {
                     TyKind::Form { .. } => {
@@ -433,7 +474,9 @@ impl NeutralKind {
     fn is_prop_assuming_stuck_ty(self, prop_ty_vars: &mut Vec<usize>) -> bool {
         let ctx_len = prop_ty_vars.last().map_or(0, |index| index + 1);
         match self {
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
 
             | NeutralKind::Var { index } => {
                 let mut prop_ty_vars = prop_ty_vars.iter().rev().copied();
@@ -489,7 +532,9 @@ impl NeutralKind {
 
     fn is_discrete_assuming_stuck_ty(&self) -> bool {
         match self {
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
 
             | NeutralKind::Explode { motive: _ }
             | NeutralKind::ObsEqual { .. }
@@ -521,7 +566,9 @@ impl NeutralKind {
                 !negative && index == ty_var_index
             },
 
-            NeutralKind::Bind { .. } => unreachable!(),
+            | NeutralKind::Bind { .. }
+            | NeutralKind::Add { .. }
+            => unreachable!(),
 
             NeutralKind::Fold { .. } => {
                 // TODO
@@ -572,6 +619,18 @@ impl NeutralKind {
                     })
                 };
                 Weaken::new(NeutralKind::Fold { elim, motive, zero_inhab, succ_inhab })
+            },
+
+            NeutralKind::Add { tms } => {
+                let tms = {
+                    tms
+                    .into_iter()
+                    .map(|tm| {
+                        tm.as_stuck().unwrap().deep_nf().into_tm()
+                    })
+                    .collect()
+                };
+                Weaken::new(NeutralKind::Add { tms })
             },
 
             NeutralKind::Explode { motive } => {

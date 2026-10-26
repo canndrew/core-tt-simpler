@@ -125,6 +125,13 @@ impl SanityCheck for NeutralKind {
                 Unify::unify(motive.bind(elim), ty).unwrap();
             },
 
+            NeutralKind::Add { tms } => {
+                for tm in tms {
+                    tm.sanity_check(ctx, Ty::nat());
+                }
+                Unify::unify(Ty::nat(), ty).unwrap();
+            },
+
             NeutralKind::Explode { motive } => {
                 let motive = Weaken::new(motive).lift_scope();
                 motive.clone().sanity_check(ctx, (Ty::never(), Scope::constant(())));

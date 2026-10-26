@@ -373,8 +373,48 @@ impl Check for Spanned<Span, ast::ExprEqual<Span>> {
 impl Check for Spanned<Span, ast::ExprAdd<Span>> {
     type Output = (Ty, Tm);
 
-    fn check(&self, _ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
-        unimplemented!()
+    fn check(&self, ch: &mut CheckCtx) -> Checked<(Ty, Tm)> {
+        let ast::ExprAdd { lhs, rhs } = &self.inner;
+
+        lhs
+        .check(ch)
+        .and_then(ch, |ch, _, (lhs_ty, lhs_tm)| {
+            Checked::cast(
+                ch,
+                MetaTag::AddLhsTypeIsNat {
+                    add_span: self.span(),
+                    lhs_span: lhs.span(),
+                },
+                lhs_ty,
+                Ty::nat(),
+                lhs_tm,
+            )
+            .and_then(ch, |ch, _, lhs_tm| {
+                rhs
+                .check(ch)
+                .group(MetaTag::AddRhsConstraint {
+                    add_span: self.span(),
+                    rhs_span: rhs.span(),
+                })
+                .and_then(ch, |ch, _, (rhs_ty, rhs_tm)| {
+                    Checked::cast(
+                        ch,
+                        MetaTag::AddRhsTypeIsNat {
+                            add_span: self.span(),
+                            rhs_span: rhs.span(),
+                        },
+                        rhs_ty,
+                        Ty::nat(),
+                        rhs_tm,
+                    )
+                    .map(ch, |_, _, rhs_tm| {
+                        let ty = Ty::nat();
+                        let tm = Tm::add(vec![lhs_tm, rhs_tm]);
+                        (ty, tm)
+                    })
+                })
+            })
+        })
     }
 }
 
