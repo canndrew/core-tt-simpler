@@ -4,9 +4,9 @@ pub type Lazy = Weaken<Arc<LazyData>>;
 
 #[derive(Clone, Debug)]
 pub struct LazyData {
-    pub(crate) reduced_filter: Usages,
-    pub(crate) reduced_opt: Arc<OnceLock<Option<ValTm>>>,
-    pub(crate) neutral_kind: Arc<NeutralKind>,
+    reduced_filter: Usages,
+    reduced_opt: Arc<OnceLock<Option<ValTm>>>,
+    neutral_kind: Arc<NeutralKind>,
 }
 
 #[derive(Clone, Debug)]

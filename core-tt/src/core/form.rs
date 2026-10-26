@@ -88,7 +88,7 @@ impl Substitutable for FormKind {
     fn subst(self, subst: &mut Subst) -> Weaken<FormKind> {
         match self {
             FormKind::Name => Weaken::new(FormKind::Name),
-            
+
             FormKind::Universe => Weaken::new(FormKind::Universe),
 
             FormKind::Nat => Weaken::new(FormKind::Nat),
